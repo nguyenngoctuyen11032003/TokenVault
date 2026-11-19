@@ -71,11 +71,17 @@ class MacKeychain:
         cmd = (f"add-generic-password -U -s {_quote(self.service)} -a {_quote(account)} "
                f"-w {value.hex()}\n")
         try:
-            rc, out, err = self.run(["security", "-i"], cmd.encode("ascii"))
+            self.run(["security", "-i"], cmd.encode("ascii"))
         except Exception as e:  # noqa: BLE001 - OSError/timeout: fail closed
             raise SecretStoreError(f"Keychain unavailable: {type(e).__name__}") from e
-        if rc != 0 or b"error" in (err + out).lower():
-            raise SecretStoreError(f"Keychain refused to store the secret (exit {rc})")
+        # `security -i` may exit 0 even when the command failed and its messages are not
+        # a contract: the only proof is reading the item back.
+        try:
+            stored = self.get(account)
+        except SecretStoreError as e:
+            raise SecretStoreError(f"Keychain did not store the secret: {e}") from e
+        if stored != value:
+            raise SecretStoreError("Keychain did not store the secret (read-back mismatch)")
 
     def get(self, account: str) -> bytes | None:
         argv = ["security", "find-generic-password", "-s", self.service, "-a", account, "-w"]
@@ -141,5 +147,8 @@ def probe() -> None:
 
         dpapi.protect(b"probe")
         return
-    store.set("probe", b"probe")
-    store.delete("probe")
+    store.set("probe", b"probe")  # includes the read-back check
+    try:
+        store.delete("probe")
+    except DpapiError:
+        log.warning("could not remove the Keychain probe item")

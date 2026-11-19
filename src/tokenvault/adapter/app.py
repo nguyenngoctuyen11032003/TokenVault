@@ -66,6 +66,11 @@ from tokenvault.common.protocol import PROTOCOL_VERSION, Hello
 log = logging.getLogger("tokenvault.adapter.app")
 
 
+class IndicatorUnavailable(RuntimeError):
+    """macOS: the menu-bar indicator was requested but cannot be shown. Privacy rule:
+    the agent must not collect without a visible indicator, so it refuses to start."""
+
+
 class NotConfigured(RuntimeError):
     """config.json is missing or invalid: the installer's setup step has not run."""
 
@@ -239,9 +244,11 @@ class AdapterApp:
                                   self.open_log_folder, self.show_about)
                 try:
                     self._tray.start()
-                except Exception:
-                    log.exception("tray icon unavailable; continuing without it")
+                except Exception as e:
                     self._tray = None
+                    if sys.platform == "darwin":
+                        raise IndicatorUnavailable(f"{type(e).__name__}: {e}") from e
+                    log.exception("tray icon unavailable; continuing without it")
             self._reload = singleton.ReloadListener(self._reload_event, self.stop)
             self._reload.start()
             self._transport.start()
@@ -282,6 +289,9 @@ class AdapterApp:
         if (tray is not None and tray.main_thread_mode
                 and threading.current_thread() is threading.main_thread()):
             tray.run_blocking()  # macOS: returns when stop() stops the icon
+            if tray.failed and not self._stopped.is_set():
+                self.stop()
+                raise IndicatorUnavailable("the menu-bar icon stopped unexpectedly")
         self._stopped.wait()
         return 0
 

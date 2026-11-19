@@ -1,6 +1,9 @@
 .superpowers/
 dist/
-build/
+dist-mac/
+build-mac-work/
+build/*
+!build/build-mac.sh
 __pycache__/
 *.pyc
 .venv/

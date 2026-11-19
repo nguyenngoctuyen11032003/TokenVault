@@ -13,6 +13,7 @@ import contextlib
 import logging
 import os
 import secrets
+import shutil
 import stat
 import unicodedata
 import zipfile
@@ -21,6 +22,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tokenvault.common.config_payload import (
+    CHUNK,
     MAX_HOSTS,
     PayloadConfig,
     append_payload,
@@ -72,6 +74,8 @@ def _payload_team(team: str) -> str:
 MAC_APP_DIR = "TokenVault Adapter.app"
 MAC_PAYLOAD_NAME = "tokenvault-config.bin"
 MAC_INSTALL_SCRIPT = "Install.command"
+MAC_UNINSTALL_SCRIPT = "Uninstall.command"
+_MAC_SCRIPTS = (MAC_INSTALL_SCRIPT, MAC_UNINSTALL_SCRIPT)
 _EXEC = 0o100755 << 16
 _SECRET_FILE = 0o100600 << 16
 
@@ -90,12 +94,12 @@ def write_mac_zip(template_zip: Path, dst: Path, payload: bytes) -> None:
         names = [i.filename for i in zin.infolist()]
         if not all(_mac_zip_name_ok(n) for n in names):
             raise PackagerError("The macOS template contains unsafe paths.")
-        if not any(n.startswith(MAC_APP_DIR + "/") for n in names) or (
-            MAC_INSTALL_SCRIPT not in names
+        if not any(n.startswith(MAC_APP_DIR + "/") for n in names) or not all(
+            s in names for s in _MAC_SCRIPTS
         ):
             raise PackagerError(
-                f"The macOS template must contain '{MAC_APP_DIR}' and '{MAC_INSTALL_SCRIPT}' "
-                "at its top level."
+                f"The macOS template must contain '{MAC_APP_DIR}', '{MAC_INSTALL_SCRIPT}' "
+                f"and '{MAC_UNINSTALL_SCRIPT}' at its top level."
             )
         if MAC_PAYLOAD_NAME in names:
             raise PackagerError("The macOS template already contains a config payload.")
@@ -104,13 +108,16 @@ def write_mac_zip(template_zip: Path, dst: Path, payload: bytes) -> None:
             out.create_system = 3
             out.compress_type = zipfile.ZIP_DEFLATED
             mode = info.external_attr
-            if info.filename == MAC_INSTALL_SCRIPT:
+            if info.filename in _MAC_SCRIPTS:
                 mode = _EXEC
             elif not mode:
                 mode = (0o040755 if info.is_dir() else 0o100644) << 16
             out.external_attr = mode
-            data = b"" if info.is_dir() else zin.read(info)
-            zout.writestr(out, data)
+            if info.is_dir():
+                zout.writestr(out, b"")
+            else:  # stream: the app bundle can be large
+                with zin.open(info) as fin, zout.open(out, "w") as fout:
+                    shutil.copyfileobj(fin, fout, CHUNK)
         pinfo = zipfile.ZipInfo(MAC_PAYLOAD_NAME)
         pinfo.create_system = 3
         pinfo.external_attr = _SECRET_FILE

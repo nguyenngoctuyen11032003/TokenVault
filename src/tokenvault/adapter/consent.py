@@ -52,8 +52,10 @@ def ask_consent(text: str) -> bool | None:  # pragma: no cover - interactive
     if sys.platform == "darwin":  # osascript dialog (tkinter is unreliable in a bundle)
         from tokenvault.adapter.platform import mac
 
-        return mac.ask_consent(text, t("consent.window_title"), t("consent.accept"),
-                               t("consent.decline"))
+        return mac.ask_consent(
+            text, t("consent.window_title"), t("consent.accept"), t("consent.decline"),
+            view=t("consent.view_full"),
+            short=mac.short_consent_text(text, t("consent.short_hint")))
     try:
         import tkinter as tk
         from tkinter import ttk

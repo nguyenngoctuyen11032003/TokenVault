@@ -497,3 +497,53 @@ def test_agent_run_path_never_imports_tkinter(configured: Path, tmp_path: Path) 
     out = subprocess.run([sys.executable, "-c", code, str(configured), str(tmp_path / "p")],
                          capture_output=True, text=True, timeout=60, env=env)
     assert out.stdout.strip().endswith("NO_TK"), out.stderr
+
+
+# ------------------------------------------------- macOS: indicator + consent
+def test_run_refuses_to_collect_without_indicator_and_exits_zero(
+    configured: Path, monkeypatch: pytest.MonkeyPatch, fake_app: type[FakeApp]
+) -> None:
+    """macOS privacy rule: no visible indicator -> no collection; exit 0 (no respawn loop)."""
+    from tokenvault.adapter.app import IndicatorUnavailable
+
+    monkeypatch.setattr(main, "set_background_priority", lambda: True)
+    notes: list[str] = []
+    monkeypatch.setattr(main, "_notify", notes.append)
+    fake_app.error = IndicatorUnavailable("ImportError: no pystray")
+    assert main.main(["run", "--data-dir", str(configured)]) == 0
+    st = json.loads(DataFiles(configured).state.read_text(encoding="utf-8"))
+    assert st["state"] == "no_indicator" and "pystray" in st["last_error"]
+    assert notes and "KHÔNG thu thập" in notes[0]
+
+
+def test_tray_failure_on_mac_raises_indicator_unavailable(
+    configured: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tokenvault.adapter.app import IndicatorUnavailable
+
+    class BrokenTray:
+        def __init__(self, *a: Any, **k: Any) -> None:
+            pass
+
+        def start(self) -> None:
+            raise ImportError("pystray")
+
+    monkeypatch.setattr(appmod, "Tray", BrokenTray)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    app = AdapterApp(DataFiles(configured), configured / "p", identity=IDENT, tray=True,
+                     transport_options={})
+    with pytest.raises(IndicatorUnavailable):
+        app.run()
+
+
+def test_consent_subcommand_exit_codes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, calls: dict[str, list[Any]]
+) -> None:
+    exe = fake_exe(tmp_path)
+    for answer, code in ((True, 0), (False, 3), (None, 4)):
+        monkeypatch.setattr(consent, "ask_consent", lambda text, a=answer: a)
+        assert main.main(["consent", "--from", str(exe)]) == code
+    plain = tmp_path / "plain.bin"
+    plain.write_bytes(b"nothing")
+    assert main.main(["consent", "--from", str(plain)]) == 2
+    assert calls == {"autostart": [], "launch": []}  # consent alone changes nothing

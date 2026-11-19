@@ -11,7 +11,10 @@ import contextlib
 import logging
 import os
 import plistlib
+import shutil
 import subprocess
+import tempfile
+import time
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -22,6 +25,7 @@ LABEL = "vn.ics.tokenvault.adapter"
 PRIO_DARWIN_PROCESS = 4
 PRIO_DARWIN_BG = 0x1000
 RUN_TIMEOUT_S = 20
+BOOTSTRAP_TRIES = 5
 
 #: runner(argv, stdin) -> (returncode, stdout, stderr). Never logs its inputs.
 Runner = Callable[[Sequence[str], bytes | None], tuple[int, bytes, bytes]]
@@ -65,7 +69,6 @@ def plist_bytes(program_args: Sequence[str], logs: Path) -> bytes:
         "ProgramArguments": [str(a) for a in program_args],
         "RunAtLoad": True,
         "KeepAlive": {"SuccessfulExit": False},  # clean exit (reload/quit) stays stopped
-        "ProcessType": "Background",
         "LimitLoadToSessionType": "Aqua",
         "StandardOutPath": str(logs / "adapter.out.log"),
         "StandardErrorPath": str(logs / "adapter.err.log"),
@@ -75,10 +78,12 @@ def plist_bytes(program_args: Sequence[str], logs: Path) -> bytes:
 
 class LaunchAgent:
     def __init__(self, home: Path | None = None, uid: int | None = None,
-                 runner: Runner | None = None) -> None:
+                 runner: Runner | None = None,
+                 sleep: Callable[[float], None] | None = None) -> None:
         self.home = home
         self._uid = uid
         self.run = runner or run_command
+        self._sleep = sleep or time.sleep
 
     @property
     def uid(self) -> int:
@@ -101,11 +106,17 @@ class LaunchAgent:
         tmp.write_bytes(data)
         os.replace(tmp, self.path)
         self.run(["launchctl", "bootout", f"{self.domain}/{LABEL}"], None)  # may not be loaded
-        rc, _, err = self.run(["launchctl", "bootstrap", self.domain, str(self.path)], None)
-        if rc != 0:
-            # The plist is in place, so it still starts at next login.
-            log.warning("launchctl bootstrap failed (%d): %s", rc,
-                        err.decode("utf-8", "replace").strip()[:200])
+        # bootout is asynchronous: an immediate bootstrap can fail with "Input/output error"
+        # while the old job is still going away, so retry with backoff.
+        rc, err = 1, b""
+        for attempt in range(BOOTSTRAP_TRIES):
+            rc, _, err = self.run(["launchctl", "bootstrap", self.domain, str(self.path)], None)
+            if rc == 0:
+                return
+            self._sleep(0.25 * (2 ** attempt))
+        # The plist is in place, so it still starts at next login.
+        log.warning("launchctl bootstrap failed (%d): %s", rc,
+                    err.decode("utf-8", "replace").strip()[:200])
 
     def disable(self) -> None:
         self.run(["launchctl", "bootout", f"{self.domain}/{LABEL}"], None)
@@ -119,30 +130,94 @@ class LaunchAgent:
 # ------------------------------------------------------------------ consent
 _ASCRIPT = (
     "on run argv\n"
+    "  set btns to items 3 thru -1 of argv\n"
     "  display dialog (item 1 of argv) with title (item 2 of argv) "
-    "buttons {(item 3 of argv), (item 4 of argv)} "
-    "default button 2 cancel button 1 with icon note\n"
+    "buttons btns default button 2 cancel button 1 with icon note\n"
+    "end run\n"
+)
+_NOTIFY_SCRIPT = (
+    "on run argv\n"
+    "  display notification (item 1 of argv) with title (item 2 of argv)\n"
     "end run\n"
 )
 
 
-def ask_consent(text: str, title: str, accept: str, decline: str,
-                runner: Runner | None = None) -> bool | None:
-    """Consent dialog via ``osascript``. True = Accept, False = Decline/Esc/close,
-    None = the dialog could not be shown (not a decline). The text goes in as an
-    argv item, never into the script source."""
+def short_consent_text(full: str, hint: str) -> str:
+    """A dialog-sized version of the consent text: field names without their notes, and
+    without the trailing tray/removal paragraphs; ``hint`` points at the full text."""
+    blocks = full.split("\n\n")
+    kept = blocks[:-2] if len(blocks) > 3 else blocks
+    out: list[str] = []
+    for line in "\n\n".join(kept).splitlines():
+        if line.startswith("  - ") and ":" in line:
+            line = line.split(":", 1)[0]
+        out.append(line)
+    return "\n".join(out) + "\n\n" + hint
+
+
+def _button(out: bytes) -> str:
+    """The pressed button from ``button returned:X, gave up:false``."""
+    text = out.decode("utf-8", "replace").strip()
+    if not text.startswith("button returned:"):
+        return ""
+    return text[len("button returned:"):].split(", gave up:")[0].strip()
+
+
+def ask_consent(text: str, title: str, accept: str, decline: str, view: str = "",
+                short: str | None = None, runner: Runner | None = None,
+                opener: Runner | None = None) -> bool | None:
+    """Consent dialog via ``osascript``. True = Accept, False = Decline/Esc, None = the
+    dialog could not be shown (not a decline). A short text is shown first; the
+    "view full" button opens the complete text in TextEdit (a private temp file) and the
+    dialog is shown again. The text goes in as an argv item, never into the script."""
     run = runner or run_command
+    open_run = opener or run_command
+    two_step = short is not None and bool(view)
+    shown = short if (two_step and short is not None) else text
+    buttons = [decline, view, accept] if two_step else [decline, accept]
+    tmpdir: str | None = None
     try:
-        rc, out, _ = run(["osascript", "-e", _ASCRIPT, text, title, decline, accept], None)
-    except (OSError, subprocess.SubprocessError) as e:
-        log.error("cannot show the consent dialog: %s", e)
-        return None
-    if rc == 0:
-        return accept in out.decode("utf-8", "replace")
-    if rc == 1:  # osascript: user cancelled (-128), i.e. the cancel button / Esc
-        return False
-    log.error("consent dialog failed (osascript exit %d)", rc)
-    return None
+        while True:
+            argv = ["osascript", "-e", _ASCRIPT, shown, title, *buttons]
+            try:
+                rc, out, err = run(argv, None)
+            except (OSError, subprocess.SubprocessError) as e:
+                log.error("cannot show the consent dialog: %s", e)
+                return None
+            if rc == 0:
+                pressed = _button(out)
+                if pressed == accept:
+                    return True
+                if pressed == decline:
+                    return False
+                if view and pressed == view:
+                    if tmpdir is None:
+                        tmpdir = tempfile.mkdtemp(prefix="tokenvault-consent-")
+                    path = Path(tmpdir) / "TokenVault-consent.txt"
+                    path.write_text(text, encoding="utf-8")
+                    try:
+                        open_run(["open", "-t", str(path)], None)
+                    except (OSError, subprocess.SubprocessError) as e:
+                        log.error("cannot open the full consent text: %s", e)
+                        return None
+                    continue
+                log.error("consent dialog returned an unexpected result")
+                return None
+            if rc == 1 and b"-128" in err:  # user cancelled: Esc / cancel button
+                return False
+            log.error("consent dialog failed (osascript exit %d)", rc)
+            return None
+    finally:
+        if tmpdir is not None:
+            shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def notify(message: str, title: str, runner: Runner | None = None) -> None:
+    """Best-effort macOS notification (never raises)."""
+    try:
+        (runner or run_command)(["osascript", "-e", _NOTIFY_SCRIPT, message, title], None)
+    except (OSError, subprocess.SubprocessError):
+        log.warning("cannot show a notification")
 
 
 # ----------------------------------------------------------------- priority

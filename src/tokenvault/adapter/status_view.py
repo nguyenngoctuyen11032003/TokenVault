@@ -158,7 +158,8 @@ def format_text(d: dict[str, Any]) -> str:
 
 
 _STATE_KEYS = {f"state.{s}" for s in (
-    "connected", "offline", "rejected", "connecting", "not_configured", "stopped", "crashed")}
+    "connected", "offline", "rejected", "connecting", "not_configured", "stopped", "crashed",
+    "no_indicator")}
 
 
 def version() -> str:

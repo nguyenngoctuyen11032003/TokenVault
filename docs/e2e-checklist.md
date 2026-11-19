@@ -14,16 +14,18 @@ Build and package
 
 Install (employee Mac)
 - [ ] Unzip a downloaded copy (quarantined). Right-click `Install.command` -> Open works; a plain double-click is allowed or shows the Gatekeeper prompt (document which).
-- [ ] The consent dialog (osascript) shows the FULL text, including all wire fields and the "what is not sent" part, and is not truncated or unreadable. Decline installs nothing (exit 3, no Keychain item, no plist).
+- [ ] The consent dialog (osascript) is short and readable; "Xem đầy đủ" opens the full text in TextEdit (all wire fields, "what is not sent") and the dialog comes back. Esc/Decline installs nothing (exit 3).
+- [ ] Re-running `Install.command` on a Mac that already has the agent: decline leaves the old app, plist and agent untouched; accept replaces them; a failing setup restores the old app.
 - [ ] After Accept: app is in `~/Applications`, `~/Library/LaunchAgents/vn.ics.tokenvault.adapter.plist` exists, `launchctl print gui/$(id -u)/vn.ics.tokenvault.adapter` shows it loaded.
 - [ ] Keychain Access shows items for service `vn.ics.tokenvault.adapter`; no secret appears in `ps aux` during setup; `config.json` and the `.key`/`.secret` files hold no secret (only `TVK1:` markers).
 - [ ] No Keychain permission prompt appears for the background agent (or document the prompt).
 
 Run
-- [ ] A menu-bar icon appears (pystray on the main thread); "What is sent?" opens; Quit/reload works. If the icon is unavailable the agent runs headless and the log says so.
+- [ ] A menu-bar icon appears (pystray on the main thread) and "What is sent?" opens. If the icon cannot be shown the agent REFUSES to collect: notification appears, `status` shows no_indicator, exit code 0 and launchd does not respawn it in a loop.
+- [ ] `launchctl bootout gui/$(id -u)/vn.ics.tokenvault.adapter` and `kill -TERM` stop the agent promptly while the menu-bar loop is running (sigwait thread).
 - [ ] Data folder is `~/Library/Application Support/TokenVault`, log in `~/Library/Logs/TokenVault/adapter.log`.
 - [ ] Use Claude Code; events reach the Manager (device appears with the team). FSEvents picks up new `.jsonl` lines within a few seconds.
 - [ ] Idle CPU is near zero; `nice` shows 10+. Network to the Manager is not stalled by the background policy (`setpriority` PRIO_DARWIN_BG).
 - [ ] Re-running `Install.command` while the agent runs reloads it (SIGUSR1) and starts exactly one agent; two simultaneous launches leave one (flock).
 - [ ] Log out and in: the agent starts via the LaunchAgent. Kill -9 the agent: launchd restarts it (KeepAlive after a crash). Clean quit does not restart it.
-- [ ] Uninstall steps from the Installer page instructions work (bootout, delete app and plist; Keychain items removed or documented).
+- [ ] `Uninstall.command` (right-click -> Open) removes the app, the plist, the Keychain items, `~/Library/Application Support/TokenVault` and the logs, and the agent process ends.

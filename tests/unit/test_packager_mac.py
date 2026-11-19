@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import stat
 import subprocess
@@ -36,10 +37,11 @@ def make_template(path: Path, *, install: bool = True, app: bool = True,
             z.writestr(i, MACHO)
             z.writestr(f"{APP}/Contents/Info.plist", b"<plist/>")
         if install:
-            i = zipfile.ZipInfo("Install.command")
-            i.create_system = 3
-            i.external_attr = 0o100644 << 16  # wrong on purpose: packager must fix
-            z.writestr(i, b"#!/bin/bash\n")
+            for script in ("Install.command", "Uninstall.command"):
+                i = zipfile.ZipInfo(script)
+                i.create_system = 3
+                i.external_attr = 0o100644 << 16  # wrong on purpose: packager must fix
+                z.writestr(i, b"#!/bin/bash\n")
         for k, v in (extra or {}).items():
             z.writestr(k, v)
     return path
@@ -68,7 +70,7 @@ def test_mac_zip_structure_and_sidecar_payload_roundtrip(tmp_path: Path, enr: En
         # the Mach-O is byte-identical: payload is a sidecar, never appended
         assert z.read(f"{APP}/Contents/MacOS/TokenVault Adapter") == MACHO
         modes = {i.filename: stat.S_IMODE(i.external_attr >> 16) for i in z.infolist()}
-        assert modes["Install.command"] == 0o755
+        assert modes["Install.command"] == 0o755 and modes["Uninstall.command"] == 0o755
         assert modes[f"{APP}/Contents/MacOS/TokenVault Adapter"] == 0o755
         assert modes["tokenvault-config.bin"] == 0o600
         z.extract("tokenvault-config.bin", tmp_path / "x")
@@ -152,21 +154,47 @@ def test_api_manage_exposes_target_param() -> None:
     assert "target" in inspect.signature(api_manage.create_installer).parameters
 
 
-def _rendered_install_command() -> str:
-    tmpl = (ROOT / "packaging" / "mac" / "Install.command.tmpl").read_text(encoding="utf-8")
+def _render(name: str) -> str:
+    tmpl = (ROOT / "packaging" / "mac" / name).read_text(encoding="utf-8")
     return tmpl.replace("@@APP_NAME@@", APP).replace("@@BIN_NAME@@", "TokenVault Adapter")
+
+
+def _rendered_install_command() -> str:
+    return _render("Install.command.tmpl")
 
 
 def test_install_command_content() -> None:
     s = _rendered_install_command()
     assert "@@" not in s and s.startswith("#!/bin/bash\n") and "set -euo pipefail" in s
     assert "xattr -dr com.apple.quarantine" in s
-    assert '"$HOME/Applications"' in s and 'setup --from "$HERE/$PAYLOAD_NAME"' in s
+    assert '"$HOME/Applications"' in s and 'setup --silent --accept --from "$PAYLOAD"' in s
     assert "sudo" not in s and "curl" not in s and "rm -rf /" not in s
-    for line in s.splitlines():  # every rm -rf is scoped to the app inside DEST_DIR
+    for line in s.splitlines():  # every rm -rf targets a known, quoted variable
         if "rm -rf" in line:
-            assert '"$DEST_DIR/$APP_NAME"' in line
+            assert re.search(r'rm -rf "\$(STAGE_DIR|BACKUP|OLD_APP)"', line), line
     assert "\r" not in s
+    # staged copy -> consent -> only then is the previous install touched
+    assert s.index('cp -R "$HERE/$APP_NAME"') < s.index('consent --from "$PAYLOAD"')
+    assert s.index('consent --from "$PAYLOAD"') < s.index('mv "$OLD_APP" "$BACKUP"')
+    assert "khôi phục bản cũ" in s  # rollback when setup fails
+
+
+def test_uninstall_command_content() -> None:
+    s = _render("Uninstall.command.tmpl")
+    assert "@@" not in s and "launchctl bootout" in s and "delete-generic-password" in s
+    assert 'rm -f "$PLIST"' in s and 'rm -rf "$APP_PATH"' in s and 'rm -rf "$SUPPORT_DIR"' in s
+    assert "sudo" not in s
+    for line in s.splitlines():
+        if "rm -rf" in line:
+            assert re.search(r'rm -rf "\$(APP_PATH|SUPPORT_DIR|LOG_DIR)"', line), line
+
+
+def test_build_script_is_not_git_ignored() -> None:
+    if shutil.which("git") is None:
+        pytest.skip("no git")
+    r = subprocess.run(["git", "check-ignore", "-q", "build/build-mac.sh"], cwd=ROOT,
+                       capture_output=True, timeout=30)
+    assert r.returncode == 1  # 1 = not ignored
 
 
 def _working_bash() -> str | None:
@@ -186,6 +214,7 @@ def test_shell_scripts_pass_bash_syntax_check() -> None:
         pytest.skip("no working bash")
     scripts = {
         "Install.command": _rendered_install_command(),
+        "Uninstall.command": _render("Uninstall.command.tmpl"),
         "build-mac.sh": (ROOT / "build" / "build-mac.sh").read_text(encoding="utf-8"),
     }
     for name, text in scripts.items():  # script on stdin: no path translation issues

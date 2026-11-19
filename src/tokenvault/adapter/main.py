@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from tokenvault.adapter import autostart, consent, paths, singleton, status_view, strings
-from tokenvault.adapter.app import AdapterApp, NotConfigured
+from tokenvault.adapter.app import AdapterApp, IndicatorUnavailable, NotConfigured
 from tokenvault.adapter.config import (
     AdapterConfig,
     delete_file,
@@ -51,7 +51,7 @@ log = logging.getLogger("tokenvault.adapter.main")
 EXIT_OK, EXIT_CRASH, EXIT_NO_PAYLOAD, EXIT_DECLINED, EXIT_NO_UI, EXIT_DPAPI = 0, 1, 2, 3, 4, 5
 LOG_BYTES, LOG_BACKUPS = 1_000_000, 3
 RELOAD_WAIT_S = 10.0
-_SUBCOMMANDS = ("run", "setup", "status", "about", "show")
+_SUBCOMMANDS = ("run", "setup", "consent", "status", "about", "show")
 _ATTACH_PARENT_PROCESS = 0xFFFFFFFF
 _log_handler: logging.Handler | None = None
 
@@ -264,7 +264,29 @@ def cmd_setup(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_consent(args: argparse.Namespace) -> int:
+    """Show ONLY the consent screen for the payload (installer scripts call this BEFORE
+    replacing an existing install). Exit 0 accepted, 3 declined, 4 no UI, 2 no payload."""
+    src = Path(args.from_exe) if args.from_exe else Path(sys.executable)
+    try:
+        payload = read_payload(src)
+    except OSError:
+        payload = None
+    if payload is None:
+        _err(t("setup.no_payload", name=src.name))
+        return EXIT_NO_PAYLOAD
+    accepted = consent.ask_consent(consent.render_text(consent.WIRE_FIELDS, payload.hosts))
+    if accepted is None:
+        _err(t("setup.no_ui"))
+        return EXIT_NO_UI
+    return EXIT_OK if accepted else EXIT_DECLINED
+
+
 def cmd_run(args: argparse.Namespace) -> int:
+    if sys.platform == "darwin":  # before any thread exists (see mac_singleton)
+        from tokenvault.adapter.platform import mac_singleton
+
+        mac_singleton.block_signals()
     files = _files(args)
     _start_file_logging(files)  # before any risky work, so a crash is recorded
     inst = singleton.SingleInstance(singleton.mutex_name())
@@ -280,7 +302,17 @@ def cmd_run(args: argparse.Namespace) -> int:
             log.error("%s", e)
             _err(str(e))
             return EXIT_NO_PAYLOAD
-        return int(app.run())
+        try:
+            return int(app.run())
+        except IndicatorUnavailable as e:
+            # Exit 0 on purpose: launchd KeepAlive(SuccessfulExit=false) must not respawn-loop.
+            reason = status_view.sanitize(str(e))
+            log.error("no visible indicator (%s); refusing to collect", reason)
+            status_view.write_state(files, "no_indicator", reason)
+            msg = t("run.no_indicator")
+            _err(msg)
+            _notify(msg)
+            return EXIT_OK
     except Exception as e:
         log.exception("agent crashed")
         reason = status_view.sanitize(f"{type(e).__name__}: {e}")
@@ -291,6 +323,14 @@ def cmd_run(args: argparse.Namespace) -> int:
         if _log_handler is not None:
             _log_handler.flush()
         inst.release()
+
+
+def _notify(message: str) -> None:
+    """User-visible notice when there is no tray (macOS notification; no-op elsewhere)."""
+    if sys.platform == "darwin":
+        from tokenvault.adapter.platform import mac
+
+        mac.notify(message, "TokenVault Adapter")
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -340,6 +380,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--accept", action="store_true", help="with --silent: consent given")
     s.add_argument("--no-autostart", action="store_true", help="do not register HKCU Run")
     s.add_argument("--no-start", action="store_true", help="do not start the agent")
+    c = sub.add_parser("consent", parents=[common], help="show only the consent screen")
+    c.add_argument("--from", dest="from_exe", help="file carrying the payload")
     st = sub.add_parser("status", parents=[common], help="show status and queue")
     st.add_argument("--json", action="store_true", help="JSON incl. one queued event")
     sub.add_parser("about", parents=[common], help="version information")
@@ -357,8 +399,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         attach_parent_console()
     args = build_parser().parse_args(args_list)
     strings.set_lang(args.lang)
-    handlers = {"run": cmd_run, "setup": cmd_setup, "status": cmd_status, "about": cmd_about,
-                "show": cmd_show}
+    handlers = {"run": cmd_run, "setup": cmd_setup, "consent": cmd_consent,
+                "status": cmd_status, "about": cmd_about, "show": cmd_show}
     try:
         return handlers[args.command](args)
     finally:

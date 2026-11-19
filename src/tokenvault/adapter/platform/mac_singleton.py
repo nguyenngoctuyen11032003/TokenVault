@@ -122,37 +122,72 @@ def signal_reload(path: str | Path, kill: Callable[[int, int], None] | None = No
     return True
 
 
+def _sig(name: str, default: int) -> int:
+    return int(getattr(signal, name, default))
+
+
+def block_signals(mask: Callable[[int, Any], Any] | None = None) -> None:
+    """Block SIGUSR1/SIGUSR2/SIGTERM in the calling thread (and every thread it creates
+    afterwards). Call this EARLY in the main thread: pystray's Cocoa loop owns the main
+    thread, so Python-level handlers would never run; a dedicated ``sigwait`` thread
+    takes the signals instead."""
+    fn = mask or getattr(signal, "pthread_sigmask", None)
+    if fn is None:
+        return
+    fn(getattr(signal, "SIG_BLOCK", 0), {_sig("SIGUSR1", 30), _sig("SIGUSR2", 31),
+                                         _sig("SIGTERM", 15)})
+
+
 class SignalReloadListener:
-    """Calls ``on_reload`` (once) on SIGUSR1. Needs the main thread to install the handler."""
+    """Calls ``on_reload`` (once) on SIGUSR1 (setup reload) or SIGTERM (launchctl bootout /
+    logout), using a ``sigwait`` thread so it works while the Cocoa loop owns the main
+    thread. ``stop()`` wakes the thread with SIGUSR2. The three functions are injectable."""
 
     def __init__(self, on_reload: Callable[[], None],
-                 install: Callable[[int, Any], Any] | None = None) -> None:
+                 sigwait: Callable[[Any], int] | None = None,
+                 mask: Callable[[int, Any], Any] | None = None,
+                 wake: Callable[[], None] | None = None) -> None:
         self._on_reload = on_reload
-        self._install = install or signal.signal
-        self._old: Any = None
-        self._installed = False
-        self._fired = False
+        self._sigwait = sigwait or getattr(signal, "sigwait", None)
+        self._mask = mask
+        self._wake = wake or (lambda: os.kill(os.getpid(), _sig("SIGUSR2", 31)))
+        self._thread: threading.Thread | None = None
+        self._stopping = False
 
     def start(self) -> bool:
-        if threading.current_thread() is not threading.main_thread():
+        if self._sigwait is None:
             return False
         try:
-            self._old = self._install(_usr1(), self._handle)
-        except (ValueError, OSError, AttributeError):
+            block_signals(self._mask)  # idempotent; threads started later inherit it
+        except (ValueError, OSError):
             return False
-        self._installed = True
+        self._thread = threading.Thread(target=self._run, name="tv-signals", daemon=True)
+        self._thread.start()
         return True
 
-    def _handle(self, signum: int, frame: Any) -> None:
-        if self._fired:
+    def _run(self) -> None:
+        assert self._sigwait is not None
+        wanted = {_sig("SIGUSR1", 30), _sig("SIGUSR2", 31), _sig("SIGTERM", 15)}
+        while not self._stopping:
+            try:
+                sig = self._sigwait(wanted)
+            except (OSError, ValueError):
+                return
+            if self._stopping or sig == _sig("SIGUSR2", 31):
+                return
+            log.info("asked to stop (signal %s); stopping", sig)
+            try:
+                self._on_reload()
+            except Exception:
+                log.exception("reload callback failed")
             return
-        self._fired = True
-        log.info("setup asked the agent to reload; stopping")
-        # never block inside a signal handler
-        threading.Thread(target=self._on_reload, name="tv-reload", daemon=True).start()
 
     def stop(self) -> None:
-        if self._installed:
-            self._installed = False
-            with contextlib.suppress(ValueError, OSError):
-                self._install(_usr1(), self._old if self._old is not None else signal.SIG_DFL)
+        t, self._thread = self._thread, None
+        if t is None:
+            return
+        self._stopping = True
+        if t.is_alive() and t is not threading.current_thread():
+            with contextlib.suppress(OSError):
+                self._wake()
+            t.join(5)

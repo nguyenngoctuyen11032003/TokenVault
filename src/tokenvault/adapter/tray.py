@@ -167,6 +167,7 @@ class Tray:
         self._thread: threading.Thread | None = None
         self._shown_state: str | None = None
         self._ready = threading.Event()
+        self.failed = False  # the icon loop died on its own
         self._main_thread: bool | None = None  # tests; None = decide by OS
         self.refresh = Throttle(self._refresh_now)
 
@@ -210,6 +211,7 @@ class Tray:
         try:
             self._icon.run(setup=setup)
         except Exception:
+            self.failed = True
             log.exception("tray icon failed")
         finally:
             self._ready.set()
