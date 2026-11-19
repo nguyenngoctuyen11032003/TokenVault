@@ -77,6 +77,11 @@ class Offline(Exception):
     """Could not reach / lost the Manager."""
 
 
+def _is_shutdown(e: BaseException) -> bool:
+    """Interpreter / executor shutdown: retrying can never succeed, so stop the loop."""
+    return isinstance(e, RuntimeError) and "shutdown" in str(e).lower()
+
+
 class Transport:
     def __init__(
         self,
@@ -210,6 +215,10 @@ class Transport:
                 failures = 0
                 delay = self.rejected_retry_s
             except Exception as e:  # Offline, ConnectionClosed, OSError, ProtocolError, bugs
+                if _is_shutdown(e):
+                    self._set_state("offline", f"stopped: {e}")
+                    log.info("transport loop ends: %s", e)
+                    return
                 if self._connected_once:
                     failures = 0
                 reason = str(e) if isinstance(e, Offline) else f"{type(e).__name__}: {e}"
@@ -244,6 +253,8 @@ class Transport:
                 try:
                     found = await asyncio.to_thread(self._resolver)
                 except Exception as e:
+                    if _is_shutdown(e):
+                        raise
                     log.warning("resolver failed: %r", e)
                     found = []
                 hosts = [h for h in dict.fromkeys(found) if h not in tried]
