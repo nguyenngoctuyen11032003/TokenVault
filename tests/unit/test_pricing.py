@@ -73,7 +73,13 @@ def test_repo_pricing_file_loads_with_reference_rates() -> None:
     m = 1_000_000
     assert p.cost("claude-sonnet-4-6", m, 0, 0, 0, 0) == Decimal("3")
     assert p.cost("claude-sonnet-4-6", 0, m, 0, 0, 0) == Decimal("15")
-    assert p.cost("claude-opus-4-7", 0, 0, 0, m, 0) == Decimal("18.75")
+    # Verified against the official price list (2026-11-19): Opus 4.x is 5/25, 5m cache write 6.25
+    assert p.cost("claude-opus-4-7", 0, 0, 0, m, 0) == Decimal("6.25")
+    assert p.cost("claude-opus-4-7", m, 0, 0, 0, 0) == Decimal("5")
+    assert p.cost("claude-opus-5-5", 0, m, 0, 0, 0) == Decimal("20")
+    assert p.cost("claude-sonnet-5-5", 0, 0, m, 0, 0) == Decimal("0.10")
+    assert p.cost("claude-haiku-5-5", m, 0, 0, 0, 0) == Decimal("0.10")
+    assert p.cost("claude-fable-5-2", 0, m, 0, 0, 0) == Decimal("40")
     assert p.cost("claude-haiku-4-5", 0, 0, 0, 0, m) == Decimal("2")
     assert p.cost("gpt-4o", m, 0, 0, 0, 0) is None
 
