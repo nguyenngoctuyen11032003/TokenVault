@@ -31,8 +31,23 @@ which is `"device:<id>"` for devices without a Claude account), `start`/`end` ar
 - `connectivity_test() -> {ok, checks: [{name, ok, detail}]}` (bind, firewall rule, LAN IPs, certificate)
 - `regenerate_certificate() -> {fingerprint, warning}` (explicit; invalidates all installed adapters)
 
-## Window methods
-`window_min()`, `window_close()` (hide to tray), `window_ready()`.
+## Window methods (owner request: a normal resizable desktop window)
+The window is frameless + chamfered (CSS) but must behave like a normal app window: resizable from every edge/corner,
+minimise, maximise/restore, full screen, remembers its size/position. All geometry is in the SAME logical (DPI-scaled)
+pixels the page sees (`window.innerWidth`); Python converts. Minimum size 1100x720.
+- `window_min()`, `window_close()` (hide to tray), `window_ready()`
+- `window_toggle_maximize() -> WindowState` · `window_maximize()` · `window_restore()` — maximise = the monitor's WORK AREA
+  (never covers the taskbar), restore returns to the saved normal bounds
+- `window_set_fullscreen(on: bool) -> WindowState` · `window_toggle_fullscreen() -> WindowState` — full screen = the whole monitor, no taskbar
+- `window_state() -> WindowState` where `WindowState = {maximized: bool, fullscreen: bool, x, y, width, height, min_width, min_height, screen: {x, y, width, height, work_x, work_y, work_width, work_height}}`
+- `window_get_bounds() -> {x, y, width, height}` · `window_set_bounds(x, y, width, height) -> WindowState` (clamped to min size and to the visible screen area; ignored while maximised/fullscreen except it first restores)
+- `window_start_move()` is NOT needed: the title bar uses the native drag region; double-click on the title bar toggles maximise (UI).
+- Edge/corner resizing: native if achievable (WS_THICKFRAME / WM_NCHITTEST on the HWND); otherwise the UI draws 6 px invisible
+  resize handles and drives `window_get_bounds()` + `window_set_bounds()` during the pointer drag. Python must support both.
+- Python pushes `tv.onWindowState(<WindowState json>)` on every change (maximise, restore, fullscreen, resize, move; throttled to ~10/s with a
+  trailing flush); the UI sets `.window--maximized` / `.window--fullscreen` on the root and hides the chamfer/margins in those states.
+- Persistence: the Manager saves `{x, y, width, height, maximized}` (NOT fullscreen) in settings.json on change (debounced) and restores it at start,
+  validating against the current monitors (off-screen/too-large saved geometry falls back to centred 1440x900 or the work area).
 
 ## Live push
 Python calls `tv.onLive(<json>)` at most 2/s with `{online, total, last_event_at, devices:{online,total}}`;
