@@ -120,10 +120,11 @@ def test_missing_route_shows_not_built_panel(open_shell: Any) -> None:
     assert panel.is_visible()
     assert "chưa được xây dựng" in panel.inner_text()
 
-    # Nav pages without a module yet render the same panel, naming the page.
-    page.evaluate("location.hash = '#/settings'")
-    _wait_route(page, "settings")
-    assert "Cài đặt" in page.locator("#tv-view tv-panel.tv-not-built").inner_text()
+    # Routes without a module render the same panel, naming the page (every nav page is built
+    # now, so an unknown route is used).
+    page.evaluate("location.hash = '#/not-a-page'")
+    _wait_route(page, "not-a-page")
+    assert "not-a-page" in page.locator("#tv-view tv-panel.tv-not-built").inner_text()
 
     # Route modules added later are picked up with no shared-file edits (test overlay).
     page.evaluate("location.hash = '#/demo/abc%20def'")

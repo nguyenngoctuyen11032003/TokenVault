@@ -1,0 +1,310 @@
+/* Shared by the installer, settings and diagnostics pages (Task 17): form fields, confirm
+ * dialog, toggle switch, badges, link buttons, mono text. Every rule uses a tv-installer-*
+ * class owned by these pages. */
+
+.tv-installer-mono {
+  font-family: "Cascadia Mono", Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+}
+
+.tv-installer-copybuf {
+  position: fixed;
+  left: -9999px;
+  opacity: 0;
+}
+
+.tv-installer-error {
+  margin-bottom: 12px;
+}
+
+/* ---------- form fields ---------- */
+
+.tv-installer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+  min-width: 0;
+}
+
+.tv-installer-field__label {
+  color: var(--tv-text-strong);
+  font-size: var(--tv-fs-md);
+  font-weight: 600;
+}
+
+.tv-installer-field__input {
+  width: 100%;
+  max-width: 460px;
+  padding: 9px 12px;
+  border: 1px solid var(--tv-line-strong);
+  border-left: 3px solid var(--tv-line-strong);
+  background: #0e0e11;
+  color: var(--tv-text-strong);
+  font: inherit;
+  font-size: 15px;
+  transition: border-color var(--tv-dur) var(--tv-ease), box-shadow var(--tv-dur) var(--tv-ease);
+}
+
+.tv-installer-field__input::placeholder {
+  color: var(--tv-dim);
+}
+
+.tv-installer-field__input:hover:not(:disabled) {
+  border-color: #50505a;
+}
+
+.tv-installer-field__input:focus-visible,
+.tv-installer-field__input:focus {
+  outline: none;
+  border-color: var(--tv-red-hot);
+  box-shadow: 0 0 0 1px var(--tv-red-hot), 0 0 14px rgb(255 45 63 / 0.25);
+}
+
+.tv-installer-field__input[aria-invalid="true"] {
+  border-color: var(--tv-red-hot);
+  background: #170a0c;
+}
+
+.tv-installer-field__input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.tv-installer-field__hint {
+  margin: 0;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-installer-field__error {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin: 0;
+  color: #ff6b78;
+  font-size: var(--tv-fs-sm);
+  font-weight: 500;
+}
+
+.tv-installer-field__error::before {
+  content: "!";
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  background: var(--tv-red-hot);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  line-height: 20px;
+}
+
+/* ---------- buttons ---------- */
+
+.tv-installer .tv-btn:disabled,
+.tv-installer-dlg .tv-btn:disabled,
+.tv-settings .tv-btn:disabled,
+.tv-diagnostics .tv-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tv-installer-linkbtn {
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  background: none;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+  cursor: pointer;
+}
+
+.tv-installer-linkbtn:hover {
+  border-color: rgb(255 45 63 / 0.5);
+  color: var(--tv-red-hot);
+}
+
+.tv-installer-linkbtn:focus-visible {
+  outline-offset: 0;
+}
+
+.tv-installer-copyhint {
+  align-self: center;
+  margin-left: 8px;
+  color: var(--tv-amber);
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-installer-copy[data-copied] {
+  box-shadow: inset 0 -2px 0 var(--tv-green);
+}
+
+/* ---------- badges ---------- */
+
+.tv-installer-badge {
+  display: inline-block;
+  padding: 2px 10px 2px 8px;
+  font-size: var(--tv-fs-xs);
+  letter-spacing: 0.04em;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+
+.tv-installer-badge.is-active {
+  background: rgb(43 212 106 / 0.14);
+  color: var(--tv-green);
+}
+
+.tv-installer-badge.is-revoked {
+  background: #26262b;
+  color: var(--tv-muted);
+}
+
+/* ---------- toggle switch ---------- */
+
+.tv-installer-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  color: var(--tv-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tv-installer-switch__track {
+  position: relative;
+  flex: none;
+  width: 46px;
+  height: 22px;
+  background: #2a2a30;
+  box-shadow: inset 0 0 0 1px #3b3b41;
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  transition: background var(--tv-dur) var(--tv-ease);
+}
+
+.tv-installer-switch__track > i {
+  position: absolute;
+  top: 4px;
+  left: 7px;
+  width: 14px;
+  height: 14px;
+  background: #8a8a92;
+  transition: transform var(--tv-dur) var(--tv-ease), background var(--tv-dur) var(--tv-ease);
+}
+
+.tv-installer-switch[aria-checked="true"] .tv-installer-switch__track {
+  background: linear-gradient(180deg, var(--tv-red-hot), var(--tv-red));
+}
+
+.tv-installer-switch[aria-checked="true"] .tv-installer-switch__track > i {
+  transform: translateX(18px);
+  background: #fff;
+}
+
+.tv-installer-switch:disabled {
+  opacity: 0.45;
+  cursor: progress;
+}
+
+.tv-installer-switch[data-busy] {
+  cursor: progress;
+}
+
+/* ---------- confirm dialog ---------- */
+
+.tv-installer-dlg-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(4 4 6 / 0.72);
+  backdrop-filter: blur(2px);
+  animation: tv-installer-fade var(--tv-dur) var(--tv-ease);
+}
+
+.tv-installer-dlg {
+  --tv-cut: 16px;
+  position: relative;
+  width: min(520px, 100%);
+  padding: 22px 26px 20px;
+  background:
+    linear-gradient(90deg, var(--tv-red-hot) 0 3px, transparent 3px),
+    linear-gradient(180deg, #222227, #151518 60%, #111114);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.6);
+  clip-path: polygon(0 0, calc(100% - var(--tv-cut)) 0, 100% var(--tv-cut), 100% 100%,
+      var(--tv-cut) 100%, 0 calc(100% - var(--tv-cut)));
+  animation: tv-installer-rise 200ms var(--tv-ease);
+}
+
+.tv-installer-dlg__title {
+  margin-bottom: 12px;
+  color: var(--tv-text-strong);
+  font-size: 18px;
+}
+
+.tv-installer-dlg__body p {
+  color: var(--tv-text);
+  overflow-wrap: anywhere;
+}
+
+.tv-installer-dlg__body p + p {
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-installer-dlg--danger .tv-installer-dlg__title::before {
+  content: "";
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 10px;
+  background: var(--tv-red-hot);
+  box-shadow: 0 0 10px var(--tv-red-glow);
+  transform: rotate(45deg) translateY(-2px);
+}
+
+.tv-installer-dlg__check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 14px 0 4px;
+  padding: 10px 12px;
+  border: 1px solid rgb(255 45 63 / 0.35);
+  background: rgb(225 11 31 / 0.08);
+  color: var(--tv-text-strong);
+  cursor: pointer;
+}
+
+.tv-installer-dlg__check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--tv-red-hot);
+}
+
+.tv-installer-dlg .tv-installer-field {
+  margin: 8px 0 0;
+}
+
+.tv-installer-dlg__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+@keyframes tv-installer-fade {
+  from { opacity: 0; }
+}
+
+@keyframes tv-installer-rise {
+  from { opacity: 0; transform: translateY(8px); }
+}
