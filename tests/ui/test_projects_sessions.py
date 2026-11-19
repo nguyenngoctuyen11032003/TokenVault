@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -297,3 +297,20 @@ def test_employee_page_clamps_long_overview_range_to_30d(open_page: Any) -> None
     assert page.locator("#tv-view [data-range-note]").is_visible()
     pressed = page.locator("#tv-view .tv-rangeswitch button[aria-pressed='true']")
     assert pressed.get_attribute("data-range") == "30d"
+
+
+@pytest.mark.parametrize("stored", ["90d", "all", "2026-01-01..2026-03-31"])
+def test_employees_page_clamps_long_overview_range_to_30d(open_page: Any, stored: str) -> None:
+    page = open_page(
+        "#/employees",
+        extra_script=(
+            f"localStorage.setItem('tv.filters.v1', JSON.stringify({{range: '{stored}'}}));"
+        ),
+    )
+    flt = calls(page, "employees")[-1][0]
+    days = (date.fromisoformat(flt["end"]) - date.fromisoformat(flt["start"])).days + 1
+    assert days == 30
+    assert page.locator("#tv-view .tv-employees [data-range-note]").is_visible()
+    pressed = page.locator("#tv-view .tv-rangeswitch button[aria-pressed='true']")
+    assert pressed.get_attribute("data-range") == "30d"
+    assert console_problems(page) == []

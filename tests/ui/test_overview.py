@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -373,13 +373,17 @@ def _sr_labels(page: Any, chart: str) -> list[str]:
 
 
 def test_axes_use_server_strings_under_a_foreign_browser_timezone(open_tz: Any) -> None:
-    # Browser in Honolulu (UTC-10, no DST); the stub data are in +07:00 like a Manager would be.
-    hnl = datetime.now(timezone(timedelta(hours=-10))).date()
+    # Browser in Honolulu (UTC-10, no DST), clock pinned to 23:30 local on 2026-11-19, which is
+    # already 2026-11-20 in UTC: 'today' must be the Honolulu-local day, not the UTC one.
+    pinned = datetime(2026, 11, 20, 9, 30, tzinfo=UTC)
+    hnl = pinned.astimezone(timezone(timedelta(hours=-10))).date()
+    assert hnl.isoformat() == "2026-11-19" and pinned.date().isoformat() == "2026-11-20"
     data = overview_data(today=hnl)
     page = open_tz("#/overview", timezone_id="Pacific/Honolulu", data=data,
-                   filters={"range": "today"})
+                   filters={"range": "today"}, fixed_time=pinned)
+    assert page.evaluate("new Date().toISOString()").startswith("2026-11-20T09:30")
     flt = calls(page, "overview")[-1][0]
-    assert flt["start"] == flt["end"] == hnl.isoformat()
+    assert flt["start"] == flt["end"] == "2026-11-19"
     resp = page.evaluate("f => window.pywebview.api.overview(f)", flt)
     expected = [p["hour"][11:16] for p in resp["hourly"]]
     assert _sr_labels(page, "daily") == expected

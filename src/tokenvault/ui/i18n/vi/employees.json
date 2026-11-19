@@ -32,6 +32,7 @@
       "shareOf": "{pct} tổng token"
     },
     "loadError": "Không tải được danh sách nhân viên: {detail}",
-    "retry": "Thử lại"
+    "retry": "Thử lại",
+    "rangeClamped": "Khoảng thời gian chọn ở trang Tổng quan không có ở trang này; đang hiển thị 30 ngày gần nhất."
   }
 }

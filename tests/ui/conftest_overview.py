@@ -301,6 +301,7 @@ def open_tz(browser: Any, ui_server: str) -> Iterator[OpenPage]:
         filters: dict[str, Any] | None = DEFAULT_FILTERS,
         width: int = 1440,
         height: int = 900,
+        fixed_time: Any = None,
     ) -> Any:
         ctx = browser.new_context(
             viewport={"width": width, "height": height}, timezone_id=timezone_id
@@ -311,6 +312,8 @@ def open_tz(browser: Any, ui_server: str) -> Iterator[OpenPage]:
         script = stub_init_script(data if data is not None else overview_data(), filters)
         ctx.add_init_script(script)
         page = ctx.new_page()
+        if fixed_time is not None:
+            page.clock.set_fixed_time(fixed_time)  # Date frozen, timers still run
         errors: list[str] = []
         console: list[str] = []
         page.on("pageerror", lambda exc: errors.append(str(exc)))
