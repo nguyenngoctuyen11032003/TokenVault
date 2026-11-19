@@ -1,0 +1,33 @@
+{
+  "skills": {
+    "range": { "7d": "7 ngày", "30d": "30 ngày", "90d": "90 ngày", "all": "Tất cả" },
+    "rangeLabel": "Khoảng thời gian",
+    "retry": "Thử lại",
+    "loadError": "Không tải được dữ liệu skill: {detail}",
+    "panel": "Skill",
+    "kpi": {
+      "total": "Lượt gọi Skill",
+      "days": "Ngày có dùng",
+      "people": "Nhân viên dùng",
+      "peak": "Ngày cao nhất"
+    },
+    "noteLead": "Giới hạn của số liệu.",
+    "note": "Collector chỉ gửi tên công cụ, nên trang này chỉ đếm số lần gọi công cụ có tên “Skill” theo ngày và theo nhân viên. Chưa biết skill nào được dùng; xếp hạng theo từng skill cần thêm trường mới trong giao thức.",
+    "dailyTitle": "Lượt gọi mỗi ngày",
+    "dailyLabel": "Số lượt gọi công cụ Skill mỗi ngày",
+    "dailySeries": "Lượt gọi",
+    "unit": "lượt",
+    "rankTitle": "Xếp hạng nhân viên",
+    "rankLabel": "Số lượt gọi Skill theo nhân viên",
+    "rankValue": "{value} lượt · {pct}",
+    "tableTitle": "Tất cả nhân viên",
+    "table": {
+      "rank": "#",
+      "employee": "Nhân viên",
+      "count": "Lượt gọi",
+      "share": "Tỷ lệ"
+    },
+    "empty": "Chưa có lượt gọi Skill nào trong khoảng thời gian này.",
+    "peakValue": "{day} · {count} lượt"
+  }
+}

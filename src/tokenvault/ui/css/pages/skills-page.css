@@ -1,0 +1,46 @@
+/* #/skills only (Task 16). */
+
+.tv-skills-head .tv-skills-note {
+  margin-top: 4px;
+}
+
+.tv-skills-charts {
+  grid-template-columns: minmax(0, 3fr) minmax(280px, 2fr);
+}
+
+@media (max-width: 1199px) {
+  .tv-skills-charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.tv-skills-table {
+  table-layout: fixed;
+}
+
+.tv-skills-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-skills-table .tv-skills-table__rank {
+  width: 48px;
+  color: var(--tv-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-skills-table th:nth-child(3),
+.tv-skills-table th:nth-child(4) {
+  width: 110px;
+}
+
+.tv-skills-table__who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tv-skills-table__who .tv-clip {
+  flex: 1;
+}

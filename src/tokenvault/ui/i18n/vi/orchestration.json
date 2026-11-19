@@ -1,0 +1,40 @@
+{
+  "orchestration": {
+    "range": { "7d": "7 ngày", "30d": "30 ngày", "90d": "90 ngày", "all": "Tất cả" },
+    "rangeLabel": "Khoảng thời gian",
+    "retry": "Thử lại",
+    "loadError": "Không tải được dữ liệu điều phối: {detail}",
+    "tokensUnit": "token",
+    "splitTitle": "Luồng chính và sub-agent",
+    "splitLabel": "Luồng chính {main} token, sub-agent {sub} token",
+    "legendMain": "Luồng chính · {tokens} · {pct}",
+    "legendSub": "Sub-agent · {tokens} · {pct}",
+    "kpi": {
+      "main": "Token luồng chính",
+      "sub": "Token sub-agent",
+      "share": "Tỷ trọng sub-agent",
+      "sessions": "Phiên dùng sub-agent"
+    },
+    "sessionsTitle": "Số phiên có token sub-agent (tối đa 20 phiên đứng đầu)",
+    "noteLead": "Giới hạn của số liệu.",
+    "note": "Collector chỉ gửi tên công cụ, không gửi tên từng agent, nên danh sách agent bên dưới được xếp hạng theo phiên, dựa trên token của các lượt phản hồi sub-agent (sidechain) trong phiên đó.",
+    "mainModels": "Model của luồng chính",
+    "subModels": "Model của sub-agent",
+    "mainModelsLabel": "Token luồng chính theo model",
+    "subModelsLabel": "Token sub-agent theo model",
+    "agentsTitle": "Phiên dùng nhiều token sub-agent nhất",
+    "agentsHint": "Xếp theo token sub-agent của từng phiên; tên phiên và nhân viên đi kèm.",
+    "rankValue": "{value} token · {pct}",
+    "untitled": "Phiên chưa đặt tên",
+    "emptyAll": "Chưa có dữ liệu token trong khoảng thời gian này.",
+    "emptyMain": "Không có token của luồng chính.",
+    "emptySidechain": "Chưa có dữ liệu sub-agent trong khoảng thời gian này: không có phản hồi nào chạy ở luồng sidechain.",
+    "emptyAgents": "Chưa có phiên nào dùng sub-agent.",
+    "explain": {
+      "title": "Trang này trả lời điều gì?",
+      "main": "Luồng chính: các phản hồi Claude trả lời trực tiếp trong cuộc trò chuyện của nhân viên.",
+      "sub": "Sub-agent: phản hồi của các agent phụ do Claude tự gọi để làm việc song song (đánh dấu sidechain). Tỷ trọng cao nghĩa là nhiều việc được giao cho agent phụ.",
+      "agents": "Danh sách phiên cho biết công việc nào dùng sub-agent nhiều nhất. Số này là token ghi nhận được, không phải tên agent."
+    }
+  }
+}
