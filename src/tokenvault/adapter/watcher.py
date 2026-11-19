@@ -36,6 +36,11 @@ MAX_WAIT_S = 1.0  # a file is collected at most this long after its first event
 # dropped after HOT_TTL_S without activity. Nothing is polled when idle.
 HOT_POLL_S = 1.0
 HOT_TTL_S = 60.0
+# watchdog's default (1 s) is how long the Windows emitter waits for a QUIET gap before
+# it hands over a batch of notifications: every change arrived >= 1 s late, and a file
+# written continuously produced none at all. 0.1 s costs ~10 idle wake-ups/s (Task 23
+# E2E: idle agent ~0.3% of one core, was ~0.1%; append -> Manager median 0.65 s, was 1.6 s).
+OBSERVER_TIMEOUT_S = 0.1
 
 
 def _stat(path: Path) -> os.stat_result:
@@ -157,7 +162,7 @@ class Watcher:
             self._next_attach = time.monotonic() + self._retry_s
             return
         try:
-            obs = Observer()
+            obs = Observer(timeout=OBSERVER_TIMEOUT_S)
             obs.schedule(_Handler(self._schedule), str(self._root), recursive=True)
             obs.daemon = True
             obs.start()
