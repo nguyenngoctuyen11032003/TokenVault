@@ -64,9 +64,11 @@
     p.revoked = true;
     return { ok: true };
   });
-  api.create_installer = rec('create_installer', (team, label) => {
+  api.create_installer = rec('create_installer', (team, label, target) => {
     const mgr = M();
-    const fileName = `TokenVault-Adapter-${team}.exe`;
+    const fileName = target === 'mac' ? `TokenVault-Adapter-${team}-mac.zip`
+      : target === 'windows-portable' ? `TokenVault-Adapter-${team}-portable.zip`
+        : `TokenVault-Adapter-${team}.exe`;
     const path = `${mgr.outDir}\\${fileName}`;
     mgr.packages.unshift({
       package_id: `pkg-${mgr.packages.length + 1}`,

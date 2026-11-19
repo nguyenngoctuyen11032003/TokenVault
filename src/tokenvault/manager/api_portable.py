@@ -7,13 +7,21 @@ from typing import Any
 from tokenvault.manager.api_models import ApiError
 from tokenvault.manager.lifecycle import Manager
 from tokenvault.manager.packager import PackagerError
-from tokenvault.manager.portable_packager import PortablePackager, default_runtime_dir
+from tokenvault.manager.portable_packager import (
+    PortablePackager,
+    default_runtime_dir,
+    runtime_ready,
+)
 
 
 def create_portable_installer(m: Manager, team: str, label: str | None) -> dict[str, Any]:
     """Build the no-exe ZIP for ``team`` (caller holds ``m.installer_lock``)."""
     packager = PortablePackager(default_runtime_dir(), m.enrollment, m.cert, m.paths.installers,
                                 m.endpoint, m.manager_id)
+    if not runtime_ready(packager.runtime_dir):  # -> UI shows the build-portable.ps1 hint
+        raise ApiError(
+            "The portable runtime is missing: run build\\build-portable.ps1 "
+            f"(expected {packager.runtime_dir / 'runtime' / 'python.exe'}).", "template_missing")
     try:
         built = packager.build_for_team(team, label)
     except PackagerError as e:
