@@ -22,6 +22,7 @@ which is `"device:<id>"` for devices without a Claude account), `start`/`end` ar
 ## Management methods (Tasks 12/17)
 - `devices() -> [{device_id, email, display_name, windows_user, hostname, team, online, last_seen, package_id}]`
 - `set_device_team(device_id, team) -> {ok}` · `revoke_device(device_id) -> {ok}` (closes live session)
+- `reset_device(device_id) -> {ok}` (owner action: drops the device's key and closes its live session so the real machine may enroll ONE more time; a device that already holds a key can never be re-enrolled otherwise; `not_found` if unknown or revoked)
 - `packages() -> [{package_id, team, label, created_at, revoked, devices}]` · `revoke_package(package_id) -> {ok}`
 - `create_installer(team, label|null) -> {path, file_name, team, bytes}` (raises if template missing)
 - `reveal_in_explorer(path) -> {ok}`

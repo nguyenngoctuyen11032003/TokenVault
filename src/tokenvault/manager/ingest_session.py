@@ -58,6 +58,7 @@ T = TypeVar("T")
 
 PREAUTH_MAX_BYTES = 4096
 REJECT_AUTH_ENROLL = "auth: enrollment refused"
+REJECT_AUTH_ALREADY = "auth: device already enrolled; ask the owner to reset the device"
 REJECT_AUTH_KEY = "auth: unknown or revoked device"
 REJECT_AUTH_REVOKED = "auth: device revoked"
 REJECT_EXPECTED_HELLO = "protocol: expected hello"
@@ -174,9 +175,10 @@ class Session:
         did = hello.device_id
         if hello.enroll_secret is not None:
             secret = hello.enroll_secret
-            key = await self._run_blocking(enr.register_device, secret, did, hello.team)
+            key, why = await self._run_blocking(enr.try_register, secret, did, hello.team)
             if key is None:
-                await self.reject(REJECT_AUTH_ENROLL)
+                await self.reject(REJECT_AUTH_ALREADY if why == "already_enrolled"
+                                  else REJECT_AUTH_ENROLL)
                 return False
             log.info("device %r enrolled from %s", did, self.peer)
         else:

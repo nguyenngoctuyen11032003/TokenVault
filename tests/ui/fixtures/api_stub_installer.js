@@ -57,6 +57,10 @@
     M().devices = M().devices.filter((x) => x.device_id !== id);
     return { ok: true };
   });
+  api.reset_device = rec('reset_device', (id) => {
+    if (!M().devices.some((x) => x.device_id === id)) throw new Error(`unknown device ${id}`);
+    return { ok: true };
+  });
   api.packages = rec('packages', () => M().packages);
   api.revoke_package = rec('revoke_package', (id) => {
     const p = M().packages.find((x) => x.package_id === id);

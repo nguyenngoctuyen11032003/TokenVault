@@ -174,6 +174,15 @@ STRINGS: dict[str, dict[str, str]] = {
     "status.outbox": {"vi": "Hàng đợi:", "en": "Outbox:"},
     "status.outbox_line": {"vi": "{queued} sự kiện, {delivered} đã gửi, {waiting} đang chờ",
                            "en": "{queued} queued, {delivered} delivered, {waiting} waiting"},
+    "status.reset_needed": {
+        "vi": "Máy này đã được đăng ký với Manager trước đó nhưng khoá thiết bị đã mất (ví dụ "
+              "sau khi cài lại Windows). Hãy nhờ chủ Manager mở Cài đặt > Máy tính và chọn "
+              "\"Đặt lại thiết bị\" cho máy này, rồi mở lại TokenVault Adapter.",
+        "en": "This computer was enrolled with the Manager before but its device key is gone "
+              "(for example after a Windows reinstall). Ask the Manager owner to open "
+              "Settings > Devices and choose \"Reset device\" for this computer, then "
+              "restart TokenVault Adapter.",
+    },
     "status.hint": {"vi": "Chạy 'status --json' để xem một sự kiện đúng như khi được gửi đi.",
                     "en": "Run 'status --json' to see one queued event exactly as it is sent."},
     # ------------------------------------------------------------------ about

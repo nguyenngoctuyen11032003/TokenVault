@@ -74,13 +74,34 @@ def test_deleted_device_may_enroll_again(enr: Enrollment) -> None:
     assert enr.register_device(pkg.secret, "dev-1", "Dev") is not None
 
 
-def test_reregister_issues_new_key_and_invalidates_old(enr: Enrollment) -> None:
+def test_active_device_cannot_be_hijacked_by_reenrolling(
+        enr: Enrollment, caplog: pytest.LogCaptureFixture) -> None:
     pkg = enr.create_package("Dev", None)
     k1 = enr.register_device(pkg.secret, "dev-1", "Dev")
-    k2 = enr.register_device(pkg.secret, "dev-1", "Dev")
-    assert k1 and k2 and k1 != k2
+    assert k1
+    with caplog.at_level("WARNING"):
+        assert enr.try_register(pkg.secret, "dev-1", "Dev") == (None, "already_enrolled")
+    assert any("already holds a key" in r.message for r in caplog.records)
+    assert enr.verify_device("dev-1", k1)  # the real device keeps working
+
+
+def test_reset_device_allows_one_new_enrollment(enr: Enrollment) -> None:
+    pkg = enr.create_package("Dev", None)
+    k1 = enr.register_device(pkg.secret, "dev-1", "Dev")
+    assert k1 and enr.reset_device("dev-1")
     assert not enr.verify_device("dev-1", k1)
-    assert enr.verify_device("dev-1", k2)
+    k2 = enr.register_device(pkg.secret, "dev-1", "Dev")
+    assert k2 and k2 != k1 and enr.verify_device("dev-1", k2)
+    assert enr.register_device(pkg.secret, "dev-1", "Dev") is None  # only once
+    assert not enr.reset_device("ghost")
+
+
+def test_reset_does_not_undo_revoke(enr: Enrollment) -> None:
+    pkg = enr.create_package("Dev", None)
+    enr.register_device(pkg.secret, "dev-1", "Dev")
+    enr.revoke_device("dev-1")
+    assert not enr.reset_device("dev-1")
+    assert enr.register_device(pkg.secret, "dev-1", "Dev") is None
 
 
 def test_revoked_package_blocks_enrollment_and_its_devices(enr: Enrollment) -> None:

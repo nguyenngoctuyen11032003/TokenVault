@@ -42,7 +42,7 @@ F = TypeVar("F", bound=Callable[..., Any])
 EXPOSED = (
     "overview", "employees", "employee", "projects", "sessions", "session", "session_turns",
     "skills", "orchestration", "teams",
-    "devices", "set_device_team", "revoke_device", "packages", "revoke_package",
+    "devices", "set_device_team", "revoke_device", "reset_device", "packages", "revoke_package",
     "create_installer", "reveal_in_explorer", "settings", "save_settings", "diagnostics",
     "connectivity_test", "regenerate_certificate",
     "report_options", "export_report", "report_progress", "open_path",
@@ -157,6 +157,10 @@ class Api:
     @_api
     def revoke_device(self, device_id: Any) -> Any:
         return mg.revoke_device(self._m, device_id)
+
+    @_api
+    def reset_device(self, device_id: Any) -> Any:
+        return mg.reset_device(self._m, device_id)
 
     @_api
     def packages(self) -> Any:

@@ -39,7 +39,7 @@ from tokenvault.adapter.config import (
     save_config,
     write_enroll_secret,
 )
-from tokenvault.adapter.identity import Identity, default_identity, read_identity
+from tokenvault.adapter.identity import Identity, default_identity, load_device_id, read_identity
 from tokenvault.adapter.paths import DataFiles
 from tokenvault.adapter.strings import t
 from tokenvault.adapter.watcher import set_background_priority
@@ -162,9 +162,11 @@ def _projects_dir(args: argparse.Namespace) -> Path:
 def _identity(args: argparse.Namespace) -> Identity:
     """With a custom Claude config dir, Claude Code keeps .claude.json inside it."""
     cd = _claude_dir(args)
+    root = _files(args).root
     if cd is not None and (cd / ".claude.json").is_file():
-        return read_identity(cd / ".claude.json", getpass.getuser(), socket.gethostname())
-    return default_identity()
+        user, host = getpass.getuser(), socket.gethostname()
+        return read_identity(cd / ".claude.json", user, host, load_device_id(root, user, host))
+    return default_identity(root)
 
 
 def _common_args(args: argparse.Namespace) -> list[str]:
@@ -239,6 +241,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
     files = _files(args)
     _start_file_logging(files)
     _stop_old_agent()
+    load_device_id(files.root, getpass.getuser(), socket.gethostname())  # before config.json
     new = AdapterConfig.from_payload(payload)
     old = load_config(files.config)
     try:  # secret first: config.json is the commit point

@@ -112,7 +112,7 @@ export default async function render(container, ctx) {
       h('a', { class: 'tv-settings-link', href: '#/diagnostics' }, t('openDiagnostics'))));
 
   // ---------- devices panel ----------
-  const deviceTable = createDeviceTable({ t, onTeam: changeTeam, onRevoke: revokeDevice });
+  const deviceTable = createDeviceTable({ t, onTeam: changeTeam, onRevoke: revokeDevice, onReset: resetDevice });
   const devicesCount = h('span', { class: 'tv-settings-count', slot: 'actions' });
   const devicesError = h('div');
   const devicesEmpty = h('div', { class: 'tv-settings-empty', 'data-devices-empty': '', hidden: true },
@@ -297,6 +297,32 @@ export default async function render(container, ctx) {
       const { code, text } = describeError(err, { revoked: t('deviceRevoked') }, (detail) => t('revokeError', { detail }));
       devicesError.replaceChildren(errorBanner({ text, attr: 'data-device-error', kind: code || 'generic' }));
       if (code === 'revoked') await refresh();
+      bump();
+      return;
+    }
+    await refresh();
+  }
+
+  async function resetDevice(device) {
+    const name = deviceName(device);
+    dialogOpen = true;
+    const ok = await confirmDialog({
+      title: t('resetTitle'),
+      body: [t('resetBody', { name, host: String(device.hostname ?? '') }), t('resetHint')],
+      confirmLabel: t('resetConfirm'),
+      cancelLabel: t('cancel'),
+      danger: false,
+      signal: ctx.signal,
+    });
+    dialogOpen = false;
+    if (!ok || ctx.signal.aborted) return;
+    devicesError.replaceChildren();
+    try {
+      await ctx.api.reset_device(device.device_id);
+    } catch (err) {
+      console.warn('[settings] reset_device failed', err);
+      const { code, text } = describeError(err, { revoked: t('deviceRevoked') }, (detail) => t('resetError', { detail }));
+      devicesError.replaceChildren(errorBanner({ text, attr: 'data-device-error', kind: code || 'generic' }));
       bump();
       return;
     }

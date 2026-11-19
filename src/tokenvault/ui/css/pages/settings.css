@@ -302,7 +302,7 @@
 .tv-settings-devices__col--device { width: 24%; }
 .tv-settings-devices__col--team { width: 190px; }
 .tv-settings-devices__col--seen { width: 140px; }
-.tv-settings-devices__col--action { width: 92px; }
+.tv-settings-devices__col--action { width: 124px; }
 
 .tv-settings-who {
   display: flex;
@@ -353,6 +353,15 @@
 
 .tv-settings-rowaction {
   text-align: right;
+}
+
+.tv-settings-rowaction > button {
+  display: block;
+  margin-left: auto;
+}
+
+.tv-settings-rowaction > button + button {
+  margin-top: 4px;
 }
 
 .tv-settings-empty {

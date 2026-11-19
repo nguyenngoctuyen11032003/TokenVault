@@ -126,6 +126,23 @@ def test_revoke_device_requires_confirmation(open_mgr: Any) -> None:
     assert page.locator(f"{DEVICES}[data-device='qa-01']").count() == 0
 
 
+def test_reset_device_requires_confirmation(open_mgr: Any) -> None:
+    page = open_mgr("#/settings")
+    button = page.locator(f"{DEVICES}[data-device='qa-01'] button[data-action='reset-device']")
+    assert button.inner_text() == "Đặt lại thiết bị"
+    button.click()
+    dialog = page.locator(DIALOG)
+    dialog.wait_for()
+    page.keyboard.press("Escape")
+    dialog.wait_for(state="detached")
+    assert calls(page, "reset_device") == []
+    button.click()
+    page.locator(f"{DIALOG} button[data-dlg='confirm']").click()
+    page.wait_for_function("() => true")
+    assert calls(page, "reset_device") == [["qa-01"]]
+    assert page.locator(f"{DEVICES}[data-device='qa-01']").count() == 1  # not removed
+
+
 def test_settings_devices_show_online_names_and_escape_xss(open_mgr: Any) -> None:
     page = open_mgr("#/settings")
     assert page.locator(DEVICES).count() == 5

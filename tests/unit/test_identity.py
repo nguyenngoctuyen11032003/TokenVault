@@ -84,3 +84,22 @@ def test_default_identity(monkeypatch, tmp_path):
     i = default_identity()
     assert isinstance(i, Identity)
     assert i.device_id == "H:bob" and i.email is None
+
+
+def test_device_id_has_random_persisted_part(tmp_path):
+    from tokenvault.adapter.identity import load_device_id
+
+    a = load_device_id(tmp_path / "d1", "u", "H")
+    assert a.startswith("H:u:") and len(a.rsplit(":", 1)[1]) == 8
+    assert load_device_id(tmp_path / "d1", "u", "H") == a  # stable across runs/reinstalls
+    assert load_device_id(tmp_path / "d2", "u", "H") != a  # not guessable from names
+
+
+def test_existing_install_keeps_legacy_device_id(tmp_path):
+    from tokenvault.adapter.identity import load_device_id
+
+    d = tmp_path / "d"
+    d.mkdir()
+    (d / "device.key").write_bytes(b"x")
+    assert load_device_id(d, "u", "H") == "H:u"
+    assert (d / "device.id").read_text() == "H:u"

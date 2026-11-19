@@ -179,6 +179,13 @@ def test_set_device_team_and_revoked(demo: Manager) -> None:
     assert call_error(api.set_device_team, dev, "Dev").startswith("[revoked]")
 
 
+def test_reset_device(demo: Manager) -> None:
+    api = Api(demo)
+    dev = api.devices()[0]["device_id"]
+    assert api.reset_device(dev) == {"ok": True}
+    assert call_error(api.reset_device, "ghost").startswith("[not_found]")
+
+
 def test_revoke_package(demo: Manager) -> None:
     api = Api(demo)
     qa = next(p for p in api.packages() if p["team"] == "QA")

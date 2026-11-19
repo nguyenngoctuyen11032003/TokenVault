@@ -333,6 +333,12 @@ class IngestServer:
             self._close_sessions([s], CLOSE_REVOKED, "revoked")
         log.info("revoked device %r", device_id)
 
+    def reset_device(self, device_id: str) -> bool:
+        """Owner reset: drop the device's key and close its live session. Thread-safe."""
+        ok = self.enrollment.reset_device(device_id)
+        self.disconnect(device_id)
+        return ok
+
     def revoke_package(self, package_id: str) -> None:
         """Revoke a package and close the live sessions of all its devices. Thread-safe."""
         self.enrollment.revoke_package(package_id)

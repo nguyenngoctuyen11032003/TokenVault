@@ -315,6 +315,7 @@ def test_lone_surrogate_frame_does_not_crash_server(rig: Rig) -> None:
         )
         assert isinstance(send_recv(bad_hello, raw_hello), Reject)
     assert rig.server.rejected_count >= 1
+    rig.enrollment.reset_device(DEVICE)  # the raw client above already enrolled it
     ob = rig.outbox()
     ob.enqueue([make_event(2, session_title="Tiếng Việt 😀")])
     t = rig.transport(ob)
@@ -370,3 +371,15 @@ def test_on_event_callback_reports_device_and_count(rig: Rig) -> None:
     assert wait_until(lambda: _delivered(rig, ob, 4))
     assert wait_until(lambda: sum(n for _, n in seen) == 4)
     assert {d for d, _ in seen} == {DEVICE}
+
+
+def test_reenroll_of_active_device_is_refused_until_reset(rig: Rig) -> None:
+    rig.start_server()
+    rig.enroll()
+    with raw_client(rig.port) as ws:
+        reply = send_recv(ws, hello_frame(secret=rig.package.secret))
+        assert isinstance(reply, Reject) and "reset the device" in reply.reason
+    assert rig.server.rejected_count >= 1
+    assert rig.server.reset_device(DEVICE)
+    with raw_client(rig.port) as ws:
+        assert isinstance(send_recv(ws, hello_frame(secret=rig.package.secret)), Welcome)

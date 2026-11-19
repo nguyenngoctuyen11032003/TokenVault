@@ -96,7 +96,7 @@ class AdapterApp:
         self.files = files
         self.config: AdapterConfig = cfg
         self.projects_dir = Path(projects_dir)
-        self.identity = identity if identity is not None else default_identity()
+        self.identity = identity if identity is not None else default_identity(files.root)
         self.state = "offline"
         self._tray_enabled = tray
         self._resolver = resolver
@@ -173,6 +173,9 @@ class AdapterApp:
                 log.warning("device key rejected (%s); will re-enroll with the installer's "
                             "secret", reason)
                 delete_file(self.files.device_key)
+        if state == "rejected" and "already enrolled" in reason:
+            log.error("the Manager refuses to enroll this device again: %s",
+                      t("status.reset_needed"))
         self._state_writer()
         if self._tray is not None:
             self._tray.refresh()
