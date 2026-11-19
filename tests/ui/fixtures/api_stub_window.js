@@ -1,7 +1,8 @@
 // Test-only: adds the Manager window methods (docs/superpowers/specs/manager-api-contract.md,
 // "Window methods") to the fake pywebview bridge from conftest.stub_script. State lives in
 // window.__tvWin; every call is recorded in window.__tvCalls. Options (set before boot through
-// window.__tvWinOpts): native_resize (bool), passive (toggles return null and change nothing,
+// window.__tvWinOpts): native_resize (bool), extra (object merged into the state, e.g. the
+// exact payload Task 12's window_control.state() returns), passive (toggles return null and change nothing,
 // so only explicit tv.onWindowState pushes change the UI), bounds_delay_ms (latency of
 // window_set_bounds, used to prove that at most one call is in flight).
 (() => {
@@ -26,6 +27,7 @@
     inflight: 0,
     maxInflight: 0,
   });
+  Object.assign(W.state, clone(opts.extra || {}));
   const result = () => (opts.passive ? null : clone(W.state));
   const rec = (name, fn, delay = 0) => (...args) => {
     calls.push({ name, args: clone(args) });

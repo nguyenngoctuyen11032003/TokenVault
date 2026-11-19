@@ -7,7 +7,11 @@
 //   applyState(p)   -> same entry point as tv.onWindowState (object or JSON string)
 //
 // WindowState (docs/superpowers/specs/manager-api-contract.md, "Window methods"):
-//   {maximized, fullscreen, x, y, width, height, min_width, min_height, screen, native_resize?}
+//   {maximized, fullscreen, x, y, width, height, min_width, min_height, screen,
+//    native_resize?, native_region?}
+// native_resize: true -> the OS resizes the window, the UI draws no resize handles.
+// native_region: true -> the OS window region is cut to the chamfer (Python's transparency
+//   fallback), so the cut corners are not part of the window; the resize handles move inside.
 // `maximized` and `fullscreen` must be booleans, otherwise the payload is dropped (logged with
 // console.warn). The root <html> and `.tv-window` get `window--maximized` / `window--fullscreen`;
 // window.css turns the chamfer off (`--tv-chamfer: 0`) in those states.
@@ -18,6 +22,7 @@ const DEFAULTS = Object.freeze({
   maximized: false,
   fullscreen: false,
   native_resize: false,
+  native_region: false,
   min_width: DEFAULT_MIN.width,
   min_height: DEFAULT_MIN.height,
   /** false until Python answered window_state() or pushed a valid state */
@@ -45,6 +50,7 @@ export function normalize(payload) {
   return {
     ...data,
     native_resize: data.native_resize === true,
+    native_region: data.native_region === true,
     min_width: positive(data.min_width, DEFAULT_MIN.width),
     min_height: positive(data.min_height, DEFAULT_MIN.height),
     available: true,

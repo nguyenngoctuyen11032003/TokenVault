@@ -79,14 +79,19 @@
     return { path, file_name: fileName, team, bytes: 18432000 };
   });
   api.reveal_in_explorer = rec('reveal_in_explorer', () => ({ ok: true }));
-  api.settings = rec('settings', () => M().settings);
+  // installer_hosts like Task 12: the configured list, or the detected one when it is empty.
+  const withInstallerHosts = (st) => ({
+    ...st,
+    installer_hosts: st.installer_hosts ?? ((st.hosts || []).length ? st.hosts : (st.hosts_auto || [])),
+  });
+  api.settings = rec('settings', () => withInstallerHosts(M().settings));
   api.save_settings = rec('save_settings', (patch) => {
     const allowed = ['transparent_window', 'start_with_windows', 'hosts'];
     for (const key of Object.keys(patch || {})) {
       if (!allowed.includes(key)) throw new Error(`not allowed: ${key}`);
       M().settings[key] = patch[key];
     }
-    return M().settings;
+    return withInstallerHosts(M().settings);
   });
   api.diagnostics = rec('diagnostics', () => M().diagnostics);
   api.connectivity_test = rec('connectivity_test', () => M().connectivity);

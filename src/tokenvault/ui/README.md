@@ -6,7 +6,8 @@ everything the app loads is in this folder (offline app).
 ```
 index.html            shell markup (titlebar, nav, <main id="tv-view">)
 css/theme.css         tokens (--tv-*) + base styles, focus ring, reduced motion
-css/window.css        chamfered window, hatch plate, title hood, layout grid
+css/window.css        chamfered window, hatch plate, title hood, layout grid, window states
+css/resize-handles.css  JS resize hit areas
 css/components.css    <tv-panel>, nav, buttons, notices
 css/primitives.css    shared page primitives (.tv-table, .tv-bar, .tv-seg, ...)
 css/gauge.css         <tv-gauge>
@@ -152,7 +153,9 @@ The window is frameless but behaves like a normal desktop window. Contract: "Win
   pushes `window.evaluate_js("tv.onWindowState(<WindowState json>)")` on every change (object
   or JSON string). `maximized` and `fullscreen` must be booleans, otherwise the push is dropped
   (`console.warn`). Optional `native_resize: true` means Python resizes natively (WS_THICKFRAME)
-  and the UI draws no resize handles; `min_width` / `min_height` default to 1100 / 720. Any
+  and the UI draws no resize handles; `native_region: true` means the OS window region is cut to
+  the chamfer (Python's fallback while normal), so the handles move inside it (corner areas on
+  the chamfer diagonals, `.tv-resize--region`); `min_width` / `min_height` default to 1100 / 720. Any
   WindowState returned by a window method is applied too. `getState()`, `subscribe(cb)`,
   `tv.windowState` expose it.
 - **Classes**: `window--maximized` (maximised and not full screen) and `window--fullscreen` on
@@ -161,14 +164,19 @@ The window is frameless but behaves like a normal desktop window. Contract: "Win
   removes the classes and the chamfer comes back. `.window--opaque` combines with both.
 - **Title bar**: minimise, maximise/restore (icon + `aria-label` "Phóng to"/"Khôi phục" follow
   the state; while full screen it leaves full screen), close. Double-click on a drag region
-  (brand, title hood, spacer) toggles maximise, except in full screen.
+  (brand, title hood, spacer: `.tv-titlebar__drag`) toggles maximise, except in full screen.
+  The `pywebview-drag-region` class is removed from those elements while maximised / full
+  screen, so a drag cannot displace the window (it comes back on restore).
 - **Shortcuts**: F11 toggles full screen (always, even while typing); Esc leaves full screen
   only when full screen, the focus is not in a text field and no dialog / menu is open
   (`[role=dialog]`, `[aria-modal=true]`, `dialog[open]`, `[role=menu]`, ...), and nobody called
   `preventDefault()` first. Entering full screen shows the chip "Thoát toàn màn hình (F11)"
   (`.tv-fullscreen-hint`) which fades after 2.5 s.
-- **No window API** (plain browser / old bridge): the buttons never throw; they show the toast
-  "Chỉ có trong ứng dụng" (`.tv-toast`). F11 falls back to the browser Fullscreen API (dev).
+- **No window API** (plain browser / old bridge): minimise, maximise, close and F11 never throw;
+  a failed call shows the toast "Chỉ có trong ứng dụng" (`.tv-toast`). Only in http mode (dev
+  server) F11 falls back to the browser Fullscreen API. F11 auto-repeat is ignored. The toast and
+  the hint are `aria-live` regions created once at boot (empty, faded out); messages only change
+  their text.
 - **Resize handles** (`js/components/resize-handles.js`, `.tv-resize__handle[data-dir]`): 6 px
   edges and 12 px corners, only when the window is normal and `native_resize` is not true. A
   drag calls `window_get_bounds()` once, then `window_set_bounds(x, y, w, h)` with bounds from

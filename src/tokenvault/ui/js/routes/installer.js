@@ -280,7 +280,10 @@ export default async function render(container, ctx) {
   }
 
   function renderInfo(settings) {
-    const hosts = Array.isArray(settings?.hosts) ? settings.hosts : [];
+    // installer_hosts = what new installers carry (configured list, or the detected one when
+    // the configured list is empty); older Managers only had `hosts`.
+    const raw = Array.isArray(settings?.installer_hosts) ? settings.installer_hosts : settings?.hosts;
+    const hosts = Array.isArray(raw) ? raw.map(String) : [];
     info.hosts.replaceChildren(...hosts.map((x) => clipText('span', 'tv-installer-info__host', x)));
     info.port.textContent = settings?.port ? String(settings.port) : '';
     info.fp.textContent = shortFingerprint(settings?.fingerprint);

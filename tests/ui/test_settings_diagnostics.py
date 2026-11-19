@@ -171,6 +171,46 @@ def test_settings_toggles_and_hosts_are_saved(open_mgr: Any) -> None:
     assert console_problems(page) == []
 
 
+def test_settings_empty_hosts_show_automatic_state_and_can_be_saved(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["settings"]["hosts"] = []  # Task 12: [] = automatic (hosts_auto is what is detected)
+    page = open_mgr("#/settings", data=data)
+    empty = page.locator("#tv-view .tv-settings-hostsempty")
+    assert empty.is_visible() and empty.get_attribute("data-auto") == "1"
+    assert "192.168.1.10, 10.0.5.23" in empty.inner_text()
+    assert "192.168.1.10" in (page.get_attribute("#tv-settings-host", "placeholder") or "")
+    assert page.locator("#tv-view .tv-settings-hosts li").count() == 0
+    # Pin one address, then go back to automatic by removing it and saving [].
+    page.fill("#tv-settings-host", "10.0.5.23")
+    page.press("#tv-settings-host", "Enter")
+    page.click("#tv-view [data-action='save-hosts']")
+    page.wait_for_function("window.__tvCalls.some(c => c.name === 'save_settings')")
+    assert calls(page, "save_settings")[-1] == [{"hosts": ["10.0.5.23"]}]
+    page.click("#tv-view .tv-settings-hosts [data-host='10.0.5.23'] [data-action='remove-host']")
+    save = page.locator("#tv-view [data-action='save-hosts']")
+    assert save.is_enabled()
+    save.click()
+    page.wait_for_function("window.__tvCalls.filter(c => c.name === 'save_settings').length == 2")
+    assert calls(page, "save_settings")[-1] == [{"hosts": []}]
+    assert empty.is_visible()
+    assert console_problems(page) == []
+
+
+def test_installer_shows_installer_hosts(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["settings"]["hosts"] = []
+    page = open_mgr("#/installer", data=data)
+    hosts = page.locator("#tv-view .tv-installer-info__host")
+    assert hosts.all_inner_texts() == ["192.168.1.10", "10.0.5.23"]
+    # An explicit installer_hosts wins over hosts.
+    data["settings"]["hosts"] = ["MANAGER-PC"]
+    data["settings"]["installer_hosts"] = ["MANAGER-PC", "192.168.1.10"]
+    page2 = open_mgr("#/installer", data=data)
+    texts = page2.locator("#tv-view .tv-installer-info__host").all_inner_texts()
+    assert texts == ["MANAGER-PC", "192.168.1.10"]
+    assert console_problems(page) == [] and console_problems(page2) == []
+
+
 def test_settings_toggle_failure_reverts_and_shows_error(open_mgr: Any) -> None:
     data = mgr_data()
     data["failOnce"] = {"save_settings": "registry access denied"}

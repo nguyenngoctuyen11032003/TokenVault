@@ -2,7 +2,9 @@
 //
 // Eight invisible hit areas (6 px edges, 12 px corners) along the viewport border, drawn only
 // while the window is normal (not maximised / full screen) and Python reports no native
-// resizing (`WindowState.native_resize !== true`). A drag:
+// resizing (`WindowState.native_resize !== true`). With `native_region: true` (the OS window
+// region itself is chamfered, so the cut corners are not part of the window) the corner areas
+// sit on the chamfer diagonals and the edges start where the chamfers end. A drag:
 //   pointerdown  -> setPointerCapture, api.window_get_bounds() once
 //   pointermove  -> new bounds from the SCREEN delta (event.screenX/Y: the window itself moves
 //                   under the pointer, so client coordinates are useless), clamped to
@@ -98,6 +100,8 @@ export function mountResizeHandles(api, host = document.body) {
 
   const sync = (state) => {
     root.hidden = state.maximized || state.fullscreen || state.native_resize === true;
+    // The OS window region is cut to the chamfer: keep every hit area inside it.
+    root.classList.toggle('tv-resize--region', state.native_region === true);
     if (root.hidden && drag) end(false);
   };
 

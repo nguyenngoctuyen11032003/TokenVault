@@ -5,10 +5,9 @@
 // and close (close hides the window to the tray — implemented in Python). Double-click on a drag
 // region toggles maximise (not while full screen); the max button follows js/winstate.js.
 
-import { api } from '../api.js';
 import { t } from '../i18n.js';
 import { deviceCounts, lastLive, onLive } from '../live.js';
-import { toggleMaximize } from '../wincommands.js';
+import { closeWindow, minimize, toggleMaximize } from '../wincommands.js';
 import * as winstate from '../winstate.js';
 import { icon } from './icons.js';
 
@@ -45,17 +44,17 @@ export class TvTitlebar extends HTMLElement {
       </div>`;
     this._live = this.querySelector('.tv-live');
     this._liveText = this.querySelector('.tv-live__text');
-    this.querySelector('[data-action="min"]').addEventListener('click', () =>
-      api.window_min().catch((err) => console.error(err)),
-    );
-    this.querySelector('[data-action="close"]').addEventListener('click', () =>
-      api.window_close().catch((err) => console.error(err)),
-    );
+    this.querySelector('[data-action="min"]').addEventListener('click', () => minimize());
+    this.querySelector('[data-action="close"]').addEventListener('click', () => closeWindow());
+    // Drag regions: marked once with tv-titlebar__drag; the pywebview class is only present while
+    // the window is normal, so a drag can never displace a maximised / full-screen window.
+    this._drags = [...this.querySelectorAll('.pywebview-drag-region')];
+    this._drags.forEach((el) => el.classList.add('tv-titlebar__drag'));
     this._max = this.querySelector('[data-action="max"]');
     this._max.addEventListener('click', () => toggleMaximize());
     this.addEventListener('dblclick', (event) => {
       const target = event.target instanceof Element ? event.target : null;
-      if (!target?.closest('.pywebview-drag-region') || target.closest('button, a')) return;
+      if (!target?.closest('.tv-titlebar__drag') || target.closest('button, a')) return;
       if (winstate.getState().fullscreen) return;
       toggleMaximize();
     });
@@ -73,6 +72,7 @@ export class TvTitlebar extends HTMLElement {
 
   _renderWindow(state) {
     const flat = state.maximized || state.fullscreen;
+    this._drags.forEach((el) => el.classList.toggle('pywebview-drag-region', !flat));
     const key = flat ? 'restore' : 'maximize';
     if (this._max.dataset.icon === key) return;
     this._max.dataset.icon = key;

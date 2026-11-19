@@ -316,14 +316,20 @@ def test_malformed_state_push_is_ignored(open_shell: Any) -> None:
     assert page.tv_errors == []
 
 
+def _wait_toast(page: Any) -> None:
+    page.wait_for_function(
+        "() => { const t = document.querySelector('.tv-toast');"
+        " return t && t.textContent && !t.classList.contains('tv-toast--out'); }"
+    )
+
+
 def test_window_api_absent_does_not_throw(open_shell: Any) -> None:
     # Stub without any window_* method except min/close (an old bridge).
     page = open_shell("#/home")
     page.wait_for_selector("tv-titlebar [data-action='max']")
     _max_button(page).click()
-    toast = page.locator(".tv-toast")
-    toast.wait_for(state="visible")
-    assert toast.inner_text() == "Chỉ có trong ứng dụng"
+    _wait_toast(page)
+    assert page.locator(".tv-toast").inner_text() == "Chỉ có trong ứng dụng"
     page.locator("tv-titlebar .tv-titlebar__title").dblclick()
     page.keyboard.press("F11")
     page.keyboard.press("Escape")
@@ -337,7 +343,112 @@ def test_window_api_absent_does_not_throw(open_shell: Any) -> None:
     plain = open_shell("#/home", pywebview=False)
     plain.wait_for_selector("tv-titlebar [data-action='max']")
     _max_button(plain).click()
-    plain.locator(".tv-toast").wait_for(state="visible")
+    _wait_toast(plain)
     plain.keyboard.press("F11")
     plain.wait_for_timeout(150)
     assert plain.tv_errors == []
+
+
+TASK12_STATE = {
+    # Exactly what Task 12's WindowControl.state() returns (window_control.py).
+    "maximized": False, "fullscreen": False, "x": 240, "y": 120, "width": 1440, "height": 900,
+    "min_width": 1100, "min_height": 720, "native_resize": False, "native_region": True,
+    "screen": {"x": 0, "y": 0, "width": 1920, "height": 1080, "work_x": 0, "work_y": 0,
+               "work_width": 1920, "work_height": 1040},
+}
+
+
+def test_task12_window_state_payload_is_accepted(open_shell: Any) -> None:
+    page = _open_win(open_shell, extra=TASK12_STATE)
+    page.wait_for_function("() => tv.windowState.native_region === true")
+    state = page.evaluate("tv.windowState")
+    assert state["x"] == 240 and state["screen"]["work_height"] == 1040
+    assert sorted(_handles_visible(page)) == sorted(HANDLE_DIRS)
+    # native_region: handles move inside the chamfered OS region.
+    boxes = page.evaluate(
+        "Object.fromEntries([...document.querySelectorAll('.tv-resize__handle')].map(h => {"
+        " const r = h.getBoundingClientRect(); return [h.dataset.dir, [r.left, r.top]]; }))"
+    )
+    assert boxes["nw"][0] > 0 and boxes["nw"][1] > 0
+    assert boxes["n"][0] >= 30
+    # Pushed as a JSON string too (how Python sends it).
+    page.evaluate("s => tv.onWindowState(JSON.stringify(s))", TASK12_STATE | {"maximized": True})
+    assert "window--maximized" in _root_classes(page)["html"]
+    assert _handles_visible(page) == []
+    no_region = TASK12_STATE | {"native_region": False}
+    page.evaluate("s => tv.onWindowState(JSON.stringify(s))", no_region)
+    assert len(_handles_visible(page)) == 8
+    box = page.evaluate(
+        "(() => { const r = document.querySelector('.tv-resize__handle--nw')"
+        ".getBoundingClientRect(); return [r.left, r.top]; })()"
+    )
+    assert box == [0, 0]
+    assert page.tv_errors == []
+
+
+def _drag_regions(page: Any) -> int:
+    return page.evaluate("document.querySelectorAll('tv-titlebar .pywebview-drag-region').length")
+
+
+def test_drag_regions_disabled_while_maximized_or_fullscreen(open_shell: Any) -> None:
+    page = _open_win(open_shell)
+    assert _drag_regions(page) == 3
+    _push(page, maximized=True)
+    assert _drag_regions(page) == 0
+    # Double-click still restores (marker class stays).
+    page.locator("tv-titlebar .tv-titlebar__title").dblclick()
+    page.wait_for_function("() => window.__tvCalls.some(c => c.name === 'window_toggle_maximize')")
+    _push(page, fullscreen=True)
+    assert _drag_regions(page) == 0
+    _push(page)
+    assert _drag_regions(page) == 3
+
+
+def test_f11_repeat_ignored_and_fallback_only_in_http_mode(open_shell: Any) -> None:
+    page = _open_win(open_shell)
+    page.evaluate(
+        "() => window.dispatchEvent(new KeyboardEvent('keydown', {key: 'F11', repeat: true,"
+        " cancelable: true}))"
+    )
+    page.wait_for_timeout(100)
+    assert _calls(page, "window_toggle_fullscreen") == []
+
+    # pywebview bridge without window methods: toast, no browser full screen.
+    old = open_shell("#/home")
+    old.wait_for_selector("tv-titlebar [data-action='max']")
+    old.evaluate(
+        "() => { window.__fsRequests = 0; document.documentElement.requestFullscreen ="
+        " () => { window.__fsRequests += 1; return Promise.resolve(); }; }"
+    )
+    old.keyboard.press("F11")
+    _wait_toast(old)
+    assert old.evaluate("window.__fsRequests") == 0
+
+    # http mode: browser Fullscreen API fallback; minimise/close show the toast.
+    plain = open_shell("#/home", pywebview=False)
+    plain.wait_for_selector("tv-titlebar [data-action='max']")
+    plain.evaluate(
+        "() => { window.__fsRequests = 0; document.documentElement.requestFullscreen ="
+        " () => { window.__fsRequests += 1; return Promise.resolve(); }; }"
+    )
+    plain.keyboard.press("F11")
+    plain.wait_for_function("() => window.__fsRequests === 1")
+    for action in ("min", "close"):
+        plain.evaluate("document.querySelector('.tv-toast').classList.add('tv-toast--out')")
+        plain.locator(f"tv-titlebar [data-action='{action}']").click()
+        _wait_toast(plain)
+    assert plain.tv_errors == []
+
+
+def test_live_regions_exist_empty_at_boot(open_shell: Any) -> None:
+    page = _open_win(open_shell)
+    regions = page.evaluate(
+        "['.tv-toast', '.tv-fullscreen-hint'].map(s => { const e = document.querySelector(s);"
+        " return e && [e.getAttribute('aria-live'), e.textContent]; })"
+    )
+    assert regions == [["polite", ""], ["polite", ""]]
+    page.keyboard.press("F11")
+    page.wait_for_function(
+        "() => document.querySelector('.tv-fullscreen-hint').textContent.includes('F11')"
+    )
+    assert page.locator(".tv-fullscreen-hint").count() == 1
