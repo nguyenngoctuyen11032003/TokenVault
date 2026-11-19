@@ -114,6 +114,42 @@ def read_secret(path: Path) -> str | None:
     return value or None
 
 
+def secret_state(path: Path) -> str:
+    """"ok" (decrypts), "missing" or "unreadable"."""
+    if not path.exists():
+        return "missing"
+    return "ok" if read_secret(path) is not None else "unreadable"
+
+
+def write_enroll_secret(path: Path, secret: str, cfg: AdapterConfig) -> None:
+    """Store the enrollment secret BOUND to the Manager it belongs to.
+
+    An agent still running with another Manager's config will refuse to use it
+    (see :func:`read_enroll_secret`), so a secret can never be sent to the wrong
+    Manager while setup swaps configs.
+    """
+    bound = {"manager_id": cfg.manager_id, "fingerprint": cfg.fingerprint, "secret": secret}
+    write_secret(path, json.dumps(bound, separators=(",", ":")))
+
+
+def read_enroll_secret(path: Path, cfg: AdapterConfig) -> str | None:
+    """The enrollment secret if it is bound to ``cfg``'s Manager, else None."""
+    raw = read_secret(path)
+    if raw is None:
+        return None
+    try:
+        d = json.loads(raw)
+    except ValueError:
+        log.warning("%s has an unknown format; ignored", path.name)
+        return None
+    if not isinstance(d, dict) or not isinstance(d.get("secret"), str):
+        return None
+    if (d.get("manager_id"), d.get("fingerprint")) != (cfg.manager_id, cfg.fingerprint):
+        log.warning("enrollment secret belongs to another Manager; not using it")
+        return None
+    return str(d["secret"]) or None
+
+
 def delete_file(path: Path) -> None:
     with contextlib.suppress(FileNotFoundError):
         path.unlink()

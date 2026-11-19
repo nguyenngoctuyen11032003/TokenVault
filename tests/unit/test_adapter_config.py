@@ -53,8 +53,42 @@ def test_secret_file_is_protected_and_round_trips(tmp_path: Path) -> None:
 
 def test_unreadable_secret_returns_none(tmp_path: Path) -> None:
     p = tmp_path / "device.key"
+    assert cfgmod.secret_state(p) == "missing"
     p.write_bytes(b"garbage")
     assert cfgmod.read_secret(p) is None
+    assert cfgmod.secret_state(p) == "unreadable"
+    cfgmod.write_secret(p, "k")
+    assert cfgmod.secret_state(p) == "ok"
+
+
+def test_enroll_secret_is_bound_to_its_manager(tmp_path: Path) -> None:
+    p = tmp_path / "enroll.secret"
+    a = AdapterConfig.from_payload(_payload())
+    b = AdapterConfig("mgr-2", ("10.0.0.9",), 47800, "cd" * 32, "Dev")
+    cfgmod.write_enroll_secret(p, SECRET, a)
+    assert SECRET.encode() not in p.read_bytes()
+    assert cfgmod.read_enroll_secret(p, a) == SECRET
+    assert cfgmod.read_enroll_secret(p, b) is None  # never handed to another Manager
+    same_mgr_other_team = AdapterConfig("mgr-1", ("x",), 1, FP, "QA")
+    assert cfgmod.read_enroll_secret(p, same_mgr_other_team) == SECRET
+    cfgmod.write_secret(p, SECRET)  # legacy/unbound format is not used
+    assert cfgmod.read_enroll_secret(p, a) is None
+
+
+def test_write_secret_fails_closed_without_dpapi(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tokenvault.common import dpapi
+
+    def boom(data: bytes) -> bytes:
+        raise OSError("dpapi down")
+
+    monkeypatch.setattr(dpapi.sys, "platform", "win32")
+    monkeypatch.setattr(dpapi, "_dpapi_protect", boom)
+    p = tmp_path / "enroll.secret"
+    with pytest.raises(dpapi.DpapiError):
+        cfgmod.write_secret(p, SECRET)
+    assert not p.exists()
 
 
 def test_paths_defaults(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

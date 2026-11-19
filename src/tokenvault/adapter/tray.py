@@ -1,5 +1,7 @@
 """Tray icon: always present, menu = status line + "What is sent?" + "Open log folder"
-+ "About". There is deliberately NO pause, quit or hide entry.
++ "About" (Vietnamese by default, see strings.py). There is deliberately NO pause,
+quit or hide entry. Windows opened from the menu run in a child process (app.py),
+so the agent never loads tkinter.
 
 pystray runs its own Win32 message loop on the tray thread (no polling). The
 status line is re-read when the menu is rebuilt, which happens on state
@@ -17,25 +19,27 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from tokenvault.adapter.strings import STRINGS, t
+
 log = logging.getLogger("tokenvault.adapter.tray")
 
 REFRESH_MIN_S = 5.0
-_STATE_LABEL = {
-    "connected": "Connected",
-    "offline": "Offline",
-    "rejected": "Rejected",
-    "connecting": "Connecting",
-}
 _STATE_COLOR = {
     "connected": (225, 11, 31),  # #e10b1f
     "offline": (128, 128, 128),
     "rejected": (255, 140, 0),
     "connecting": (230, 190, 40),
+    "not_configured": (255, 140, 0),
 }
 
 
+def state_label(state: str) -> str:
+    key = f"state.{state}"
+    return t(key) if key in STRINGS else state
+
+
 def status_line(state: str, waiting: int) -> str:
-    return f"{_STATE_LABEL.get(state, state.capitalize())} - {waiting} queued"
+    return t("tray.status", state=state_label(state), n=waiting)
 
 
 @dataclass(frozen=True)
@@ -57,9 +61,9 @@ def build_menu(
     """The complete tray menu. Exactly four entries; the first is a disabled status line."""
     return [
         MenuEntry(status_text, None, enabled=False),
-        MenuEntry("What is sent?", on_what_is_sent),
-        MenuEntry("Open log folder", on_open_log),
-        MenuEntry("About", on_about),
+        MenuEntry(t("tray.what"), on_what_is_sent),
+        MenuEntry(t("tray.open_log"), on_open_log),
+        MenuEntry(t("tray.about"), on_about),
     ]
 
 
@@ -169,7 +173,7 @@ class Tray:
             return status_line(self._state(), self._waiting())
         except Exception:
             log.exception("tray status failed")
-            return "Status unavailable"
+            return t("tray.status_unavailable")
 
     def start(self) -> None:
         import pystray
@@ -177,7 +181,8 @@ class Tray:
         state = self._state()
         self._shown_state = state
         self._icon = pystray.Icon(
-            "TokenVaultAdapter", make_icon(state), "TokenVault Adapter",
+            "TokenVaultAdapter", make_icon(state),
+            t("tray.tooltip", status=self._status_text()),
             menu=to_pystray_menu(self._entries),
         )
         self._thread = threading.Thread(target=self._run, name="tv-tray", daemon=True)
@@ -204,7 +209,7 @@ class Tray:
         if state != self._shown_state:
             self._shown_state = state
             icon.icon = make_icon(state)
-        icon.title = f"TokenVault Adapter - {self._status_text()}"
+        icon.title = t("tray.tooltip", status=self._status_text())
         icon.update_menu()
 
     def stop(self) -> None:

@@ -7,6 +7,8 @@ deleted. The registry is injectable for tests (anything with get/set/delete).
 
 from __future__ import annotations
 
+import subprocess
+from collections.abc import Sequence
 from typing import Any, Protocol
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -53,11 +55,15 @@ class WinRunKey:
             pass
 
 
-def command_line(exe_path: str, args: str = "run") -> str:
-    return f'"{exe_path}" {args}'.rstrip()
+def command_line(exe_path: str, args: Sequence[str] = ("run",)) -> str:
+    """Exe always quoted (it cannot contain quotes); args via ``list2cmdline`` so
+    spaces, unicode and trailing backslashes survive the Windows command line."""
+    tail = subprocess.list2cmdline(list(args))
+    return f'"{exe_path}" {tail}' if tail else f'"{exe_path}"'
 
 
-def enable(exe_path: str, registry: RunRegistry | None = None, args: str = "run") -> None:
+def enable(exe_path: str, registry: RunRegistry | None = None,
+           args: Sequence[str] = ("run",)) -> None:
     (registry or WinRunKey()).set(VALUE_NAME, command_line(str(exe_path), args))
 
 

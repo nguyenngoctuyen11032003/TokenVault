@@ -1,7 +1,10 @@
-"""``status`` data, the "What is sent?" text, state.json, and a small text window.
+"""``status`` data, the "What is sent?" / About texts, state.json and a text window.
 
-Nothing here ever reads or prints secrets or keys: only whether a device key
-exists (``enrolled``).
+Readers here open the outbox READ-ONLY (``mode=ro``), so ``status`` and the
+``show`` child process never write to the agent's database. Nothing here ever
+reads out or prints secrets or keys: only whether a usable key exists.
+The text window (tkinter) is shown only from the short-lived ``show`` child
+process, never inside the agent.
 """
 
 from __future__ import annotations
@@ -9,23 +12,35 @@ from __future__ import annotations
 import json
 import logging
 import os
+import sqlite3
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from tokenvault.adapter import consent
-from tokenvault.adapter.config import atomic_write, load_config
+from tokenvault.adapter.config import atomic_write, load_config, secret_state
 from tokenvault.adapter.identity import Identity, display_account
-from tokenvault.adapter.outbox import Outbox
 from tokenvault.adapter.paths import DataFiles
-from tokenvault.common.protocol import event_to_dict
+from tokenvault.adapter.strings import t
+from tokenvault.common.protocol import ProtocolError, event_from_dict, event_to_dict
 
 log = logging.getLogger("tokenvault.adapter.status")
+MAX_REASON = 200
 
 
 # ------------------------------------------------------------------ state.json
-def write_state(files: DataFiles, state: str, last_error: str | None = None) -> None:
-    d = {"state": state, "updated": time.time(), "pid": os.getpid(), "last_error": last_error}
+def sanitize(reason: str | None) -> str | None:
+    if reason is None:
+        return None
+    flat = " ".join(str(reason).split())
+    return flat[:MAX_REASON]
+
+
+def write_state(files: DataFiles, state: str, last_error: str | None = None,
+                **extra: Any) -> None:
+    d = {"state": state, "updated": time.time(), "pid": os.getpid(),
+         "last_error": sanitize(last_error), **extra}
     try:
         atomic_write(files.state, json.dumps(d, ensure_ascii=False).encode("utf-8"))
     except OSError as e:
@@ -40,36 +55,60 @@ def read_state(files: DataFiles) -> dict[str, Any] | None:
     return d if isinstance(d, dict) else None
 
 
-# ---------------------------------------------------------------- outbox views
-def sample_event(outbox: Outbox) -> dict[str, Any] | None:
-    """One queued (undelivered) event exactly as it will be sent, or None."""
-    rows = outbox.pending(1)
-    return event_to_dict(rows[0].event) if rows else None
+# ------------------------------------------------------- read-only outbox view
+@dataclass(frozen=True)
+class OutboxView:
+    queued: int = 0
+    delivered: int = 0
+    waiting: int = 0
+    sample: dict[str, Any] | None = None
 
 
-def what_is_sent_text(outbox: Outbox, hosts: list[str] | tuple[str, ...]) -> str:
+def read_outbox(path: Path) -> OutboxView:
+    """Stats + one undelivered event, read-only. Missing/unreadable -> empty view."""
+    if not path.exists():
+        return OutboxView()
+    try:
+        uri = path.resolve().as_uri() + "?mode=ro"
+        db = sqlite3.connect(uri, uri=True, timeout=2)
+    except sqlite3.Error as e:
+        log.warning("cannot open outbox read-only: %s", e)
+        return OutboxView()
+    try:
+        total, delivered = db.execute(
+            "SELECT COUNT(*), COALESCE(SUM(delivered), 0) FROM events").fetchone()
+        sample: dict[str, Any] | None = None
+        for (payload,) in db.execute(
+            "SELECT payload FROM events WHERE delivered=0 ORDER BY enqueued_at, rowid LIMIT 5"
+        ):
+            try:
+                sample = event_to_dict(event_from_dict(json.loads(payload)))
+                break
+            except (ValueError, ProtocolError):
+                continue
+        return OutboxView(int(total), int(delivered), int(total) - int(delivered), sample)
+    except sqlite3.Error as e:
+        log.warning("cannot read outbox: %s", e)
+        return OutboxView()
+    finally:
+        db.close()
+
+
+def what_is_sent_text(sample: dict[str, Any] | None, hosts: list[str] | tuple[str, ...]) -> str:
     text = consent.render_text(consent.WIRE_FIELDS, list(hosts))
-    ev = sample_event(outbox)
-    if ev is None:
-        tail = ("No events are queued right now (everything was delivered, or Claude Code "
-                "has not been used yet). Run 'status --json' later to see one.")
+    if sample is None:
+        tail = t("wis.none")
     else:
-        tail = ("One queued event, exactly as it will be sent:\n\n"
-                + json.dumps(ev, ensure_ascii=False, indent=2))
+        tail = t("wis.one") + "\n\n" + json.dumps(sample, ensure_ascii=False, indent=2)
     return f"{text}\n\n{tail}\n"
 
 
 # ---------------------------------------------------------------------- status
 def gather(files: DataFiles, identity: Identity, running: bool) -> dict[str, Any]:
     cfg = load_config(files.config)
-    stats = {"queued": 0, "delivered": 0, "waiting": 0}
-    ev: dict[str, Any] | None = None
-    if files.outbox.exists():  # never create the outbox just to report on it
-        with Outbox(files.outbox) as ob:
-            s = ob.stats()
-            stats = {"queued": s.queued, "delivered": s.delivered, "waiting": s.waiting}
-            ev = sample_event(ob)
+    ob = read_outbox(files.outbox)
     st = read_state(files) if running else None
+    key = secret_state(files.device_key)
     return {
         "device_id": identity.device_id,
         "account": display_account(identity),
@@ -82,33 +121,44 @@ def gather(files: DataFiles, identity: Identity, running: bool) -> dict[str, Any
             {"hosts": list(cfg.hosts), "port": cfg.port, "fingerprint": cfg.fingerprint}
             if cfg else None
         ),
-        "enrolled": files.device_key.exists(),
+        "enrolled": key == "ok",
+        "device_key": key,  # "ok" | "missing" | "unreadable" (never the key itself)
         "agent_running": running,
         "connection": st.get("state") if st else None,
         "last_error": st.get("last_error") if st else None,
-        "outbox": stats,
-        "sample_event": ev,
+        "outbox": {"queued": ob.queued, "delivered": ob.delivered, "waiting": ob.waiting},
+        "sample_event": ob.sample,
     }
 
 
 def format_text(d: dict[str, Any]) -> str:
     mgr = d["manager"]
-    conn = d["connection"] or ("unknown" if d["agent_running"] else "agent not running")
-    lines = [
-        f"Device id:   {d['device_id']}",
-        f"Account:     {d['account']}",
-        f"Data dir:    {d['data_dir']}",
-        f"Team:        {d['team'] if d['configured'] else '(not set up - run the installer)'}",
-        f"Manager:     {', '.join(mgr['hosts']) + ':' + str(mgr['port']) if mgr else '-'}",
-        f"Enrolled:    {'yes' if d['enrolled'] else 'not yet'}",
-        f"Agent:       {'running' if d['agent_running'] else 'not running'}",
-        f"Connection:  {conn}",
-        f"Outbox:      {d['outbox']['queued']} queued, {d['outbox']['delivered']} delivered, "
-        f"{d['outbox']['waiting']} waiting",
-        "",
-        "Run 'status --json' to see one queued event exactly as it is sent.",
+    if d["connection"]:
+        key = f"state.{d['connection']}"
+        conn = t(key) if key in _STATE_KEYS else str(d["connection"])
+    else:
+        conn = t("status.unknown") if d["agent_running"] else t("status.not_running")
+    enrolled = t({"ok": "status.key_ok", "missing": "status.key_missing"}.get(
+        d["device_key"], "status.key_unreadable"))
+    rows = [
+        ("status.device", d["device_id"]),
+        ("status.account", d["account"]),
+        ("status.data_dir", d["data_dir"]),
+        ("status.team", d["team"] if d["configured"] else t("status.not_setup")),
+        ("status.manager", f"{', '.join(mgr['hosts'])}:{mgr['port']}" if mgr else "-"),
+        ("status.enrolled", enrolled),
+        ("status.agent", t("status.running") if d["agent_running"] else t("status.not_running")),
+        ("status.connection", conn),
+        ("status.outbox", t("status.outbox_line", **d["outbox"])),
     ]
-    return "\n".join(lines)
+    labels = [t(k) for k, _ in rows]
+    width = max(len(s) for s in labels) + 1
+    lines = [f"{lbl:<{width}} {val}" for lbl, (_, val) in zip(labels, rows, strict=True)]
+    return "\n".join([*lines, "", t("status.hint")])
+
+
+_STATE_KEYS = {f"state.{s}" for s in (
+    "connected", "offline", "rejected", "connecting", "not_configured", "stopped", "crashed")}
 
 
 def version() -> str:
@@ -122,33 +172,30 @@ def version() -> str:
 
 
 def about_text(identity: Identity | None = None, files: DataFiles | None = None) -> str:
-    lines = [
-        f"TokenVault Adapter {version()}",
-        "Reports Claude Code token usage (counts and metadata only) to your company's",
-        "TokenVault Manager. Use 'What is sent?' to see exactly what leaves this PC.",
-    ]
+    lines = [t("about.title", version=version()), "", t("about.desc")]
     if identity is not None:
-        lines += ["", f"Device id: {identity.device_id}", f"Account:   {display_account(identity)}"]
+        lines += ["", f"{t('status.device')} {identity.device_id}",
+                  f"{t('status.account')} {display_account(identity)}"]
     if files is not None:
-        lines.append(f"Data dir:  {files.root}")
-    lines += ["", "To remove: Windows Settings > Apps (Apps & Features) > TokenVault Adapter."]
+        lines.append(f"{t('status.data_dir')} {files.root}")
+    lines += ["", t("consent.remove")]
     return "\n".join(lines)
 
 
 # ---------------------------------------------------------------- text window
-def show_text_window(title: str, text: str) -> None:  # pragma: no cover - interactive
-    """Blocking read-only text window (call from its own thread)."""
+def show_text_window(title: str, text: str) -> int:  # pragma: no cover - interactive
+    """Blocking read-only text window. Only ever called in the ``show`` child process."""
     try:
         import tkinter as tk
         from tkinter import ttk
     except ImportError:
         log.error("tkinter is not available")
-        return
+        return 4
     try:
         root = tk.Tk()
     except tk.TclError as e:
         log.error("cannot open a window: %s", e)
-        return
+        return 4
     root.title(title)
     frame = ttk.Frame(root, padding=10)
     frame.pack(fill="both", expand=True)
@@ -159,12 +206,13 @@ def show_text_window(title: str, text: str) -> None:  # pragma: no cover - inter
     box.configure(state="disabled")
     scroll.pack(side="right", fill="y")
     box.pack(side="left", fill="both", expand=True)
-    close = ttk.Button(root, text="Close", command=root.destroy)
+    close = ttk.Button(root, text=t("common.close"), command=root.destroy)
     close.pack(pady=(0, 10))
     close.focus_set()
     root.bind("<Escape>", lambda e: root.destroy())
     root.bind("<Return>", lambda e: root.destroy())
     root.mainloop()
+    return 0
 
 
 def open_folder(path: Path) -> None:  # pragma: no cover - interactive

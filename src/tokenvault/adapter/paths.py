@@ -13,6 +13,7 @@ Data dir (per Windows user, no admin): ``%LOCALAPPDATA%\\TokenVault\\Adapter``::
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +34,16 @@ def claude_config_dir(env: Mapping[str, str] | None = None) -> Path:
 
 def claude_projects_dir(env: Mapping[str, str] | None = None) -> Path:
     return claude_config_dir(env) / "projects"
+
+
+def self_argv(windowed: bool = True) -> list[str]:
+    """argv prefix that starts this program again (frozen exe, or ``python -m``)."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable]
+    exe = Path(sys.executable)
+    pyw = exe.with_name("pythonw.exe")
+    use = pyw if windowed and pyw.is_file() else exe
+    return [str(use), "-m", "tokenvault.adapter.main"]
 
 
 @dataclass(frozen=True)

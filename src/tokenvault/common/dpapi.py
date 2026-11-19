@@ -4,9 +4,11 @@ Blobs are self-describing:
 
 * ``TVD1:`` + DPAPI ciphertext - protected; only the same Windows user on the
   same machine can unprotect it.
-* ``TVP1:`` + plain bytes - **NOT protected**. Written only when DPAPI is not
-  available (non-Windows test runs) or failed; every such write logs a warning
-  so the fallback is never silent.
+* ``TVP1:`` + plain bytes - **NOT protected**. Written ONLY when the caller
+  explicitly allows it (``allow_plain=True`` or module flag ``ALLOW_PLAIN``,
+  meant for non-Windows test runs); every such write logs a warning. Otherwise a
+  DPAPI failure raises :class:`DpapiError` (fail closed: no plaintext secret on
+  disk).
 
 ``unprotect`` accepts both and raises ``ValueError`` on anything else (or when
 DPAPI refuses to decrypt, e.g. another user's blob).
@@ -29,6 +31,11 @@ DPAPI_PREFIX = b"TVD1:"
 PLAIN_PREFIX = b"TVP1:"
 _CRYPTPROTECT_UI_FORBIDDEN = 0x1
 _ENTROPY = b"TokenVault.v1"
+ALLOW_PLAIN = False  # tests / non-Windows dev only
+
+
+class DpapiError(OSError):
+    """DPAPI could not protect the data and the plaintext fallback is not allowed."""
 
 
 class _Blob(ctypes.Structure):
@@ -78,14 +85,23 @@ def _dpapi_unprotect(data: bytes) -> bytes:
     return _call("CryptUnprotectData", data)
 
 
-def protect(data: bytes) -> bytes:
-    """Return a blob of ``data`` protected for the current Windows user."""
+def protect(data: bytes, *, allow_plain: bool | None = None) -> bytes:
+    """Return a blob of ``data`` protected for the current Windows user.
+
+    Raises :class:`DpapiError` if DPAPI is unavailable/failed, unless the plain
+    fallback is explicitly allowed.
+    """
+    plain_ok = ALLOW_PLAIN if allow_plain is None else allow_plain
     if sys.platform == "win32":
         try:
             return DPAPI_PREFIX + _dpapi_protect(data)
-        except Exception as e:  # any DPAPI failure -> flagged fallback
+        except Exception as e:  # any DPAPI failure
+            if not plain_ok:
+                raise DpapiError(f"DPAPI failed: {e}") from e
             log.warning("DPAPI unavailable (%s); secret stored NOT protected", e)
     else:
+        if not plain_ok:
+            raise DpapiError("DPAPI needs Windows")
         log.warning("not on Windows; secret stored NOT protected (plain fallback)")
     return PLAIN_PREFIX + data
 

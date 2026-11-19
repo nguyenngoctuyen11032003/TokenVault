@@ -40,10 +40,39 @@ def test_autostart_writes_hkcu_run_value_only() -> None:
     autostart.disable(reg)  # idempotent
 
 
-def test_enable_with_extra_args() -> None:
+def test_enable_with_extra_args_uses_list2cmdline() -> None:
     reg = FakeRegistry()
-    autostart.enable(r"C:\py\pythonw.exe", reg, args='-m tokenvault.adapter.main run')
-    assert reg.values["TokenVaultAdapter"] == '"C:\\py\\pythonw.exe" -m tokenvault.adapter.main run'
+    data = "C:\\Users\\Nguyễn A\\data dir\\"  # space, unicode, trailing backslash
+    autostart.enable(r"C:\py\pythonw.exe", reg,
+                     args=["-m", "tokenvault.adapter.main", "run", "--data-dir", data])
+    value = reg.values["TokenVaultAdapter"]
+    assert value == ('"C:\\py\\pythonw.exe" -m tokenvault.adapter.main run --data-dir '
+                     '"C:\\Users\\Nguyễn A\\data dir\\\\"')
+    # Windows argv parsing gives back exactly the original arguments
+    import subprocess
+
+    assert subprocess.list2cmdline([data]) in value
+    assert _split(value)[1:] == ["-m", "tokenvault.adapter.main", "run", "--data-dir", data]
+
+
+def _split(cmdline: str) -> list[str]:
+    """CommandLineToArgvW, the parser Windows uses for the Run value."""
+    import ctypes
+    import sys
+
+    if sys.platform != "win32":
+        pytest.skip("Windows only")
+    from ctypes import wintypes
+
+    shell32 = ctypes.windll.shell32
+    shell32.CommandLineToArgvW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_int)]
+    shell32.CommandLineToArgvW.restype = ctypes.POINTER(wintypes.LPWSTR)
+    n = ctypes.c_int()
+    arr = shell32.CommandLineToArgvW(cmdline, ctypes.byref(n))
+    try:
+        return [arr[i] for i in range(n.value)]
+    finally:
+        ctypes.windll.kernel32.LocalFree(arr)
 
 
 class FakeKey:
