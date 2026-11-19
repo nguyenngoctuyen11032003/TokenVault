@@ -87,8 +87,8 @@ def test_existing_output_gets_suffix(tmp_path: Path, enr: Enrollment, template: 
 
 @pytest.mark.parametrize("raw,expected", [
     ("CON", "CON_"), ("nul", "nul_"), ("com1", "com1_"), ("LPT9", "LPT9_"),
-    ("Dev...", "Dev"), ("Dev  ", "Dev"), ("a//b\\\\c", "a_b_c"), ("a\x00\x1fb", "a_b"),
-    ("", "Team"), ("...", "Team"), ("///", "_"), ("x" * 100, "x" * 40),
+    ("Dev...", "Dev_"), ("Dev  ", "Dev"), ("a//b\\\\c", "a_b_c"), ("a\x00\x1fb", "a_b"),
+    ("", "Team"), ("...", "_"), ("///", "_"), ("x" * 100, "x" * 40),
     ("Nhóm_1-2 ok", "Nhóm_1-2 ok"),
 ])
 def test_safe_team_name(raw: str, expected: str) -> None:
@@ -134,3 +134,97 @@ def test_secret_never_logged_and_unicode_names(
     assert cfg.secret not in caplog.text
     assert b.file_name == "TokenVault-Adapter-Đội Ngũ.exe"
     assert b.path.read_bytes()[:4] == b"MZ\x90\x00"
+
+
+# ---------------------------------------------------------------- review round 1
+@pytest.mark.parametrize("hosts,port", [
+    (["999.1.1.1"], 47800), (["ok", "bad host"], 47800), (["10.0.0.1"], 0),
+    (["10.0.0.1"], 70000), ([], 47800),
+])
+def test_bad_endpoint_creates_no_package(
+    tmp_path: Path, enr: Enrollment, template: Path, hosts: list[str], port: int
+) -> None:
+    with pytest.raises(PackagerError):
+        make(tmp_path, enr, template, port=port, hosts=hosts).build_for_team("Dev", None)
+    assert enr.list_packages() == []
+
+
+def _leftovers(tmp_path: Path) -> list[Path]:
+    out = tmp_path / "out"
+    return list(out.iterdir()) if out.exists() else []
+
+
+class Boom(BaseException):
+    pass
+
+
+@pytest.mark.parametrize("exc", [OSError("disk full"), Boom()])
+def test_failure_midway_cleans_file_and_revokes(
+    tmp_path: Path, enr: Enrollment, template: Path, monkeypatch: pytest.MonkeyPatch,
+    exc: BaseException,
+) -> None:
+    def fake_append(src: Path, dst: Path, cfg: object) -> None:
+        dst.write_bytes(b"MZ partial")
+        raise exc
+
+    monkeypatch.setattr("tokenvault.manager.packager.append_payload", fake_append)
+    with pytest.raises((PackagerError, Boom)):
+        make(tmp_path, enr, template).build_for_team("Dev", None)
+    assert _leftovers(tmp_path) == []  # no final file, no temp file
+    assert all(p.revoked for p in enr.list_packages()) and enr.list_packages()
+
+
+def test_revoke_failure_still_removes_partial(
+    tmp_path: Path, enr: Enrollment, template: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def fake_append(src: Path, dst: Path, cfg: object) -> None:
+        dst.write_bytes(b"MZ partial")
+        raise OSError("boom")
+
+    def bad_revoke(package_id: str) -> None:
+        raise RuntimeError("db locked")
+
+    monkeypatch.setattr("tokenvault.manager.packager.append_payload", fake_append)
+    monkeypatch.setattr(enr, "revoke_package", bad_revoke)
+    with pytest.raises(PackagerError):
+        make(tmp_path, enr, template).build_for_team("Dev", None)
+    assert _leftovers(tmp_path) == []
+
+
+def test_success_leaves_only_final_file(tmp_path: Path, enr: Enrollment, template: Path) -> None:
+    b = make(tmp_path, enr, template).build_for_team("Dev", None)
+    assert _leftovers(tmp_path) == [b.path]
+
+
+def test_final_name_absent_while_writing(
+    tmp_path: Path, enr: Enrollment, template: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[list[str]] = []
+    from tokenvault.common import config_payload as cp
+
+    def spy(src: Path, dst: Path, cfg: cp.PayloadConfig) -> None:
+        cp.append_payload(src, dst, cfg)
+        seen.append([p.name for p in dst.parent.iterdir()])
+
+    monkeypatch.setattr("tokenvault.manager.packager.append_payload", spy)
+    make(tmp_path, enr, template).build_for_team("Dev", None)
+    assert seen and not any(n.endswith(".exe") for n in seen[0])
+
+
+def test_hosts_lowercased_and_deduped(tmp_path: Path, enr: Enrollment, template: Path) -> None:
+    p = make(tmp_path, enr, template, hosts=["PC-One", "pc-one", "10.0.0.1"])
+    cfg = read_payload(p.build_for_team("Dev", None).path)
+    assert cfg is not None and cfg.hosts == ["pc-one", "10.0.0.1"]
+
+
+def test_nfd_vietnamese_normalised_and_whitespace_team(
+    tmp_path: Path, enr: Enrollment, template: Path
+) -> None:
+    assert safe_team_name("Phát") == "Phát"
+    assert safe_team_name("   ") == "Team"
+    assert safe_team_name("a.b") == "a_b"
+    assert safe_team_name("CON") == "CON_"
+    b = make(tmp_path, enr, template).build_for_team("Phát", None)
+    assert b.file_name == "TokenVault-Adapter-Phát.exe"
+    with pytest.raises(PackagerError):
+        make(tmp_path, enr, template).build_for_team("   ", None)

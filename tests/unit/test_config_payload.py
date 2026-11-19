@@ -173,3 +173,82 @@ def test_large_template_streamed(tmp_path: Path) -> None:
     assert peak < 8 * (1 << 20)
     assert read_payload(out) == make_cfg()
     assert out.stat().st_size > big.stat().st_size
+
+
+# ---------------------------------------------------------------- review round 1
+def test_deeply_nested_json_returns_none(tmp_path: Path) -> None:
+    deep = b"[" * 30000 + b"]" * 30000
+    exe = tmp_path / "d.exe"
+    exe.write_bytes(b"MZ" + raw_footer(deep))
+    assert read_payload(exe) is None
+
+
+def test_repr_and_str_hide_secret() -> None:
+    cfg = make_cfg()
+    assert SECRET not in repr(cfg) and SECRET not in str(cfg)
+
+
+@pytest.mark.parametrize("host", [
+    "999.1.1.1", "1.2.3.4\n", "1.2.3.4 ", " host", "fe80::1%eth0", ":::", "1::2::3",
+    "http://x", "1.2.3.4:47800", "a..b", "a" * 64 + ".com", ("a" * 60 + ".") * 5 + "com",
+    "1.2.3", "1.2.3.4.5", "host\n", "-bad", "host.", "", "a b",
+])
+def test_bad_hosts_rejected(host: str) -> None:
+    with pytest.raises(ValueError):
+        make_cfg(hosts=[host]).validate()
+
+
+@pytest.mark.parametrize("host", [
+    "10.0.0.1", "192.168.1.255", "fe80::1", "2001:db8::ff00:42:8329", "pc-manager",
+    "Host_1.corp.example.com", "a" * 63 + ".com",
+])
+def test_good_hosts_accepted(host: str) -> None:
+    make_cfg(hosts=[host]).validate()
+
+
+def test_host_count_and_duplicates() -> None:
+    with pytest.raises(ValueError):
+        make_cfg(hosts=[f"10.0.0.{i}" for i in range(9)]).validate()
+    make_cfg(hosts=[f"10.0.0.{i}" for i in range(8)]).validate()
+    with pytest.raises(ValueError):
+        make_cfg(hosts=["Host", "host"]).validate()
+    with pytest.raises(ValueError):
+        make_cfg(hosts=["10.0.0.1", "10.0.0.1"]).validate()
+
+
+@pytest.mark.parametrize("kw", [
+    {"secret": SECRET + "\n"}, {"fingerprint": FP + "\n"}, {"manager_id": "mgr\n"},
+    {"team": "Dev\n"}, {"team": "   "}, {"version": True},
+])
+def test_trailing_newline_and_odd_values_rejected(kw: dict[str, object]) -> None:
+    with pytest.raises(ValueError):
+        make_cfg(**kw).validate()
+
+
+def test_magic_only_tail_keeps_all_template_bytes(tmp_path: Path) -> None:
+    junk = bytes(range(200)) * 3 + b"\x00" * 12 + MAGIC  # garbage + magic, no valid footer
+    tpl = tmp_path / "t.exe"
+    tpl.write_bytes(b"MZ" + junk)
+    out = tmp_path / "o.exe"
+    append_payload(tpl, out, make_cfg())
+    assert out.read_bytes().startswith(tpl.read_bytes())
+    assert read_payload(out) == make_cfg()
+
+
+@pytest.mark.parametrize("n", [1, 2**40])
+def test_forged_magic_tiny_and_huge_length(tmp_path: Path, n: int) -> None:
+    exe = tmp_path / "f.exe"
+    exe.write_bytes(b"MZ" + bytes(50) + struct.pack(">I", 0) + struct.pack(">Q", n) + MAGIC)
+    assert read_payload(exe) is None
+    out = tmp_path / "o.exe"
+    append_payload(exe, out, make_cfg())
+    assert out.read_bytes().startswith(exe.read_bytes())
+
+
+def test_bad_crc_footer_is_not_stripped(tmp_path: Path) -> None:
+    g = good_payload()
+    tpl = tmp_path / "t.exe"
+    tpl.write_bytes(b"MZ" + raw_footer(g, crc=zlib.crc32(g) ^ 1))
+    out = tmp_path / "o.exe"
+    append_payload(tpl, out, make_cfg())
+    assert out.read_bytes().startswith(tpl.read_bytes())

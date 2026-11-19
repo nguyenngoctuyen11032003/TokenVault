@@ -18,7 +18,7 @@ import os
 import re
 import struct
 import zlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -29,25 +29,35 @@ CHUNK = 1 << 20
 CURRENT_VERSION = 1
 
 _LABEL = r"[A-Za-z0-9_]([A-Za-z0-9_-]{0,61}[A-Za-z0-9_])?"
-_HOST_RE = re.compile(rf"^{_LABEL}(\.{_LABEL})*\.?$")
-_FP_RE = re.compile(r"^[0-9a-f]{64}$")
-_SECRET_RE = re.compile(r"^[A-Za-z0-9_-]{32,}$")
-_ID_RE = re.compile(r"^[\w.@-]{1,64}$")
+_HOST_RE = re.compile(rf"{_LABEL}(\.{_LABEL})*")
+_NUMERIC_RE = re.compile(r"[0-9.]+")
+_FP_RE = re.compile(r"[0-9a-f]{64}")
+_SECRET_RE = re.compile(r"[A-Za-z0-9_-]{32,}")
+_ID_RE = re.compile(r"[\w.@-]{1,64}")
+MAX_HOSTS = 8
 
 
-def _valid_host(h: str) -> bool:
-    if not h or len(h) > 253:
+def valid_host(h: object) -> bool:
+    """Plausible IPv4 / IPv6 (no zone id) / hostname; nothing else."""
+    if not isinstance(h, str) or not h or len(h) > 253:
         return False
-    try:
-        ipaddress.ip_address(h)
+    if ":" in h or _NUMERIC_RE.fullmatch(h):
+        # IP forms must parse exactly; a dotted-numeric string is never a hostname.
+        if "%" in h or h != h.strip():
+            return False
+        try:
+            ipaddress.ip_address(h)
+        except ValueError:
+            return False
         return True
-    except ValueError:
-        return bool(_HOST_RE.match(h))
+    return _HOST_RE.fullmatch(h) is not None
 
 
 def _valid_team(t: str) -> bool:
-    return 1 <= len(t) <= 40 and not any(
-        ord(c) < 32 or ord(c) == 127 or c in "/\\" for c in t
+    return (
+        1 <= len(t) <= 40
+        and bool(t.strip())
+        and not any(ord(c) < 32 or ord(c) == 127 or c in "/\\" for c in t)
     )
 
 
@@ -57,7 +67,7 @@ class PayloadConfig:
     hosts: list[str]
     port: int
     fingerprint: str
-    secret: str
+    secret: str = field(repr=False)
     team: str
     version: int = CURRENT_VERSION
 
@@ -66,24 +76,26 @@ class PayloadConfig:
         if (
             not isinstance(self.hosts, list)
             or not self.hosts
-            or not all(isinstance(h, str) and _valid_host(h) for h in self.hosts)
+            or len(self.hosts) > MAX_HOSTS
+            or not all(valid_host(h) for h in self.hosts)
+            or len({h.lower() for h in self.hosts}) != len(self.hosts)
         ):
-            raise ValueError("hosts must be a non-empty list of valid IP addresses / host names")
+            raise ValueError("hosts must be 1..8 distinct valid IP addresses / host names")
         if (
             not isinstance(self.port, int)
             or isinstance(self.port, bool)
             or not 1 <= self.port <= 65535
         ):
             raise ValueError("port must be 1..65535")
-        if not isinstance(self.fingerprint, str) or not _FP_RE.match(self.fingerprint):
+        if not isinstance(self.fingerprint, str) or not _FP_RE.fullmatch(self.fingerprint):
             raise ValueError("fingerprint must be 64 lowercase hex characters")
-        if not isinstance(self.secret, str) or not _SECRET_RE.match(self.secret):
+        if not isinstance(self.secret, str) or not _SECRET_RE.fullmatch(self.secret):
             raise ValueError("secret must be >= 32 characters of [A-Za-z0-9_-]")
         if not isinstance(self.team, str) or not _valid_team(self.team):
             raise ValueError("team must be 1..40 characters without control chars or slashes")
-        if not isinstance(self.manager_id, str) or not _ID_RE.match(self.manager_id):
+        if not isinstance(self.manager_id, str) or not _ID_RE.fullmatch(self.manager_id):
             raise ValueError("manager_id must be 1..64 safe characters")
-        if self.version != CURRENT_VERSION:
+        if type(self.version) is not int or self.version != CURRENT_VERSION:
             raise ValueError(f"unsupported payload version {self.version}")
 
 
@@ -108,12 +120,16 @@ def _from_json(data: bytes) -> PayloadConfig | None:
         )
         cfg.validate()
         return cfg
-    except (ValueError, KeyError, TypeError, UnicodeDecodeError):
+    except Exception:  # noqa: BLE001 - bad content (incl. RecursionError) never raises
         return None
 
 
-def _payload_span(f: Any, size: int) -> tuple[int, int, int] | None:
-    """(payload_start, payload_len, crc) of a structurally valid footer, else None."""
+def _valid_footer(f: Any, size: int) -> tuple[int, PayloadConfig] | None:
+    """(payload_start, cfg) when the tail of ``f`` is a fully valid footer, else None.
+
+    Checks magic, length bounds, CRC, JSON and field validation. Shared by
+    read_payload and append_payload so both agree on what a footer is.
+    """
     if size < FOOTER_SIZE:
         return None
     f.seek(size - FOOTER_SIZE)
@@ -124,7 +140,13 @@ def _payload_span(f: Any, size: int) -> tuple[int, int, int] | None:
     (n,) = struct.unpack(">Q", tail[4:12])
     if n > MAX_PAYLOAD or n + FOOTER_SIZE > size:
         return None
-    return size - FOOTER_SIZE - n, n, crc
+    start = size - FOOTER_SIZE - n
+    f.seek(start)
+    data = f.read(n)
+    if len(data) != n or zlib.crc32(data) != crc:
+        return None
+    cfg = _from_json(data)
+    return None if cfg is None else (start, cfg)
 
 
 def read_payload(exe: Path) -> PayloadConfig | None:
@@ -134,15 +156,8 @@ def read_payload(exe: Path) -> PayloadConfig | None:
     """
     with open(exe, "rb") as f:
         f.seek(0, os.SEEK_END)
-        span = _payload_span(f, f.tell())
-        if span is None:
-            return None
-        start, n, crc = span
-        f.seek(start)
-        data = f.read(n)
-    if len(data) != n or zlib.crc32(data) != crc:
-        return None
-    return _from_json(data)
+        found = _valid_footer(f, f.tell())
+    return None if found is None else found[1]
 
 
 def append_payload(src_exe: Path, dst_exe: Path, cfg: PayloadConfig) -> None:
@@ -162,8 +177,8 @@ def append_payload(src_exe: Path, dst_exe: Path, cfg: PayloadConfig) -> None:
         with open(src_exe, "rb") as src, open(dst_exe, "wb") as dst:
             src.seek(0, os.SEEK_END)
             size = src.tell()
-            span = _payload_span(src, size)
-            remaining = size if span is None else span[0]
+            found = _valid_footer(src, size)
+            remaining = size if found is None else found[0]
             src.seek(0)
             while remaining > 0:
                 chunk = src.read(min(CHUNK, remaining))
@@ -172,6 +187,8 @@ def append_payload(src_exe: Path, dst_exe: Path, cfg: PayloadConfig) -> None:
                 dst.write(chunk)
                 remaining -= len(chunk)
             dst.write(footer)
+            dst.flush()
+            os.fsync(dst.fileno())
     except BaseException:
         with contextlib.suppress(OSError):
             Path(dst_exe).unlink()
