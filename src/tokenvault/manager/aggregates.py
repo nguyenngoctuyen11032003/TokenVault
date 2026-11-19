@@ -26,7 +26,8 @@
 
 Implementation lives in ``agg_sql`` (query core), ``agg_series`` (shared
 series), ``agg_people`` (employees) and ``agg_activity`` (skills,
-orchestration); this module only wires them together.
+orchestration), ``agg_session`` (one session header); this module only
+wires them together.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ import time
 from collections.abc import Callable
 
 from tokenvault.common.pricing import Pricing
-from tokenvault.manager import agg_activity, agg_people, agg_series
+from tokenvault.manager import agg_activity, agg_people, agg_series, agg_session
 from tokenvault.manager.agg_models import (
     EmployeeRow,
     EmployeeView,
@@ -106,6 +107,11 @@ class Aggregates:
         """Sessions overlapping the filter, most recently active first."""
         with self.ctx.snapshot():
             return agg_series.sessions(self.ctx, flt, limit)
+
+    def session(self, session_id: str) -> SessionRow | None:
+        """One session header (as in :meth:`sessions`), or None when unknown."""
+        with self.ctx.snapshot():
+            return agg_session.session(self.ctx, session_id)
 
     def session_turns(self, session_id: str) -> list[Turn]:
         """Raw per-response rows of one session, ordered by timestamp."""
