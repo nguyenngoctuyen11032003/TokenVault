@@ -143,20 +143,14 @@ class MessageDeduper:
         if prev is None:
             self._by_id[usage.message_id] = usage
             return None
-        tools = prev.tool_names + tuple(
-            t for t in usage.tool_names if t not in prev.tool_names
-        )
+        tools = prev.tool_names + tuple(t for t in usage.tool_names if t not in prev.tool_names)
         self._by_id[usage.message_id] = replace(
             prev,
             input_tokens=max(prev.input_tokens, usage.input_tokens),
             output_tokens=max(prev.output_tokens, usage.output_tokens),
             cache_read_tokens=max(prev.cache_read_tokens, usage.cache_read_tokens),
-            cache_create_5m_tokens=max(
-                prev.cache_create_5m_tokens, usage.cache_create_5m_tokens
-            ),
-            cache_create_1h_tokens=max(
-                prev.cache_create_1h_tokens, usage.cache_create_1h_tokens
-            ),
+            cache_create_5m_tokens=max(prev.cache_create_5m_tokens, usage.cache_create_5m_tokens),
+            cache_create_1h_tokens=max(prev.cache_create_1h_tokens, usage.cache_create_1h_tokens),
             tool_names=tools,
         )
         return None

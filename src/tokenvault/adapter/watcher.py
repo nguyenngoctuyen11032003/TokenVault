@@ -31,6 +31,15 @@ log = logging.getLogger("tokenvault.adapter.watcher")
 BELOW_NORMAL_PRIORITY_CLASS = 0x4000
 JOIN_TIMEOUT_S = 5.0
 MAX_WAIT_S = 1.0  # a file is collected at most this long after its first event
+# Hot-file stat poll: OS notifications can be withheld while a file is written
+# continuously, so files that produced an event are stat-ed every HOT_POLL_S and
+# dropped after HOT_TTL_S without activity. Nothing is polled when idle.
+HOT_POLL_S = 1.0
+HOT_TTL_S = 60.0
+
+
+def _stat(path: Path) -> os.stat_result:
+    return os.stat(path)
 
 
 class _CollectorLike(Protocol):
@@ -96,6 +105,9 @@ class Watcher:
         self._cond = threading.Condition()
         self._pending: dict[Path, tuple[float, float]] = {}  # path -> (first, last) monotonic
         self._next_attach = 0.0
+        # path -> (last activity, last seen (size, mtime_ns) or None before first poll)
+        self._hot: dict[Path, tuple[float, tuple[int, int] | None]] = {}
+        self._next_poll = 0.0
         self._stopping = threading.Event()
         self._started = False
         self._worker: threading.Thread | None = None
@@ -159,6 +171,16 @@ class Watcher:
         obs.join(JOIN_TIMEOUT_S)
 
     def _schedule(self, path: Path) -> None:
+        """Handle a real OS event: mark the path hot and queue it."""
+        now = time.monotonic()
+        with self._cond:
+            seen = self._hot[path][1] if path in self._hot else None
+            if not self._hot:
+                self._next_poll = now + HOT_POLL_S
+            self._hot[path] = (now, seen)
+        self._enqueue(path)
+
+    def _enqueue(self, path: Path) -> None:
         now = time.monotonic()
         with self._cond:
             first, _ = self._pending.get(path, (now, now))
@@ -168,6 +190,34 @@ class Watcher:
     def _due(self, path: Path) -> float:
         first, last = self._pending[path]
         return min(first + MAX_WAIT_S, last + self._debounce_s)
+
+    def _poll_hot(self) -> None:
+        """Stat hot files; queue the ones that changed; prune stale entries."""
+        with self._cond:
+            snapshot = dict(self._hot)
+            self._next_poll = time.monotonic() + HOT_POLL_S
+        for path, (active, seen) in snapshot.items():
+            try:
+                st = _stat(path)
+            except FileNotFoundError:
+                with self._cond:
+                    self._hot.pop(path, None)
+                continue
+            except OSError:
+                continue
+            cur = (st.st_size, st.st_mtime_ns)
+            now = time.monotonic()
+            if seen is not None and cur != seen:
+                active = now
+                self._enqueue(path)
+            with self._cond:
+                if path in self._hot:
+                    prev_active = self._hot[path][0]
+                    active = max(active, prev_active)
+                    if now - active > HOT_TTL_S:
+                        del self._hot[path]
+                    else:
+                        self._hot[path] = (active, cur)
 
     # -- worker ----------------------------------------------------------
     def _run(self) -> None:
@@ -184,18 +234,26 @@ class Watcher:
             if self._stopping.is_set():
                 return
             now = time.monotonic()
+            poll = bool(self._hot) and now >= self._next_poll
             due = [p for p in self._pending if self._due(p) <= now]
-            if due:
+            if poll:
+                pass
+            elif due:
                 path = min(due, key=self._due)
                 del self._pending[path]
             else:
                 waits: list[float] = []
                 if self._pending:
                     waits.append(min(self._due(p) for p in self._pending) - now)
+                if self._hot:
+                    waits.append(self._next_poll - now)
                 if not self._attached:
                     waits.append(self._next_attach - now)
                 self._cond.wait(max(0.0, min(waits)) if waits else None)
         if self._stopping.is_set():
+            return
+        if poll:
+            self._poll_hot()
             return
         if path is None:
             if not self._attached and time.monotonic() >= self._next_attach:

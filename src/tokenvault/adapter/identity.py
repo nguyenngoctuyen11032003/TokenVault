@@ -50,6 +50,4 @@ def display_account(i: Identity) -> str:
 
 
 def default_identity() -> Identity:
-    return read_identity(
-        Path.home() / ".claude.json", getpass.getuser(), socket.gethostname()
-    )
+    return read_identity(Path.home() / ".claude.json", getpass.getuser(), socket.gethostname())

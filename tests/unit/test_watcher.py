@@ -341,3 +341,117 @@ def test_stop_during_backfill_sleep_returns_promptly(root: Path) -> None:
     w.stop()
     assert time.monotonic() - t0 < 1.0
     assert w.backfill_done.is_set()
+
+
+def _real_writer(f: Path, stop: threading.Event, first: list[float], prime_s: float) -> None:
+    """Append a line every 150 ms for ~4 s; optionally pause once after the first line."""
+
+    def run() -> None:
+        end = time.monotonic() + 4.0
+        n = 0
+        while time.monotonic() < end and not stop.is_set():
+            if not first:
+                first.append(time.monotonic())
+            append(f)
+            n += 1
+            time.sleep(prime_s if n == 1 else 0.15)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def _measure_first_delivery(root: Path, prime_s: float) -> float | None:
+    f = root / "a.jsonl"
+    hits: list[float] = []
+    first: list[float] = []
+    w = Watcher(root, FakeCollector(), lambda: hits.append(time.monotonic()), debounce_s=0.5)
+    w.start()
+    stop = threading.Event()
+    try:
+        time.sleep(0.3)
+        _real_writer(f, stop, first, prime_s)
+        wait_for(lambda: bool(hits), 4.0)
+        return hits[0] - first[0] if hits else None
+    finally:
+        stop.set()
+        w.stop()
+
+
+@pytest.mark.parametrize("run", [1, 2, 3])
+def test_streaming_writer_first_delivery_latency(root: Path, run: int) -> None:
+    # Claude writes a message, pauses (API latency), then streams more: after the
+    # first OS event the file is hot and the stat poll covers the rest.
+    latency = _measure_first_delivery(root, prime_s=1.3)
+    print(f"first-delivery latency (run {run}): {latency}")
+    assert latency is not None and latency < 2.5
+
+
+@pytest.mark.xfail(strict=False, reason="Windows withholds OS events during gap-free writes")
+def test_gap_free_streaming_writer_latency(root: Path) -> None:
+    latency = _measure_first_delivery(root, prime_s=0.15)
+    print(f"first-delivery latency (gap-free writer): {latency}")
+    assert latency is not None and latency < 2.5
+
+
+def test_stat_poll_picks_up_changes_when_os_events_are_missing(root: Path) -> None:
+    f = root / "a.jsonl"
+    f.write_text("")
+    col = FakeCollector()
+    hits: list[int] = []
+    w = Watcher(root, col, lambda: hits.append(1), debounce_s=0.1)
+    w.start()
+    try:
+        w._schedule(f)  # the only "event"; later appends are seen by the poll alone
+        time.sleep(0.2)
+        # Stop real events from reaching us so only the poll can notice changes.
+        w._observer.unschedule_all()
+        for _ in range(6):
+            append(f)
+            time.sleep(0.5)
+        assert wait_for(lambda: len(hits) >= 2, 3.0)
+        assert len(col.calls) >= 3
+    finally:
+        w.stop()
+
+
+def test_idle_watcher_never_polls(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import tokenvault.adapter.watcher as mod
+
+    stats: list[Path] = []
+    real = mod._stat
+    monkeypatch.setattr(mod, "_stat", lambda p: (stats.append(p), real(p))[1])
+    (root / "a.jsonl").write_text("")
+    w = Watcher(root, FakeCollector(), lambda: None, debounce_s=0.1)
+    w.start()
+    try:
+        time.sleep(3.0)
+        assert w._hot == {}
+        assert stats == []
+    finally:
+        w.stop()
+
+
+def test_hot_entries_are_pruned_after_ttl(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import tokenvault.adapter.watcher as mod
+
+    monkeypatch.setattr(mod, "HOT_TTL_S", 0.4)
+    monkeypatch.setattr(mod, "HOT_POLL_S", 0.1)
+    f = root / "a.jsonl"
+    f.write_text("")
+    w = Watcher(root, FakeCollector(), lambda: None, debounce_s=0.1)
+    w.start()
+    try:
+        w._schedule(f)
+        assert f in w._hot
+        assert wait_for(lambda: w._hot == {}, 3.0)
+    finally:
+        w.stop()
+
+
+def test_vanished_hot_file_is_dropped(root: Path) -> None:
+    f = root / "a.jsonl"
+    f.write_text("")
+    w = Watcher(root, FakeCollector(), lambda: None, debounce_s=0.1)
+    w._schedule(f)
+    f.unlink()
+    w._poll_hot()
+    assert w._hot == {}
