@@ -7,7 +7,7 @@ import logging
 import sqlite3
 import threading
 import time
-from collections.abc import Iterable, Iterator, Sequence
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -17,7 +17,7 @@ from tokenvault.common.protocol import ProtocolError, event_from_dict, event_to_
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 _TOKEN_FIELDS = (
     "input_tokens",
     "output_tokens",
@@ -42,6 +42,13 @@ _MIGRATIONS = {
             prefix_hash TEXT NOT NULL,
             file_size INTEGER NOT NULL)""",
     ),
+    2: (
+        # Bumped on every payload change so a stale receipt cannot ack newer data.
+        "ALTER TABLE events ADD COLUMN revision INTEGER NOT NULL DEFAULT 0",
+        """CREATE TABLE IF NOT EXISTS session_titles (
+            session_id TEXT PRIMARY KEY,
+            title TEXT NOT NULL)""",
+    ),
 }
 
 
@@ -51,6 +58,18 @@ class SourceOffset:
     offset: int
     prefix_hash: str
     file_size: int = 0  # size seen when the offset was saved; shrinking => re-baseline
+
+
+@dataclass(frozen=True)
+class PendingEvent:
+    """An undelivered event and the row revision it was read at.
+
+    Ack with `(message_id, revision)`; the ack is ignored if the row changed since.
+    """
+
+    message_id: str
+    revision: int
+    event: UsageEvent
 
 
 @dataclass(frozen=True)
@@ -111,10 +130,11 @@ class Outbox:
             self._db.execute("BEGIN IMMEDIATE")
             try:
                 yield self._db
+                self._db.execute("COMMIT")
             except BaseException:
-                self._db.execute("ROLLBACK")
+                if self._db.in_transaction:
+                    self._db.execute("ROLLBACK")
                 raise
-            self._db.execute("COMMIT")
 
     def _migrate(self) -> None:
         with self._tx() as db:
@@ -136,7 +156,8 @@ class Outbox:
                 row = db.execute("SELECT payload FROM events WHERE message_id=?", (key,)).fetchone()
                 if row is None:
                     db.execute(
-                        "INSERT INTO events VALUES (?, ?, ?, 0, ?)",
+                        "INSERT INTO events (message_id, session_id, payload, delivered, "
+                        "enqueued_at, revision) VALUES (?, ?, ?, 0, ?, 0)",
                         (key, ev.session_id, _dump(ev), now),
                     )
                     changed += 1
@@ -148,33 +169,34 @@ class Outbox:
                     merged = ev
                 if merged is not None:
                     db.execute(
-                        "UPDATE events SET session_id=?, payload=?, delivered=0, enqueued_at=? "
-                        "WHERE message_id=?",
+                        "UPDATE events SET session_id=?, payload=?, delivered=0, enqueued_at=?, "
+                        "revision=revision+1 WHERE message_id=?",
                         (merged.session_id, _dump(merged), now, key),
                     )
                     changed += 1
         return changed
 
-    def pending(self, limit: int) -> list[UsageEvent]:
+    def pending(self, limit: int) -> list[PendingEvent]:
         with self._lock:
             rows = self._db.execute(
-                "SELECT message_id, payload FROM events WHERE delivered=0 "
+                "SELECT message_id, revision, payload FROM events WHERE delivered=0 "
                 "ORDER BY enqueued_at, rowid LIMIT ?",
                 (limit,),
             ).fetchall()
-        out: list[UsageEvent] = []
-        for key, payload in rows:
+        out: list[PendingEvent] = []
+        for key, rev, payload in rows:
             try:
-                out.append(_load(payload))
+                out.append(PendingEvent(key, rev, _load(payload)))
             except (ValueError, ProtocolError):
                 log.warning("skipping unreadable outbox row %s", key)
         return out
 
-    def ack(self, message_ids: Sequence[str]) -> int:
+    def ack(self, sent: Iterable[tuple[str, int]]) -> int:
+        """Mark `(message_id, revision)` pairs delivered. Stale revisions are ignored."""
         with self._tx() as db:
             cur = db.executemany(
-                "UPDATE events SET delivered=1 WHERE message_id=? AND delivered=0",
-                [(m,) for m in message_ids],
+                "UPDATE events SET delivered=1 WHERE message_id=? AND revision=? AND delivered=0",
+                [(m, r) for m, r in sent],
             )
             return max(cur.rowcount, 0)
 
@@ -186,9 +208,14 @@ class Outbox:
         return OutboxStats(queued=total, delivered=delivered, waiting=total - delivered)
 
     def set_session_title(self, session_id: str, title: str) -> int:
-        """Set session_title on undelivered rows of a session. Returns rows changed."""
+        """Persist a session's title and set it on its undelivered rows. Returns rows changed."""
         changed = 0
         with self._tx() as db:
+            db.execute(
+                "INSERT INTO session_titles VALUES (?, ?) "
+                "ON CONFLICT(session_id) DO UPDATE SET title=excluded.title",
+                (session_id, title),
+            )
             rows = db.execute(
                 "SELECT message_id, payload FROM events WHERE session_id=? AND delivered=0",
                 (session_id,),
@@ -201,11 +228,16 @@ class Outbox:
                 if ev.session_title == title:
                     continue
                 db.execute(
-                    "UPDATE events SET payload=? WHERE message_id=?",
+                    "UPDATE events SET payload=?, revision=revision+1 WHERE message_id=?",
                     (_dump(replace(ev, session_title=title)), key),
                 )
                 changed += 1
         return changed
+
+    def session_titles(self) -> dict[str, str]:
+        with self._lock:
+            rows = self._db.execute("SELECT session_id, title FROM session_titles").fetchall()
+        return dict(rows)
 
     def get_offset(self, source: str) -> SourceOffset | None:
         with self._lock:

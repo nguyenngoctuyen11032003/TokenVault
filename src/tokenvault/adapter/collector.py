@@ -102,6 +102,8 @@ class Collector:
         self._identity = identity
         self._team = team
         self._ctx = ctx if ctx is not None else SessionContext()
+        for session, title in outbox.session_titles().items():
+            self._ctx.titles.setdefault(session, title)  # titles survive restarts
         self._deduper = MessageDeduper()
 
     def _to_event(self, u: AssistantUsage) -> UsageEvent:
