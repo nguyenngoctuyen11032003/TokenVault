@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import hmac
 import logging
 import random
 import threading
@@ -33,10 +32,11 @@ from tokenvault.adapter.outbox import PendingEvent
 from tokenvault.adapter.transport_tls import (
     PinMismatch,
     client_ssl_context,
-    normalize_fp,
     peer_fingerprint,
+    pin_matches,
     pinned_connection_class,
     short_fp,
+    validate_fp,
 )
 from tokenvault.common.protocol import (
     MAX_BATCH,
@@ -108,7 +108,7 @@ class Transport:
         self.rejected_retry_s = rejected_retry_s
         self.open_timeout = open_timeout
         self.reply_timeout = reply_timeout
-        self._pin = normalize_fp(endpoint.fingerprint)
+        self._pin = validate_fp(endpoint.fingerprint)  # ValueError if malformed
         self.state = "offline"
         self.last_error: str | None = None  # human-readable reason of the last failure
         self.last_good_host: str | None = None
@@ -119,22 +119,39 @@ class Transport:
         self._connected_once = False
 
     # ------------------------------------------------------------ public API
+    @property
+    def running(self) -> bool:
+        t = self._thread
+        return t is not None and t.is_alive()
+
     def start(self) -> None:
-        if self._thread is not None and self._thread.is_alive():
-            return
-        self._loop = asyncio.new_event_loop()
+        """Start the background thread. Raises RuntimeError if it is still running."""
+        if self.running:
+            raise RuntimeError("transport already running (or an old thread has not exited)")
+        loop = asyncio.new_event_loop()
+        self._loop = loop
         self._wake = asyncio.Event()
-        self._thread = threading.Thread(target=self._run, name="tv-transport", daemon=True)
+        self._task = loop.create_task(self._main())
+        self._thread = threading.Thread(
+            target=self._run, args=(loop, self._task), name="tv-transport", daemon=True
+        )
         self._thread.start()
 
     def stop(self, timeout: float = 10.0) -> None:
-        loop, thread = self._loop, self._thread
-        if loop is None or thread is None:
+        """Stop the transport. Safe from any thread, including its own callbacks."""
+        loop, thread, task = self._loop, self._thread, self._task
+        if loop is None or thread is None or task is None:
+            return
+        if threading.current_thread() is thread:
+            task.cancel()  # we are on the loop (e.g. inside on_state): just cancel
             return
         with contextlib.suppress(RuntimeError):
-            loop.call_soon_threadsafe(self._cancel)
+            loop.call_soon_threadsafe(task.cancel)
         thread.join(timeout)
-        self._thread = None
+        if thread.is_alive():
+            log.warning("transport thread did not stop within %.0f s", timeout)
+        elif self._thread is thread:
+            self._thread = None
 
     def notify(self) -> None:
         """Thread-safe: new rows are in the outbox, send them now."""
@@ -145,18 +162,11 @@ class Transport:
             loop.call_soon_threadsafe(wake.set)
 
     # ------------------------------------------------------------- internals
-    def _cancel(self) -> None:
-        if self._task is not None:
-            self._task.cancel()
-
-    def _run(self) -> None:
-        loop = self._loop
-        assert loop is not None
+    def _run(self, loop: asyncio.AbstractEventLoop, task: asyncio.Task[None]) -> None:
         asyncio.set_event_loop(loop)
         try:
-            self._task = loop.create_task(self._main())
             with contextlib.suppress(asyncio.CancelledError):
-                loop.run_until_complete(self._task)
+                loop.run_until_complete(task)
         except Exception:
             log.exception("transport loop crashed")
         finally:
@@ -164,7 +174,8 @@ class Transport:
                 # Wait for in-flight outbox calls so none outlives stop().
                 loop.run_until_complete(loop.shutdown_default_executor())
             loop.close()
-            self._loop = None
+            if self._loop is loop:  # a newer start() may already own a new loop
+                self._loop = None
 
     def _set_state(self, state: str, reason: str | None = None) -> None:
         if reason is not None:
@@ -276,7 +287,7 @@ class Transport:
             raise
         # Belt and braces: verify again before anything of ours is sent.
         got = peer_fingerprint(ws.transport)
-        if got is None or not hmac.compare_digest(got, self._pin):
+        if not pin_matches(got, self._pin):
             ws.transport.abort()
             raise PinMismatch(f"got {short_fp(got or '')}, pinned {short_fp(self._pin)}")
         return ws
@@ -318,10 +329,12 @@ class Transport:
                     await self._send_batch(ws, rows)
                     continue
                 waiter = asyncio.ensure_future(wake.wait())
-                done, _ = await asyncio.wait(
-                    {waiter, closed}, timeout=self.idle_s, return_when=asyncio.FIRST_COMPLETED
-                )
-                waiter.cancel()
+                try:
+                    done, _ = await asyncio.wait(
+                        {waiter, closed}, timeout=self.idle_s, return_when=asyncio.FIRST_COMPLETED
+                    )
+                finally:
+                    waiter.cancel()
                 if closed in done:
                     raise Offline("connection closed by Manager")
                 if not done:  # idle: keepalive round trip
@@ -330,19 +343,32 @@ class Transport:
         finally:
             closed.cancel()
 
+    async def _drop(self, rows: list[PendingEvent], why: str) -> None:
+        """Ack rows that can never be sent, so they cannot block the queue forever."""
+        for r in rows:
+            log.error("dropping outbox row %a: %s", r.message_id, why)
+        await asyncio.to_thread(self._outbox.ack, [(r.message_id, r.revision) for r in rows])
+
     async def _send_batch(self, ws: ClientConnection, rows: list[PendingEvent]) -> None:
+        good: list[PendingEvent] = []
+        bad: list[PendingEvent] = []
+        for r in rows:  # a row that cannot be framed on its own is poison
+            try:
+                encode_msg(Batch([r.event]))
+                good.append(r)
+            except (ProtocolError, ValueError):  # incl. UnicodeEncodeError, oversize
+                bad.append(r)
+        if bad:
+            await self._drop(bad, "cannot be encoded into a frame")
+        if not good:
+            return
+        rows = good
         while True:
             try:
                 frame = encode_msg(Batch([r.event for r in rows]))
                 break
-            except ProtocolError:
-                if len(rows) > 1:
-                    rows = rows[: len(rows) // 2]
-                    continue
-                # A single event that can never fit in a frame would block the queue forever.
-                log.error("dropping outbox row %s: larger than one frame", rows[0].message_id)
-                await asyncio.to_thread(self._outbox.ack, [(rows[0].message_id, rows[0].revision)])
-                return
+            except (ProtocolError, ValueError):
+                rows = rows[: max(1, len(rows) // 2)]  # too big together: send fewer
         await ws.send(frame)
         msg = await self._recv_msg(ws)
         if not isinstance(msg, Receipt):

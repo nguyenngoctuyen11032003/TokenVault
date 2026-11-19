@@ -15,10 +15,12 @@ from cryptography.hazmat.primitives import serialization
 
 from tokenvault.manager import secrets as tv_secrets
 from tokenvault.manager.tls import (
+    CertificateError,
     CertInfo,
     _write_new_certificate,
     ensure_certificate,
     load_server_context,
+    regenerate_certificate,
 )
 
 
@@ -74,25 +76,80 @@ def test_certificate_reused_when_present(tmp_path: Path) -> None:
     assert a == b
 
 
-def test_certificate_regenerated_when_unreadable(tmp_path: Path) -> None:
+def test_absent_files_are_generated(tmp_path: Path) -> None:
+    d = tmp_path / "new"
+    info = ensure_certificate(d)
+    assert info.cert_path.exists() and info.key_path.exists()
+
+
+def test_unreadable_cert_raises_and_keeps_files(tmp_path: Path) -> None:
     a = ensure_certificate(tmp_path)
     a.cert_path.write_bytes(b"garbage")
-    b = ensure_certificate(tmp_path)
-    assert b.fingerprint_sha256 != a.fingerprint_sha256
-    load_server_context(b)
+    before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    with pytest.raises(CertificateError):
+        ensure_certificate(tmp_path)
+    assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == before
 
 
-def test_certificate_regenerated_when_key_missing(tmp_path: Path) -> None:
+def test_missing_key_raises_and_keeps_cert(tmp_path: Path) -> None:
     a = ensure_certificate(tmp_path)
     a.key_path.unlink()
-    b = ensure_certificate(tmp_path)
-    assert b.fingerprint_sha256 != a.fingerprint_sha256
+    cert_bytes = a.cert_path.read_bytes()
+    with pytest.raises(CertificateError):
+        ensure_certificate(tmp_path)
+    assert a.cert_path.read_bytes() == cert_bytes
+    assert not a.key_path.exists()
 
 
-def test_certificate_regenerated_near_expiry(tmp_path: Path) -> None:
+def test_transient_read_failure_does_not_destroy_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    a = ensure_certificate(tmp_path)
+    before = {p.name: p.read_bytes() for p in tmp_path.iterdir()}
+    real = Path.read_bytes
+
+    def flaky(self: Path) -> bytes:
+        if self.name == a.cert_path.name:
+            raise PermissionError("locked by antivirus")
+        return real(self)
+
+    monkeypatch.setattr(Path, "read_bytes", flaky)
+    with pytest.raises(CertificateError, match="PermissionError"):
+        ensure_certificate(tmp_path)
+    monkeypatch.undo()
+    assert {p.name: p.read_bytes() for p in tmp_path.iterdir()} == before
+    assert ensure_certificate(tmp_path) == a
+
+
+def test_near_expiry_is_kept_with_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
     old = _write_new_certificate(tmp_path, valid_for=timedelta(days=5))
-    new = ensure_certificate(tmp_path)
-    assert new.fingerprint_sha256 != old.fingerprint_sha256
+    with caplog.at_level(logging.WARNING, logger="tokenvault.manager.tls"):
+        again = ensure_certificate(tmp_path)
+    assert again.fingerprint_sha256 == old.fingerprint_sha256
+    assert any("expires in" in r.getMessage() for r in caplog.records)
+
+
+def test_expired_is_kept_and_still_serves(tmp_path: Path) -> None:
+    old = _write_new_certificate(
+        tmp_path, valid_for=timedelta(days=-1), backdate=timedelta(days=2)
+    )
+    assert ensure_certificate(tmp_path) == old
+    load_server_context(old)
+
+
+def test_explicit_regenerate_backs_up_and_changes_fingerprint(tmp_path: Path) -> None:
+    a = ensure_certificate(tmp_path)
+    old_cert = a.cert_path.read_bytes()
+    b = regenerate_certificate(tmp_path)
+    assert b.fingerprint_sha256 != a.fingerprint_sha256
+    backups = sorted(p.name for p in tmp_path.iterdir() if ".bak-" in p.name)
+    assert len(backups) == 3  # cert, key, key password
+    cert_bak = next(p for p in tmp_path.iterdir() if p.name.startswith("manager-cert.pem.bak-"))
+    assert cert_bak.read_bytes() == old_cert
+    assert ensure_certificate(tmp_path) == b
+    load_server_context(b)
 
 
 def test_certificate_validity_and_san(tmp_path: Path) -> None:

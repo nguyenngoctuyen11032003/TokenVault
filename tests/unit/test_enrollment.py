@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
@@ -146,3 +147,20 @@ def test_unicode_and_surrogate_inputs_do_not_raise(enr: Enrollment) -> None:
     assert enr.verify_device("\ud800", "\ud800") is False
     key = enr.register_device(pkg.secret, "máy-1", "x")
     assert key and enr.device_team("máy-1") == "Phòng Kỹ thuật"
+
+
+def test_cross_package_reenroll_refused_and_original_key_still_valid(
+    enr: Enrollment, caplog: pytest.LogCaptureFixture
+) -> None:
+    dev_pkg = enr.create_package("Dev", None)
+    ops_pkg = enr.create_package("Ops", None)
+    key = enr.register_device(dev_pkg.secret, "dev-1", "Dev")
+    assert key is not None
+    with caplog.at_level(logging.WARNING, logger="tokenvault.manager.enrollment"):
+        assert enr.register_device(ops_pkg.secret, "dev-1", "Ops") is None
+    assert enr.verify_device("dev-1", key)
+    assert enr.device_team("dev-1") == "Dev"
+    assert enr.device_package("dev-1") == dev_pkg.package_id
+    msgs = " ".join(r.getMessage() for r in caplog.records)
+    assert "dev-1" in msgs and dev_pkg.package_id in msgs and ops_pkg.package_id in msgs
+    assert ops_pkg.secret not in msgs and dev_pkg.secret not in msgs

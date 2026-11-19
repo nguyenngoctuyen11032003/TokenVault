@@ -21,8 +21,30 @@ class PinMismatch(ConnectionError):
     """The server's certificate is not the pinned Manager certificate."""
 
 
+_HEX = frozenset("0123456789abcdef")
+
+
 def normalize_fp(fp: str) -> str:
     return fp.replace(":", "").replace(" ", "").strip().lower()
+
+
+def validate_fp(fp: str) -> str:
+    """Normalised pin (64 lowercase ASCII hex chars) or ValueError."""
+    norm = normalize_fp(fp)
+    if len(norm) != 64 or not set(norm) <= _HEX:
+        raise ValueError("certificate fingerprint must be 64 hex characters (SHA-256)")
+    return norm
+
+
+def pin_matches(got: str | None, expected: str) -> bool:
+    """Constant-time compare on ASCII bytes (never sees non-ASCII text)."""
+    if not got or not expected:
+        return False
+    try:
+        a, b = got.encode("ascii"), expected.encode("ascii")
+    except UnicodeEncodeError:
+        return False
+    return hmac.compare_digest(a, b)
 
 
 def short_fp(fp: str) -> str:
@@ -60,7 +82,7 @@ def pinned_connection_class(expected: str, holder: dict[str, str]) -> type[Clien
         def connection_made(self, transport: asyncio.BaseTransport) -> None:
             super().connection_made(transport)
             got = peer_fingerprint(transport)
-            if got is None or not expected or not hmac.compare_digest(got, expected):
+            if not pin_matches(got, expected):
                 self._pin_failed = True
                 holder["mismatch"] = f"got {short_fp(got or '')}, pinned {short_fp(expected)}"
                 cast(asyncio.Transport, transport).abort()

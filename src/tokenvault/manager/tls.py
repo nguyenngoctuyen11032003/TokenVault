@@ -3,10 +3,14 @@
 Choices
 -------
 * **ECDSA P-256** key (fast to generate, small, supported by every TLS 1.2+
-  stack). Validity 10 years; regenerated only when the files are missing,
-  unreadable, inconsistent or within 30 days of expiry. Regenerating changes
-  the fingerprint, which orphans every installer already handed out, so it is
-  deliberately rare and logged as a warning.
+  stack). Validity 10 years. :func:`ensure_certificate` generates a pair ONLY
+  when neither the cert nor the key file exists. Files that exist but cannot
+  be read / do not match raise :class:`CertificateError` and are never
+  overwritten (a transient read error must not silently change the pinned
+  fingerprint and orphan every installer). A certificate near or past its
+  expiry is kept with a WARNING: adapters pin the fingerprint and ignore
+  notAfter. Replacing the identity is an explicit admin action:
+  :func:`regenerate_certificate` (old files kept as ``*.bak-<timestamp>``).
 * SAN: machine hostname, ``localhost``, ``127.0.0.1`` and the LAN IPv4
   addresses seen at generation time. Adapters pin the fingerprint and do not
   check host names, so a later IP change does NOT trigger regeneration.
@@ -28,6 +32,7 @@ import os
 import secrets
 import socket
 import ssl
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -46,6 +51,10 @@ KEY_FILE = "manager-key.pem"
 KEY_PASS_SUFFIX = ".pass"  # DPAPI-protected key password: <key_path>.pass
 VALIDITY = timedelta(days=3650)
 RENEW_BEFORE = timedelta(days=30)
+
+
+class CertificateError(RuntimeError):
+    """The Manager certificate files exist but cannot be used (not overwritten)."""
 
 
 @dataclass(frozen=True)
@@ -110,7 +119,9 @@ def _restrict(path: Path) -> None:
         os.chmod(path, 0o600)
 
 
-def _write_new_certificate(directory: Path, valid_for: timedelta = VALIDITY) -> CertInfo:
+def _write_new_certificate(
+    directory: Path, valid_for: timedelta = VALIDITY, backdate: timedelta = timedelta(days=1)
+) -> CertInfo:
     directory.mkdir(parents=True, exist_ok=True)
     key = ec.generate_private_key(ec.SECP256R1())
     now = datetime.now(UTC)
@@ -126,7 +137,7 @@ def _write_new_certificate(directory: Path, valid_for: timedelta = VALIDITY) -> 
         .issuer_name(name)
         .public_key(key.public_key())
         .serial_number(x509.random_serial_number())
-        .not_valid_before(now - timedelta(days=1))
+        .not_valid_before(now - backdate)
         .not_valid_after(now + valid_for)
         .add_extension(_san(), critical=False)
         .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
@@ -166,21 +177,55 @@ def _load_existing(directory: Path) -> CertInfo:
     pub = serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
     if key.public_key().public_bytes(*pub) != cert.public_key().public_bytes(*pub):
         raise ValueError("private key does not match certificate")
-    if cert.not_valid_after_utc - datetime.now(UTC) < RENEW_BEFORE:
-        raise ValueError("certificate expires soon")
-    return CertInfo(
-        cert_path, key_path, fingerprint_of_der(cert.public_bytes(serialization.Encoding.DER))
-    )
+    fp = fingerprint_of_der(cert.public_bytes(serialization.Encoding.DER))
+    left = cert.not_valid_after_utc - datetime.now(UTC)
+    if left < RENEW_BEFORE:
+        log.warning(
+            "Manager certificate %s %s; still used (adapters pin it, expiry is not checked). "
+            "Regenerate it from Settings and re-issue installers when convenient.",
+            short_fp(fp),
+            "has expired" if left.total_seconds() <= 0 else f"expires in {left.days} days",
+        )
+    return CertInfo(cert_path, key_path, fp)
+
+
+def _files(directory: Path) -> list[Path]:
+    key = directory / KEY_FILE
+    return [directory / CERT_FILE, key, _pass_path(key)]
 
 
 def ensure_certificate(directory: Path) -> CertInfo:
-    """Load the Manager certificate from ``directory``, creating it if needed."""
+    """Load the Manager certificate from ``directory``; create it only if absent.
+
+    Raises :class:`CertificateError` when the files exist but are unusable.
+    """
     directory = Path(directory)
-    if (directory / CERT_FILE).exists() or (directory / KEY_FILE).exists():
-        try:
-            return _load_existing(directory)
-        except Exception as e:  # unreadable/inconsistent/expiring -> regenerate
-            log.warning("Manager certificate unusable (%s); regenerating", e)
+    if not (directory / CERT_FILE).exists() and not (directory / KEY_FILE).exists():
+        return _write_new_certificate(directory)
+    try:
+        return _load_existing(directory)
+    except Exception as e:
+        raise CertificateError(
+            f"Manager certificate in {directory} is unusable ({type(e).__name__}: {e}); "
+            "files left untouched - fix access or regenerate explicitly"
+        ) from e
+
+
+def regenerate_certificate(directory: Path) -> CertInfo:
+    """Replace the Manager certificate (NEW fingerprint: installers must be re-issued).
+
+    Existing files are renamed to ``<name>.bak-<YYYYmmdd-HHMMSS>``.
+    """
+    directory = Path(directory)
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    for f in _files(directory):
+        if f.exists():
+            backup = f.with_name(f"{f.name}.bak-{stamp}")
+            n = 1
+            while backup.exists():
+                backup = f.with_name(f"{f.name}.bak-{stamp}-{n}")
+                n += 1
+            os.replace(f, backup)
     return _write_new_certificate(directory)
 
 

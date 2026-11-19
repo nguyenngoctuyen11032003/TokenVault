@@ -158,7 +158,10 @@ def test_fingerprint_mismatch_sends_nothing_keeps_queue(rig: Rig, tmp_path: Path
         t2.start()
         assert wait_until(lambda: t2.state == "offline" and "fingerprint" in (t2.last_error or ""))
         t2.stop()
-        time.sleep(0.2)  # let any (wrongly) sent bytes arrive before asserting none did
+        # The impostor's connections must be fully finished before asserting nothing arrived.
+        assert wait_until(
+            lambda: recorder.handshakes >= 1 and recorder.closed == recorder.accepted
+        )
         assert bytes(recorder.received) == b""
         assert rig.server.hellos_received == 0
         assert rig.server.connected_devices() == set()
@@ -299,17 +302,19 @@ def test_lone_surrogate_frame_does_not_crash_server(rig: Rig) -> None:
         assert isinstance(send_recv(bad, hello_frame(secret=rig.package.secret)), Welcome)
         frame = batch_frame_ascii([make_event(1)], session_title="\ud800 bad", project="\udfff")
         assert "\\ud800" in frame
-        reply = send_recv(bad, frame)
-        assert isinstance(reply, Reject)
-        with pytest.raises(ConnectionClosed):
-            bad.recv(timeout=10)
+        reply = send_recv(bad, frame)  # the bad event is dropped but acknowledged
+        assert isinstance(reply, Receipt) and reply.message_ids == ["msg_1"]
+        frame = batch_frame_ascii([make_event(9)], message_id="\ud800")
+        reply = send_recv(bad, frame)  # its id cannot even be echoed: dropped, not receipted
+        assert isinstance(reply, Receipt) and reply.message_ids == []
+        assert store_count(rig.store) == 0
     with raw_client(rig.port) as bad_hello:
         raw_hello = (
             '{"v":1,"type":"hello","device_id":"\\ud800","enroll_secret":"x",'
             '"device_key":null,"team":"Dev","version":1}'
         )
         assert isinstance(send_recv(bad_hello, raw_hello), Reject)
-    assert rig.server.rejected_count >= 2
+    assert rig.server.rejected_count >= 1
     ob = rig.outbox()
     ob.enqueue([make_event(2, session_title="Tiếng Việt 😀")])
     t = rig.transport(ob)

@@ -78,6 +78,12 @@ def client_ctx() -> ssl.SSLContext:
     ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
+    # The websockets SYNC client over TLS 1.3 intermittently stalls on Windows (its
+    # upgrade request is never seen by the asyncio server; ~2-7% of connections,
+    # with plain websockets too). The asyncio client the Transport uses does not
+    # (0 of 450 in the same probe), and nor does TLS 1.2, so the raw test client
+    # uses TLS 1.2.
+    ctx.maximum_version = ssl.TLSVersion.TLSv1_2
     return ctx
 
 
@@ -90,6 +96,7 @@ def raw_client(port: int) -> ClientConnection:
         compression=None,
         max_size=None,
         open_timeout=10,
+        legacy=True,  # plain connection object (also usable as a context manager)
     )
 
 
@@ -236,12 +243,18 @@ class RawTLSRecorder:
 
     def __init__(self, cert: CertInfo) -> None:
         self.ctx = load_server_context(cert)
+        # TLS 1.2: the server finishes its handshake by SENDING its Finished, so a
+        # completed handshake is observable even though the client then aborts
+        # (with TLS 1.3 the client's Finished and its RST race on the server side).
+        self.ctx.maximum_version = ssl.TLSVersion.TLSv1_2
         self.sock = socket.socket()
         self.sock.bind(("127.0.0.1", 0))
         self.sock.listen()
         self.port = int(self.sock.getsockname()[1])
         self.received = bytearray()
-        self.handshakes = 0
+        self.handshakes = 0  # COMPLETED TLS handshakes
+        self.accepted = 0  # TCP accepts
+        self.closed = 0  # connections fully finished (peer closed / reset)
         self._stop = False
         self._t = threading.Thread(target=self._run, daemon=True)
         self._t.start()
@@ -253,10 +266,11 @@ class RawTLSRecorder:
                 conn, _ = self.sock.accept()
             except OSError:
                 continue
-            self.handshakes += 1  # counts TCP accepts (the TLS handshake may be cut short)
+            self.accepted += 1
             try:
                 conn.settimeout(5)
                 with self.ctx.wrap_socket(conn, server_side=True) as tls:
+                    self.handshakes += 1
                     while True:
                         chunk = tls.recv(65536)
                         if not chunk:
@@ -264,6 +278,9 @@ class RawTLSRecorder:
                         self.received += chunk
             except (OSError, ssl.SSLError):
                 pass
+            finally:
+                conn.close()
+                self.closed += 1
 
     def close(self) -> None:
         self._stop = True
@@ -296,3 +313,46 @@ class GrowingOutbox:
         n = self.inner.ack(pairs)
         self.ack_results.append((len(pairs), n))
         return n
+
+
+class PoisonedOutbox:
+    """Outbox proxy that also serves one row whose event cannot be framed (lone surrogate)."""
+
+    def __init__(self, inner: Outbox, poison: UsageEvent) -> None:
+        self.inner = inner
+        self.poison = PendingEvent("poison", 7, poison)
+        self.poison_acked = False
+        self.acks: list[tuple[str, int]] = []
+
+    def pending(self, limit: int) -> list[PendingEvent]:
+        rows = self.inner.pending(limit)
+        if not self.poison_acked:
+            rows = [self.poison, *rows][:limit]
+        return rows
+
+    def ack(self, sent: Iterable[tuple[str, int]]) -> int:
+        pairs = list(sent)
+        self.acks.extend(pairs)
+        if ("poison", 7) in pairs:
+            self.poison_acked = True
+            pairs = [p for p in pairs if p[0] != "poison"]
+            return self.inner.ack(pairs) + 1
+        return self.inner.ack(pairs)
+
+    def stats(self) -> Any:
+        return self.inner.stats()
+
+
+class FlipEnrollment:
+    """Enrollment proxy: verify_device answers True once, then False (revoked in between)."""
+
+    def __init__(self, inner: Enrollment) -> None:
+        self.inner = inner
+        self.calls = 0
+
+    def verify_device(self, device_id: str, device_key: str) -> bool:
+        self.calls += 1
+        return self.calls == 1 and self.inner.verify_device(device_id, device_key)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.inner, name)

@@ -7,8 +7,10 @@
   (:func:`Enrollment.package_secret`); it is deleted when the package is revoked.
 * A *device* enrolls once with a package secret and receives a random device
   key; only the key's SHA-256 is stored and it is compared with
-  ``hmac.compare_digest``. Re-enrolling with a valid secret issues a NEW key and
-  invalidates the old one. The device's team is the package's team.
+  ``hmac.compare_digest``. Re-enrolling with a valid secret of the SAME package
+  issues a NEW key and invalidates the old one; a secret of a DIFFERENT package
+  is refused (a device never moves between packages/teams by itself; the
+  refusal looks exactly like a bad secret). The device's team is the package's.
 * Revoking a device blocks its key and any re-enrollment of the same
   ``device_id`` (the installer still holds the secret);
   :meth:`Enrollment.delete_device` forgets it so it may enroll again.
@@ -190,9 +192,18 @@ class Enrollment:
             if pkg is None:
                 return None
             dev = db.execute(
-                "SELECT revoked_at FROM devices WHERE device_id = ?", (device_id,)
+                "SELECT revoked_at, package_id FROM devices WHERE device_id = ?", (device_id,)
             ).fetchone()
             if dev is not None and dev[0] is not None:
+                return None
+            if dev is not None and dev[1] != pkg[0]:
+                log.warning(
+                    "device %r tried to re-enroll with package %s but belongs to package %s; "
+                    "refused",
+                    device_id,
+                    pkg[0],
+                    dev[1],
+                )
                 return None
             db.execute(
                 "INSERT INTO devices (device_id, package_id, team, key_hash, enrolled_at) "
@@ -225,6 +236,23 @@ class Enrollment:
                 "SELECT team FROM devices WHERE device_id = ?", (device_id,)
             ).fetchone()
         return None if row is None else str(row[0])
+
+    def device_package(self, device_id: str) -> str | None:
+        if not _text_ok(device_id):
+            return None
+        with self._lock:
+            row = self._db.execute(
+                "SELECT package_id FROM devices WHERE device_id = ?", (device_id,)
+            ).fetchone()
+        return None if row is None else str(row[0])
+
+    def devices_of_package(self, package_id: str) -> list[str]:
+        with self._lock:
+            rows = self._db.execute(
+                "SELECT device_id FROM devices WHERE package_id = ? ORDER BY device_id",
+                (package_id,),
+            ).fetchall()
+        return [str(r[0]) for r in rows]
 
     def revoke_device(self, device_id: str) -> None:
         with self._tx() as db:
