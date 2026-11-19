@@ -50,6 +50,7 @@ Source: "{#AdapterExe}"; DestDir: "{app}"; DestName: "{#ExeName}"; Flags: ignore
 [Code]
 const
   ExeImage = '{#ExeName}';
+  EXIT_NO_PAYLOAD = 2;
   EXIT_DECLINED = 3;
   SYNCHRONIZE = $00100000;
   EVENT_MODIFY_STATE = $0002;
@@ -79,62 +80,36 @@ begin
   if Result then CloseHandle(H);
 end;
 
-{ Ask this user's agent to exit via its reload event; wait up to 10 s. If it does not
-  leave, kill only our own exe image (never other programs). }
+{ Ask this user's agent to exit via its reload event and wait up to 10 s. Whatever happens
+  (also when the mutex name did not match, e.g. a non-ASCII user name hashed differently),
+  finish by killing our own exe image so the files can be replaced. Rc 128 = no such
+  process, which is fine. }
 procedure StopAgent;
 var
   H: THandle;
   I, Rc: Integer;
 begin
-  if not AgentRunning then Exit;
-  H := OpenEventW(EVENT_MODIFY_STATE, 0, MutexName + '-reload');
-  if H <> 0 then
+  if AgentRunning then
   begin
-    SetEvent(H);
-    CloseHandle(H);
-  end;
-  for I := 1 to 100 do
-  begin
-    if not AgentRunning then Exit;
-    Sleep(100);
-  end;
-  Exec(ExpandConstant('{sys}\taskkill.exe'),
-    '/F /IM ' + ExeImage + ' /FI "USERNAME eq ' + GetUserNameString + '"',
-    '', SW_HIDE, ewWaitUntilTerminated, Rc);
-  Sleep(500);
-end;
-
-{ True when the installer file ends with the payload magic (common/config_payload.py).
-  The adapter validates the payload fully (CRC, schema); this only catches the bare
-  template being run directly, before anything is installed. }
-function HasPayloadMagic: Boolean;
-var
-  S: TFileStream;
-  Tail: AnsiString;
-begin
-  Result := False;
-  try
-    S := TFileStream.Create(ExpandConstant('{srcexe}'), fmOpenRead or fmShareDenyNone);
-    try
-      SetLength(Tail, 8);
-      S.Seek(-8, soEnd);
-      S.ReadBuffer(Tail[1], 8);
-      Result := Tail = 'TVLTCFG1';
-    finally
-      S.Free;
+    H := OpenEventW(EVENT_MODIFY_STATE, 0, MutexName + '-reload');
+    if H <> 0 then
+    begin
+      SetEvent(H);
+      CloseHandle(H);
     end;
-  except
-    Result := False;
+    for I := 1 to 100 do
+    begin
+      if not AgentRunning then Break;
+      Sleep(100);
+    end;
   end;
-end;
-
-function InitializeSetup: Boolean;
-begin
-  Result := HasPayloadMagic or (ExpandConstant('{param:ADAPTERARGS|}') <> '');
-  if not Result then
-    SuppressibleMsgBox('This file has no TokenVault configuration, so it cannot be set up.' +
-      #13#10 + 'Ask your manager for your team''s installer (made with "Create installer" ' +
-      'in the TokenVault Manager) and run that file.', mbError, MB_OK, IDOK);
+  if Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM ' + ExeImage, '', SW_HIDE,
+          ewWaitUntilTerminated, Rc) then
+  begin
+    if (Rc <> 0) and (Rc <> 128) then
+      Log('taskkill ' + ExeImage + ' returned ' + IntToStr(Rc));
+    Sleep(500);
+  end;
 end;
 
 function PrepareToInstall(var NeedsRestart: Boolean): String;
@@ -156,7 +131,11 @@ begin
   if not Exec(ExpandConstant('{app}\{#ExeName}'), Args, '', SW_SHOWNORMAL,
               ewWaitUntilTerminated, Rc) then
     Rc := -1;
-  if (Rc <> 0) and (Rc <> EXIT_DECLINED) then
+  if Rc = EXIT_NO_PAYLOAD then
+    SuppressibleMsgBox('This file has no TokenVault configuration, so it cannot be set up. ' +
+      'Ask your manager for your team''s installer (made with "Create installer" in the ' +
+      'TokenVault Manager) and run that file.', mbError, MB_OK, IDOK)
+  else if (Rc <> 0) and (Rc <> EXIT_DECLINED) then
     SuppressibleMsgBox('The TokenVault Adapter could not be set up (code ' + IntToStr(Rc) +
       '). Ask your administrator for a new installer.', mbError, MB_OK, IDOK);
 end;
@@ -175,6 +154,6 @@ begin
     if not UninstallSilent then
       if MsgBox('Also delete the TokenVault Adapter data (settings, unsent queue)?',
                 mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES then
-        DelTree(ExpandConstant('{localappdata}\TokenVault'), True, True, True);
+        DelTree(ExpandConstant('{localappdata}\TokenVault\Adapter'), True, True, True);
   end;
 end;

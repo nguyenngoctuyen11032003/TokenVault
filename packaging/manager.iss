@@ -1,14 +1,16 @@
-; TokenVault Manager installer (per machine; one UAC prompt).
+; TokenVault Manager installer (per user, in %LOCALAPPDATA%\Programs; one UAC prompt).
 ;
-; Admin rights are needed for ONE thing: the inbound Windows Firewall rules
-; (TCP ingest range + UDP discovery), created by the Manager's own helper
+; The installer itself runs unelevated, so the files, Start Menu entry, autostart and the
+; Manager's data (%APPDATA%) all belong to the signed-in user. Admin rights are needed for
+; ONE thing: the inbound Windows Firewall rules (TCP ingest range + UDP discovery). That
+; step - and the matching removal on uninstall - is run elevated (ShellExec runas) as the
+; Manager's own helper
 ;     TokenVault-Manager.exe firewall --ensure --port <base>
-; Everything else (data, certificates, secrets) lives in the installing user's %APPDATA%.
 ;
 ; Compile (build.ps1 does this):
 ;   ISCC /DSourceDir=..\dist\manager\TokenVault-Manager /DRedistDir=redist /O..\dist\installer manager.iss
 ; SourceDir must already contain adapter-setup-template.exe (build.ps1 puts it there).
-; Silent install (smoke test; run from an elevated shell to avoid the UAC prompt):
+; Silent install (smoke test; /NOFIREWALL=1 avoids the UAC prompt):
 ;   TokenVault-Manager-Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /DIR="C:\tmp\tv" /NOFIREWALL=1 /NOWEBVIEW2=1
 
 #ifndef SourceDir
@@ -26,7 +28,7 @@ AppId={{B2F5E7C3-8A14-4D69-A0B7-5E93D1C64F28}
 AppName={#AppName}
 AppVersion={#AppVer}
 AppPublisher=TokenVault
-PrivilegesRequired=admin
+PrivilegesRequired=lowest
 DefaultDirName={autopf}\TokenVault Manager
 DefaultGroupName=TokenVault
 DisableProgramGroupPage=yes
@@ -67,21 +69,24 @@ const
 function WebView2Present: Boolean;
 var
   V: String;
+  Found: Boolean;
 begin
-  Result := False;
-  if RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\' + WEBVIEW2_GUID, 'pv', V)
-     or RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\' + WEBVIEW2_GUID, 'pv', V)
-     or RegQueryStringValue(HKCU, 'Software\Microsoft\EdgeUpdate\Clients\' + WEBVIEW2_GUID, 'pv', V) then
-    Result := (V <> '') and (V <> '0.0.0.0');
+  V := '';
+  Found := RegQueryStringValue(HKLM, 'SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\' + WEBVIEW2_GUID, 'pv', V);
+  if not Found then
+    Found := RegQueryStringValue(HKLM, 'SOFTWARE\Microsoft\EdgeUpdate\Clients\' + WEBVIEW2_GUID, 'pv', V);
+  if not Found then
+    Found := RegQueryStringValue(HKCU, 'Software\Microsoft\EdgeUpdate\Clients\' + WEBVIEW2_GUID, 'pv', V);
+  Result := Found and (V <> '') and (V <> '0.0.0.0');
 end;
 
-{ Remove every rule this product ever created, whatever base port it used
-  (the TCP rule name embeds the port range, so a changed port leaves stale rules). }
+{ Remove every rule this product ever created, whatever base port it used (the TCP rule
+  name embeds the port range, so a changed port leaves stale rules). Elevated: UAC prompt. }
 procedure RemoveFirewallRules;
 var
   Rc: Integer;
 begin
-  Exec(ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
+  ShellExec('runas', ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe'),
     '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Get-NetFirewallRule ' +
     '-DisplayName ''TokenVault-Manager-*'' -ErrorAction SilentlyContinue | ' +
     'Remove-NetFirewallRule -ErrorAction SilentlyContinue"',
@@ -106,7 +111,7 @@ end;
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   Rc: Integer;
-  Boot: String;
+  Boot, Port: String;
 begin
   if CurStep <> ssPostInstall then Exit;
 
@@ -122,16 +127,23 @@ begin
         'TokenVault Manager.', mbInformation, MB_OK, IDOK);
   end;
 
-  { 2. Firewall rules via the Manager's own helper (we are elevated here). }
+  { 2. Firewall rules via the Manager's own helper. An upgrade keeps rules that are already
+    in place (also a custom base port chosen earlier); only missing ones trigger the
+    elevated step. }
   if ExpandConstant('{param:NOFIREWALL|0}') <> '1' then
   begin
-    RemoveFirewallRules;
-    if (not Exec(ExpandConstant('{app}\{#ExeName}'),
-                 'firewall --ensure --port ' + ExpandConstant('{param:PORT|47800}'),
-                 '', SW_HIDE, ewWaitUntilTerminated, Rc)) or (Rc <> 0) then
-      SuppressibleMsgBox('The Windows Firewall rules could not be created, so employee PCs ' +
-        'may not reach this Manager. Run "' + ExpandConstant('{app}\{#ExeName}') +
-        '" firewall --ensure as administrator later.', mbError, MB_OK, IDOK);
+    Port := ExpandConstant('{param:PORT|47800}');
+    if (not Exec(ExpandConstant('{app}\{#ExeName}'), 'firewall --check --port ' + Port, '',
+                 SW_HIDE, ewWaitUntilTerminated, Rc)) or (Rc <> 0) then
+    begin
+      if (not ShellExec('runas', ExpandConstant('{app}\{#ExeName}'),
+                        'firewall --ensure --port ' + Port, '', SW_HIDE,
+                        ewWaitUntilTerminated, Rc)) or (Rc <> 0) then
+        SuppressibleMsgBox('The Windows Firewall rules could not be created (administrator ' +
+          'approval is required), so employee PCs may not reach this Manager. Run "' +
+          ExpandConstant('{app}\{#ExeName}') + '" firewall --ensure as administrator later.',
+          mbError, MB_OK, IDOK);
+    end;
   end;
 end;
 

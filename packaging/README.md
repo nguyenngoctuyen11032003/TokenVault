@@ -1,7 +1,7 @@
 # Packaging
 
 Build machine: Windows 10/11 x64, Python 3.11+ with the project and `pyinstaller`
-installed, and [Inno Setup 6](https://jrsoftware.org/isdl.php)
+installed, and [Inno Setup 6.3 or newer](https://jrsoftware.org/isdl.php)
 (`winget install --id JRSoftware.InnoSetup -e`).
 
 ```powershell
@@ -19,7 +19,7 @@ Without ISCC the script builds the PyInstaller outputs, prints an install hint a
 | --- | --- |
 | `adapter.spec`, `manager.spec` | PyInstaller specs (`entry_*.py` are the entry points) |
 | `adapter-template.iss` | per-user installer; runs `TokenVaultAdapter.exe setup --from "{srcexe}"`; upgrade stops the agent via its reload event (taskkill of its own exe as fallback); uninstall removes the HKCU Run value |
-| `manager.iss` | per-machine installer (admin only for firewall rules via `TokenVault-Manager.exe firewall --ensure`); WebView2 check/bootstrapper; uninstall removes every `TokenVault-Manager-*` rule, whatever the base port |
+| `manager.iss` | per-user installer (`PrivilegesRequired=lowest`); only the firewall step is elevated (`ShellExec runas` of `TokenVault-Manager.exe firewall --ensure`, skipped on upgrade when the rules already exist); WebView2 check/bootstrapper; uninstall removes every `TokenVault-Manager-*` rule, whatever the base port |
 
 Rules that matter:
 

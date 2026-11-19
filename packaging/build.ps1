@@ -11,7 +11,7 @@
   5. WebView2 bootstrapper (downloaded once into packaging\redist, git-ignored)
   6. Inno Setup:  manager.iss                    -> dist\TokenVault-Manager-Setup.exe
 
-  Steps 2, 5 and 6 need Inno Setup 6 (ISCC.exe). When it is missing the script still
+  Steps 2, 5 and 6 need Inno Setup 6.3+ (ISCC.exe). When it is missing the script still
   builds the PyInstaller outputs, says clearly what was skipped and exits with code 3.
 
 .PARAMETER DevTemplate
@@ -69,6 +69,8 @@ function Find-Iscc {
 
 $iscc = Find-Iscc
 New-Item -ItemType Directory -Force $Dist | Out-Null
+# A template left over from an earlier build must never be bundled by mistake.
+Remove-Item (Join-Path $Dist 'adapter-setup-template.exe'), (Join-Path $Dist 'TokenVault-Manager-Setup.exe') -ErrorAction SilentlyContinue
 
 # 1. Adapter exe ------------------------------------------------------------------------
 Invoke-Step 'PyInstaller: adapter' {
@@ -117,6 +119,15 @@ if (-not (Test-Path $boot) -and -not $SkipWebView2Download) {
   } catch {
     Write-Warning "WebView2 bootstrapper download failed: $($_.Exception.Message). The installer will only print a hint if the runtime is missing."
     Remove-Item $boot -ErrorAction SilentlyContinue
+  }
+}
+
+# Never ship an unverified download: the bootstrapper must be validly signed by Microsoft.
+if (Test-Path $boot) {
+  $sig = Get-AuthenticodeSignature $boot
+  if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+    Write-Warning "WebView2 bootstrapper rejected (signature: $($sig.Status)); not bundling it."
+    Remove-Item $boot -Force
   }
 }
 

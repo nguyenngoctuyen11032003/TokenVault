@@ -6,14 +6,15 @@
   Checks, in order (each result is PASS / FAIL / SKIP, with the reason for a skip):
    1. build outputs exist and sizes are sane (PyInstaller exes always; the two Inno setup
       files when Inno Setup was available)
-   2. adapter exe, run directly with no payload: exits 2 ("no payload") - same for the
-      Inno template when present (exits non-zero before installing anything)
+   2. adapter exe, run directly with no payload: exits 2 ("no payload")
    3. manager exe  --selftest --require-template  exits 0
    4. a team installer is built through the Manager's packager from the BUILT adapter exe,
       then the adapter `setup --from <team installer> --silent --accept --no-start
       --no-autostart` runs with a temp data dir and temp HOME and must write config.json
       (team, port, fingerprint); no secret in config.json; HKCU Run untouched
-   5. (installers present + elevated shell) Manager installer silent-installs into a temp
+   4b. (Inno present, no real adapter installed for this user) team installer built from the
+      real Inno template, silent install with /ADAPTERARGS, config.json asserted, uninstall
+   5. (installers present) Manager installer silent-installs into a temp
       folder (/VERYSILENT /DIR=, no firewall / WebView2 side effects), `--selftest` of the
       INSTALLED exe returns 0, then it is uninstalled again
 
@@ -92,14 +93,6 @@ try {
   elseif ($r.Code -eq 2) { Add-Result 'adapter no-payload exit' PASS 'exit 2' }
   else { Add-Result 'adapter no-payload exit' FAIL "exit $($r.Code): $($r.Out)" }
 
-  if ($haveInno) {
-    # data dir irrelevant: InitializeSetup must refuse before anything is installed
-    $r = Invoke-Exe $template @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART')
-    if ($r.Blocked) { Add-Result 'template run directly' BLOCKED $r.Out.Trim() }
-    elseif ($r.Code -ne 0) { Add-Result 'template run directly' PASS "exit $($r.Code) (no payload)" }
-    else { Add-Result 'template run directly' FAIL 'exit 0 although it carries no payload' }
-  } else { Add-Result 'template run directly' SKIP 'no Inno template (build.ps1 -DevTemplate only copies the raw exe)' }
-
   # 3. manager selftest ----------------------------------------------------------------------
   $r = Invoke-Exe $mgrExe @('--selftest', '--require-template')
   if ($r.Blocked) { Add-Result 'manager --selftest --require-template' BLOCKED $r.Out.Trim() }
@@ -137,10 +130,30 @@ try {
     }
   }
 
+  # 4b. REAL Inno template: team installer from it, silent install, assert config, uninstall ----
+  $tplKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{6C1D9B0A-3E5F-4B7A-9D2E-7A41B8F0C5D1}_is1'
+  if (-not (Test-Path $template) -or -not $haveInno) { Add-Result 'Inno template installs team config' SKIP 'no Inno template (build.ps1 -DevTemplate only copies the raw exe)' }
+  elseif (Test-Path $tplKey) { Add-Result 'Inno template installs team config' SKIP 'a real TokenVault Adapter is installed for this user (same AppId); not touching it' }
+  else {
+    $pk2 = Invoke-Exe $Python @((Join-Path $PSScriptRoot 'make_team_installer.py'), $template, (Join-Path $tmp 'team2'), 'Inno Team')
+    if ($pk2.Code -ne 0) { Add-Result 'Inno template installs team config' FAIL "packager exit $($pk2.Code): $($pk2.Out)" }
+    else {
+      $i2 = ($pk2.Out.Trim() -split "`n" | Where-Object { $_ -like '{*' } | Select-Object -Last 1) | ConvertFrom-Json
+      $d2 = Join-Path $tmp 'inno-data'; $dir2 = Join-Path $tmp 'inno-app'
+      $r = Invoke-Exe $i2.path @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$dir2",
+        "/ADAPTERARGS=--silent --accept --no-start --no-autostart --data-dir $d2")
+      $cfgFile = Join-Path $d2 'config.json'
+      if ($r.Blocked) { Add-Result 'Inno template installs team config' BLOCKED $r.Out.Trim() }
+      elseif ($r.Code -ne 0 -or -not (Test-Path $cfgFile)) { Add-Result 'Inno template installs team config' FAIL "installer exit $($r.Code), config exists: $(Test-Path $cfgFile)" }
+      elseif ((Get-Content $cfgFile -Raw | ConvertFrom-Json).team -ne 'Inno Team') { Add-Result 'Inno template installs team config' FAIL 'wrong team in config.json' }
+      else { Add-Result 'Inno template installs team config' PASS 'config.json written by the installed adapter' }
+      $un = Get-ChildItem $dir2 -Filter 'unins*.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+      if ($un) { Invoke-Exe $un.FullName @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') | Out-Null }
+    }
+  }
+
   # 5. Manager installer silent install -------------------------------------------------------
-  $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
   if (-not (Test-Path $mgrSetup)) { Add-Result 'manager installer silent install + selftest' SKIP 'no Inno Manager installer' }
-  elseif (-not $admin) { Add-Result 'manager installer silent install + selftest' SKIP 'needs an elevated shell (PrivilegesRequired=admin)' }
   else {
     $inst = Join-Path $tmp 'mgr-install'
     $r = Invoke-Exe $mgrSetup @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$inst", '/NOFIREWALL=1', '/NOWEBVIEW2=1')

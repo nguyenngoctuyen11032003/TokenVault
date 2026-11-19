@@ -2,12 +2,14 @@
 # Build:  python -m PyInstaller packaging/manager.spec --noconfirm
 # Output: dist/manager/TokenVault-Manager/  (Inno wraps this folder; build.ps1 copies
 #         adapter-setup-template.exe next to the exe, which is where the Manager looks).
+import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_all, collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH).parent
 SRC = ROOT / "src"
+sys.path.insert(0, str(SRC))  # hooks/analysis import THIS checkout's tokenvault
 
 datas = [
     (str(SRC / "tokenvault" / "ui"), "tokenvault/ui"),                 # HTML/CSS/JS + echarts
@@ -18,12 +20,25 @@ datas = [
 # fonts folder (Segoe UI/Arial/...), see reports/fonts.py - none are bundled here.
 datas += collect_data_files("reportlab")
 datas += collect_data_files("webview")  # js helpers + WebView2 loader DLLs
+binaries = []
+hidden = [*collect_submodules("webview")]
+# pythonnet / clr_loader load their .NET glue dynamically; collect everything they ship.
+for pkg in ("clr_loader", "pythonnet"):
+    try:
+        d, b, h = collect_all(pkg)
+    except Exception:  # package absent in this environment
+        continue
+    datas += d
+    binaries += b
+    hidden += h
 
 a = Analysis(
     [str(ROOT / "packaging" / "entry_manager.py")],
     pathex=[str(SRC)],
     datas=datas,
+    binaries=binaries,
     hiddenimports=[
+        *hidden,
         *collect_submodules("tokenvault.manager.reports"),
         "pystray._win32",
         "webview.platforms.edgechromium",  # WebView2 backend (pythonnet / clr_loader)
