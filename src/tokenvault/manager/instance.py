@@ -35,8 +35,9 @@ class SingleInstance:
         self._f: IO[bytes] | None = None
 
     def acquire(self) -> bool:
-        f = open(self.path, "a+b")  # noqa: SIM115 - held for the process lifetime
+        f: IO[bytes] | None = None
         try:
+            f = open(self.path, "a+b")  # noqa: SIM115 - held for the process lifetime
             if sys.platform == "win32":
                 import msvcrt
 
@@ -46,8 +47,9 @@ class SingleInstance:
                 import fcntl
 
                 fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError:
-            f.close()
+        except OSError:  # held by another process, or no access (PermissionError)
+            if f is not None:
+                f.close()
             return False
         self._f = f
         return True

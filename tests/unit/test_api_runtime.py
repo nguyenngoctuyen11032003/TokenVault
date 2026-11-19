@@ -342,3 +342,10 @@ def test_settings_writes_are_best_effort(manager: Manager, monkeypatch: pytest.M
     with caplog.at_level(logging.WARNING):
         assert manager.save_internal(port=47801) is False
     assert "could not save" in caplog.text
+
+
+def test_successful_regenerate_clears_restart_error(manager: Manager) -> None:
+    manager.cert_restart_error = "port busy"
+    Api(manager).regenerate_certificate()
+    assert manager.cert_restart_error is None
+    assert not any("did not restart" in w for w in Api(manager).diagnostics()["warnings"])

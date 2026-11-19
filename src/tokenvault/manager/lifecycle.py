@@ -363,6 +363,7 @@ class Manager:
                     self.save_internal(port=bound)
             elif self.cfg.ingest:
                 self._start_ingest()
+            self.cert_restart_error = None  # a successful regenerate clears an old failure
             log.warning("certificate regenerated: new fingerprint %s",
                         tls.short_fp(new.fingerprint_sha256))
             return new

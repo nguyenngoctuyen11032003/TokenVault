@@ -118,10 +118,18 @@ def run_gui(a: argparse.Namespace, *, demo: bool = False, screenshot: Path | Non
         lock.release()
         message_box(f"TokenVault Manager cannot start:\n\n{e}\n\nDetails: {paths.log}")
         return 2
-    shell = WindowShell(m.settings, ui.entry_url, api, hidden=bool(a.minimized))
-    pusher = LivePusher(shell.evaluate, lambda: api_manage.live_payload(m), max_per_s=2)
-    state_pusher = LivePusher(shell.evaluate, lambda: api.window_state(), max_per_s=10,
-                              fn="onWindowState")
+    try:
+        shell = WindowShell(m.settings, ui.entry_url, api, hidden=bool(a.minimized))
+        pusher = LivePusher(shell.evaluate, lambda: api_manage.live_payload(m), max_per_s=2)
+        state_pusher = LivePusher(shell.evaluate, lambda: api.window_state(), max_per_s=10,
+                                  fn="onWindowState")
+    except Exception as e:  # noqa: BLE001 - stop what boot() started, then report
+        log.exception("window setup failed")
+        _stop_quietly(m, ui)
+        lock.release()
+        message_box(f"TokenVault Manager cannot start:\n\n{type(e).__name__}: {e}\n\n"
+                    f"Details: {paths.log}")
+        return 2
     shell.on_page_loaded = pusher.notify  # push the current live state on every page load
     shell.on_window_state = state_pusher.notify
     m.on_change = pusher.notify

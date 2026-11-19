@@ -149,3 +149,25 @@ def test_demo_dir_guard(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None
     assert prepare_demo_dir(other) == other.resolve()  # marked demo dir: reusable
     fresh = prepare_demo_dir(tmp_path / "new")
     assert (fresh / DEMO_MARKER).exists()
+
+
+def test_lock_without_access_is_not_a_crash(tmp_path: Path) -> None:
+    d = tmp_path / "lockdir"
+    d.mkdir()
+    assert SingleInstance(d).acquire() is False  # a directory cannot be opened: OSError
+
+
+def test_window_setup_failure_stops_services(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stops: list[str], no_root_handlers: None
+) -> None:
+    from tokenvault.manager import window_shell
+
+    shown: list[str] = []
+    monkeypatch.setattr(gui, "message_box", lambda text, error=True: shown.append(text))
+    monkeypatch.setattr(window_shell.WindowShell, "__init__", boom)
+    a = argparse.Namespace(data_dir=str(tmp_path / "data"), template=None, minimized=False)
+    assert gui.run_gui(a) == 2
+    assert stops == ["stop"] and "ValueError: boom" in shown[0]
+    lock = SingleInstance(tmp_path / "data" / "manager.lock")
+    assert lock.acquire()
+    lock.release()

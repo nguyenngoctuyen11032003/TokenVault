@@ -132,3 +132,72 @@ def test_probe_waits_for_visible_unmaximized_window(tmp_path: Path) -> None:
     Geo.maximized = False
     shell._maybe_probe()
     assert shell._probe_state == "running"
+
+
+class ShowWindow:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def show(self) -> None:
+        self.calls.append("show")
+
+    def restore(self) -> None:
+        self.calls.append("restore")
+
+
+class NativeStub:
+    def __init__(self, minimized: bool) -> None:
+        self.minimized = minimized
+
+    def is_minimized(self) -> bool:
+        return self.minimized
+
+
+class GeoStub:
+    def __init__(self, maximized: bool, minimized: bool) -> None:
+        self.maximized = maximized
+        self.fullscreen = False
+        self._n = NativeStub(minimized)
+
+
+@pytest.mark.parametrize(
+    ("maximized", "minimized", "restored"),
+    [(True, True, True), (True, False, False), (False, False, True), (False, True, True)],
+)
+def test_show_restores_minimised_window_even_when_maximized(
+    tmp_path: Path, maximized: bool, minimized: bool, restored: bool
+) -> None:
+    shell, _, _ = make(tmp_path)
+    win = ShowWindow()
+    shell._window = win
+    shell.geometry = GeoStub(maximized, minimized)  # type: ignore[assignment]
+    shell.show()
+    assert ("restore" in win.calls) is restored and win.calls[0] == "show"
+
+
+class EventStub:
+    def __init__(self) -> None:
+        self.handlers: list[Any] = []
+
+    def __iadd__(self, h: Any) -> EventStub:
+        self.handlers.append(h)
+        return self
+
+
+class FormStub:
+    def __init__(self) -> None:
+        self.FormClosing = EventStub()
+
+
+class NativeWin:
+    def __init__(self) -> None:
+        self.native = FormStub()
+
+
+def test_session_end_hooks_installed_once(tmp_path: Path) -> None:
+    shell, _, _ = make(tmp_path)
+    win = NativeWin()
+    shell._window = win
+    shell._hook_session_end()
+    shell._hook_session_end()
+    assert len(win.native.FormClosing.handlers) == 1

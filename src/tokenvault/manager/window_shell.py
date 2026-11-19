@@ -89,6 +89,7 @@ class WindowShell:
         self._window: Any = None
         self._quitting = False
         self._session_ending = False
+        self._hooks_installed = False
         self._destroyed = False
         self.loaded = threading.Event()
         self.shape = "opaque"
@@ -180,7 +181,11 @@ class WindowShell:
 
     # ---------------------------------------------------- session ending
     def _hook_session_end(self) -> None:
-        """FormClosing reason + SystemEvents.SessionEnding (pythonnet, WinForms only)."""
+        """FormClosing reason + SystemEvents.SessionEnding (pythonnet, WinForms only).
+        Idempotent: ``shown`` may fire more than once."""
+        if self._hooks_installed:
+            return
+        self._hooks_installed = True
         try:
             form = self._window.native
             form.FormClosing += lambda _s, args: self._on_form_closing(args)
@@ -302,9 +307,18 @@ class WindowShell:
         if self._window is not None and not self._destroyed:
             self._window.show()
             self._hidden = False
-            if self.geometry is None or not self.geometry.maximized:
+            # A minimised window is always restored (SW_RESTORE returns it to its last
+            # rect, i.e. the work area when maximised); a visible maximised one is kept.
+            if self.geometry is None or not self.geometry.maximized or self._minimized():
                 self._window.restore()
             self._maybe_probe()
+
+    def _minimized(self) -> bool:
+        geo = self.geometry
+        try:
+            return geo is not None and bool(geo._n.is_minimized())
+        except Exception:  # noqa: BLE001 - native window not available
+            return False
 
     def navigate(self, route: str) -> None:
         self.evaluate(f"location.hash = {json.dumps('#/' + route)}")
