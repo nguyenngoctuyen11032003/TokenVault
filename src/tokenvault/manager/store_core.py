@@ -166,6 +166,11 @@ ALTER TABLE session_meta ADD COLUMN title_ts REAL NOT NULL DEFAULT 0;
 MIGRATE_V1_BACKFILL = f"""
 UPDATE events SET account_email = NULLIF(email, '');
 UPDATE events SET title_ts = ts WHERE session_title IS NOT NULL;
+UPDATE session_meta SET title_ts = COALESCE(
+    (SELECT MAX(e.title_ts) FROM events e WHERE e.device_id = session_meta.device_id
+        AND e.session_id = session_meta.session_id AND e.session_title = session_meta.title),
+    (SELECT MAX(e.ts) FROM events e WHERE e.device_id = session_meta.device_id
+        AND e.session_id = session_meta.session_id), 0);
 UPDATE events SET email = COALESCE((SELECT d.email FROM devices d
     WHERE d.device_id = events.device_id AND d.email <> ''), '') WHERE email = '';
 {REBUILD_FROM_EVENTS}

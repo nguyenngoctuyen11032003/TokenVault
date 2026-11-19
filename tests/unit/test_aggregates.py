@@ -4,6 +4,7 @@ import dataclasses
 import json
 import random
 import sqlite3
+import sys
 import threading
 import time
 from collections.abc import Iterator
@@ -424,6 +425,15 @@ def test_only_session_turns_reads_raw_events(store: Store, pricing: Pricing) -> 
 def test_reader_during_chunked_ingest_is_fast_and_consistent(
     tmp_path: Path, pricing: Pricing
 ) -> None:
+    """The reader never waits for the writer's lock/transaction (WAL + separate
+    read connection) and always sees one committed snapshot.
+
+    The writer thread runs long pure-Python loops (60k events parsed in one
+    call). With CPython's default 5 ms GIL switch interval a reader making
+    ~15 SQLite calls can be starved for 100-400 ms by the GIL convoy effect,
+    which says nothing about the store's locking. The test shortens the
+    switch interval while it runs so that only database blocking is timed;
+    the first, cold query is warmed up before the ingest starts."""
     store = Store(tmp_path / "c.db", chunk_rows=2000)
     base = datetime(2026, 11, 19, 0, 0, tzinfo=UTC)  # inside the 24 h hourly window
     events = [
@@ -443,22 +453,28 @@ def test_reader_during_chunked_ingest_is_fast_and_consistent(
         done.set()
 
     a = agg(store, pricing)
-    t = threading.Thread(target=ingest)
-    t.start()
-    worst, seen_partial, reads = 0.0, False, 0
-    while not done.is_set():
-        t0 = time.perf_counter()
-        ov = a.overview(Filter())
-        worst = max(worst, time.perf_counter() - t0)
-        reads += 1
-        total = ov.totals.total_tokens
-        # by_project/totals and hourly come from different queries:
-        # they agree only if all queries ran in one snapshot
-        assert total == sum(p.total_tokens for p in ov.by_project)
-        assert total == sum(h.total_tokens for h in ov.hourly)
-        assert ov.totals.events == sum(p.events for p in ov.by_project)
-        seen_partial |= 0 < ov.totals.events < len(events)
-    t.join()
+    a.overview(Filter())  # warm-up (statement compilation, page cache)
+    old_interval = sys.getswitchinterval()
+    sys.setswitchinterval(0.0005)
+    try:
+        t = threading.Thread(target=ingest)
+        t.start()
+        worst, seen_partial, reads = 0.0, False, 0
+        while not done.is_set():
+            t0 = time.perf_counter()
+            ov = a.overview(Filter())
+            worst = max(worst, time.perf_counter() - t0)
+            reads += 1
+            total = ov.totals.total_tokens
+            # by_project/totals and hourly come from different queries:
+            # they agree only if all queries ran in one snapshot
+            assert total == sum(p.total_tokens for p in ov.by_project)
+            assert total == sum(h.total_tokens for h in ov.hourly)
+            assert ov.totals.events == sum(p.events for p in ov.by_project)
+            seen_partial |= 0 < ov.totals.events < len(events)
+        t.join()
+    finally:
+        sys.setswitchinterval(old_interval)
     assert reads >= 2 and seen_partial, (reads, seen_partial)
     assert worst < 0.300, f"reader blocked {worst * 1000:.0f} ms"
     assert a.overview(Filter()).totals.events == len(events)
@@ -513,6 +529,7 @@ def _bulk_year(store: Store, n_devices: int, days: int) -> None:
         store.upsert_events(dev, events)
 
 
+@pytest.mark.slow
 def test_overview_fast_on_50_devices_365_days(tmp_path: Path, pricing: Pricing) -> None:
     """A year of 50 devices; the Manager runs at UTC+7 so the store keeps its
     local day/month rollups for that offset and long ranges read months/days."""
@@ -626,3 +643,25 @@ def test_store_offset_change_rebuilds_local_rollups(tmp_path: Path, pricing: Pri
         assert [tuple(r) for r in moved._fetchall(q)] == [tuple(r) for r in fresh._fetchall(q)]
     moved.close()
     fresh.close()
+
+
+def test_reader_ignores_local_tables_keyed_by_another_offset(
+    tmp_path: Path, pricing: Pricing
+) -> None:
+    events = _random_events(3, 600)
+    db = tmp_path / "m.db"
+    a = Store(db, tz_offset_minutes=VN)
+    for dev in ("d1", "d2", "d3"):
+        a.upsert_events(dev, [e for e in events if e.device_id == dev])
+    Store(db, tz_offset_minutes=0).close()  # another Store re-keys local tables to UTC
+    ref = Store(tmp_path / "ref.db", tz_offset_minutes=VN)
+    for dev in ("d1", "d2", "d3"):
+        ref.upsert_events(dev, [e for e in events if e.device_id == dev])
+    stale, good = agg(a, pricing, tz=VN), agg(ref, pricing, tz=VN)
+    with stale.ctx.snapshot():
+        assert not stale.ctx.local_tables  # meta says 0: fast path refused
+    assert good.ctx.local_tables
+    for f in (Filter(), Filter(start="2026-09-01", end="2026-10-15"), Filter(team="Dev")):
+        assert stale.overview(f) == good.overview(f)
+    a.close()
+    ref.close()

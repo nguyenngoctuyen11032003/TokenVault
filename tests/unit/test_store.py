@@ -10,7 +10,8 @@ from pathlib import Path
 import pytest
 
 from tokenvault.common.models import UsageEvent
-from tokenvault.manager.store import SchemaTooNewError, Store
+from tokenvault.manager.store import SchemaTooNewError, Store, TzOffsetChangedError
+from tokenvault.manager.store_core import parse_ts
 
 TOKEN_FIELDS = ("input", "output", "cache_read", "cache_5m", "cache_1h")
 
@@ -322,4 +323,93 @@ def test_migration_v1_backfills_identity_once(tmp_path: Path) -> None:
             ("b@x", 1),
         ]
     assert _raw(s, "SELECT SUM(calls) FROM rollup_tool_month") == [(2,)]
+    # session_meta.title_ts backfilled from the event that carried the title
+    assert _raw(s, "SELECT title, title_ts FROM session_meta") == [("T", parse_ts(ev(1).timestamp))]
+    s.close()
+
+
+LOCAL_TABLES = ("rollup_day", "rollup_month", "rollup_tool_day", "rollup_tool_month")
+
+
+def _local_rows(s: Store) -> dict[str, list[tuple[object, ...]]]:
+    return {t: _raw(s, f"SELECT * FROM {t} ORDER BY 1, 2, 3, 4, 5, 6") for t in LOCAL_TABLES}
+
+
+def _spread(n: int, start: int = 0) -> list[UsageEvent]:
+    # hours 0..23 UTC on two days: UTC and UTC+7 put many of them on different days
+    return [
+        ev(i, timestamp=f"2026-11-{18 + i % 2:02d}T{i % 24:02d}:30:00Z", tool_names=("Read",))
+        for i in range(start, start + n)
+    ]
+
+
+def test_secondary_opener_with_default_offset_does_not_rebuild(tmp_path: Path) -> None:
+    a = Store(tmp_path / "m.db", tz_offset_minutes=420)
+    a.upsert_events("dev1", _spread(30))
+    b = Store(tmp_path / "m.db")  # e.g. CLI / export: adopts the recorded offset
+    assert b.tz_offset_minutes == 420
+    assert b._con.total_changes == 0  # nothing rebuilt or rewritten
+    assert _local_rows(b) == _local_rows(a)
+    b.close()
+    a.close()
+
+
+def test_two_stores_with_different_offsets_never_write_miskeyed_rows(tmp_path: Path) -> None:
+    db = tmp_path / "m.db"
+    a = Store(db, tz_offset_minutes=420)
+    first, second = _spread(30), _spread(30, start=100)
+    a.upsert_events("dev1", first)
+    c = Store(db, tz_offset_minutes=0)  # explicit, different: rebuilds for UTC
+    with pytest.raises(TzOffsetChangedError, match="another Store"):
+        a.upsert_events("dev1", second)  # A fails loudly, writes nothing
+    assert _raw(c, "SELECT COUNT(*) FROM events") == [(30,)]
+    assert not a._con.in_transaction
+    # rebuilt local tables equal incrementally built ones
+    fresh0 = Store(tmp_path / "f0.db", tz_offset_minutes=0)
+    fresh0.upsert_events("dev1", first)
+    assert _local_rows(c) == _local_rows(fresh0)
+    # the UTC store keeps writing correctly keyed rows
+    c.upsert_events("dev1", second)
+    fresh0.upsert_events("dev1", second)
+    assert _local_rows(c) == _local_rows(fresh0)
+    # reopening as UTC+7 rebuilds again and equals an incremental UTC+7 store
+    a.close()
+    a2 = Store(db, tz_offset_minutes=420)
+    fresh7 = Store(tmp_path / "f7.db", tz_offset_minutes=420)
+    fresh7.upsert_events("dev1", first + second)
+    assert _local_rows(a2) == _local_rows(fresh7)
+    for st in (a2, c, fresh0, fresh7):
+        st.close()
+
+
+@pytest.mark.parametrize("chunk_rows", [3, 1])
+def test_identity_does_not_depend_on_chunk_size(tmp_path: Path, chunk_rows: int) -> None:
+    s = Store(tmp_path / "c.db", chunk_rows=chunk_rows)
+    s.upsert_events(
+        "dev1",
+        [
+            ev(1, claude_account_email="a@x"),
+            ev(2, claude_account_email=None),
+            ev(3, claude_account_email=None),
+        ],
+    )
+    assert _raw(s, "SELECT msg_key, email FROM events ORDER BY 1") == [
+        ("msg_1", "a@x"),
+        ("msg_2", "a@x"),
+        ("msg_3", "a@x"),
+    ]
+    assert [d.email for d in s.list_devices()] == ["a@x"]
+    s.close()
+
+
+def test_failed_begin_is_not_masked_by_rollback(tmp_path: Path) -> None:
+    s = Store(tmp_path / "b.db", busy_timeout_ms=50)
+    other = sqlite3.connect(tmp_path / "b.db", isolation_level=None)
+    other.execute("BEGIN IMMEDIATE")  # holds the write lock
+    with pytest.raises(sqlite3.OperationalError, match="locked"):
+        s.upsert_events("dev1", [ev(1)])
+    assert not s._con.in_transaction
+    other.execute("ROLLBACK")
+    other.close()
+    assert s.upsert_events("dev1", [ev(1)]) == 1
     s.close()

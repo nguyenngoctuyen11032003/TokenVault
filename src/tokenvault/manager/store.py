@@ -63,10 +63,22 @@ from tokenvault.manager.store_core import (
     upsert_usage_sql,
 )
 
-__all__ = ["TOKEN_COLS", "DeviceRow", "ReadSnapshot", "SchemaTooNewError", "Store", "parse_ts"]
+__all__ = [
+    "TOKEN_COLS",
+    "DeviceRow",
+    "ReadSnapshot",
+    "SchemaTooNewError",
+    "Store",
+    "TzOffsetChangedError",
+    "parse_ts",
+]
 
 SCHEMA_VERSION = 2
 _IN_CHUNK = 500
+
+
+class TzOffsetChangedError(RuntimeError):
+    """Another Store re-keyed the local rollups to a different offset."""
 
 
 class SchemaTooNewError(RuntimeError):
@@ -102,16 +114,29 @@ class ReadSnapshot:
 
 
 class Store:
-    def __init__(self, path: str | Path, chunk_rows: int = 2000, tz_offset_minutes: int = 0):
+    def __init__(
+        self,
+        path: str | Path,
+        chunk_rows: int = 2000,
+        tz_offset_minutes: int | None = None,
+        busy_timeout_ms: int = 10000,
+    ):
         """Open (create/migrate) the database.
 
         ``tz_offset_minutes`` is the Manager's fixed local offset used to key
-        the local day/month rollups; opening with a different offset than
-        last time rebuilds those rollups from the hourly ones (one-off).
+        the local day/month rollups. ``None`` (default, for secondary openers
+        such as CLI/export/tests) adopts the offset recorded in the database
+        (0 for a new one) and never rebuilds. An explicit offset that differs
+        from the recorded one rebuilds the local rollups from the hourly ones
+        (one-off) and records it. Every write chunk re-checks the recorded
+        offset; if another Store changed it, the chunk is rolled back and
+        :class:`TzOffsetChangedError` is raised (no mis-keyed rows).
         """
         self.path = Path(path)
         self.chunk_rows = max(1, chunk_rows)
-        self.tz_offset_minutes = int(tz_offset_minutes)
+        self._requested_tz = None if tz_offset_minutes is None else int(tz_offset_minutes)
+        self.tz_offset_minutes = 0
+        self._busy_ms = int(busy_timeout_ms)
         self._month_cache: dict[int, int] = {}
         self._wlock = threading.RLock()
         self._con = sqlite3.connect(
@@ -120,7 +145,7 @@ class Store:
         self._con.row_factory = sqlite3.Row
         self._con.execute("PRAGMA journal_mode=WAL")
         self._con.execute("PRAGMA synchronous=NORMAL")
-        self._con.execute("PRAGMA busy_timeout=10000")
+        self._con.execute(f"PRAGMA busy_timeout={self._busy_ms}")
         try:
             self._migrate()
         except BaseException:
@@ -137,7 +162,7 @@ class Store:
         )
         self._rcon.row_factory = sqlite3.Row
         self._rcon.execute("PRAGMA query_only=1")
-        self._rcon.execute("PRAGMA busy_timeout=10000")
+        self._rcon.execute(f"PRAGMA busy_timeout={self._busy_ms}")
         self._snap = ReadSnapshot(self._rcon)
 
     # ------------------------------------------------------------------ setup
@@ -156,9 +181,17 @@ class Store:
                     parts = [MIGRATE_V1_COLUMNS, *parts, MIGRATE_V1_BACKFILL]
                 parts.append(f"PRAGMA user_version={SCHEMA_VERSION};")
                 con.executescript(_txn(*parts))
-            row = con.execute("SELECT value FROM meta WHERE key = 'tz_offset_minutes'").fetchone()
-            if row is None or int(row[0]) != self.tz_offset_minutes:
-                con.executescript(_txn(rebuild_local_sql(self.tz_offset_minutes)))
+            recorded = self._recorded_tz()
+            want = self._requested_tz
+            if want is None:
+                want = 0 if recorded is None else recorded
+            self.tz_offset_minutes = want
+            if recorded != want:
+                con.executescript(_txn(rebuild_local_sql(want)))
+
+    def _recorded_tz(self) -> int | None:
+        row = self._con.execute("SELECT value FROM meta WHERE key = 'tz_offset_minutes'").fetchone()
+        return None if row is None else int(row[0])
 
     def close(self) -> None:
         with self._rlock:
@@ -249,6 +282,9 @@ class Store:
         """Upsert a batch for ``device_id``; return the number of new-or-grown rows.
 
         A row "grows" when any token field increases or it gains a tool name.
+        Events without an account e-mail take the device's e-mail at that point
+        of the batch (learned from earlier events if the device had none), so
+        the result does not depend on chunk boundaries.
         Distinct rows are committed in chunks of ``chunk_rows``; each chunk is
         atomic (raw rows + all rollups). Raises ``ValueError`` on an unparsable
         timestamp before anything is written.
@@ -266,12 +302,22 @@ class Store:
             chunk = rows[i : i + self.chunk_rows]
             with self._wlock:
                 con = self._con
-                con.execute("BEGIN IMMEDIATE")
+                con.execute("BEGIN IMMEDIATE")  # a failure here propagates as is
                 try:
+                    if self._recorded_tz() != self.tz_offset_minutes:
+                        raise TzOffsetChangedError(
+                            f"tz offset changed by another Store (this one uses "
+                            f"{self.tz_offset_minutes}, database has {self._recorded_tz()}); "
+                            "reopen the Store"
+                        )
                     grown += self._apply(device_id, chunk)
                     con.execute("COMMIT")
                 except BaseException:
-                    con.execute("ROLLBACK")
+                    if con.in_transaction:
+                        try:
+                            con.execute("ROLLBACK")
+                        except sqlite3.Error:
+                            pass  # keep the original error
                     raise
         return grown
 
@@ -313,7 +359,7 @@ class Store:
         con = self._con
         existing = self._existing(device_id, [r.key for r in chunk])
         dev = con.execute("SELECT email FROM devices WHERE device_id = ?", (device_id,)).fetchone()
-        device_email = (dev["email"] if dev else None) or ""
+        device_email = (dev["email"] if dev else None) or ""  # running, in event order
         inserts: list[tuple[Any, ...]] = []
         updates: list[tuple[Any, ...]] = []
         usage_acc: dict[tuple[Any, ...], list[int]] = {}  # (table, *key) -> sums
@@ -323,6 +369,8 @@ class Store:
         grown = 0
 
         for inc in chunk:
+            if not device_email and inc.account_email:
+                device_email = inc.account_email  # device learns its first e-mail
             if inc.title is not None and inc.title_ts is not None:
                 cur_t = titles.get(inc.session_id)
                 if cur_t is None or inc.title_ts >= cur_t[0]:
@@ -379,7 +427,7 @@ class Store:
         # Manager records better data via upsert_device / set_device_team).
         con.execute(
             UPSERT_DEVICE_FROM_EVENTS,
-            (device_id, last.team, last.account_email, last.windows_user, last.hostname),
+            (device_id, last.team, device_email or None, last.windows_user, last.hostname),
         )
         return grown
 

@@ -208,8 +208,10 @@ class QueryContext:
     # ------------------------------------------------------------ segments
     @property
     def local_tables(self) -> bool:
-        """Local day/month rollups are usable when they use our offset."""
-        return self.store.tz_offset_minutes == self.tz_offset_minutes
+        """Local day/month rollups are usable when the offset *recorded in the
+        database* (read in the current snapshot) equals ours."""
+        rows = self.q("SELECT value FROM meta WHERE key = 'tz_offset_minutes'")
+        return bool(rows) and int(rows[0][0]) == self.tz_offset_minutes
 
     def segments(self, sh: int | None, eh: int | None, months: bool = True) -> list[Segment]:
         """Split [sh, eh) (UTC hours, None = open) into the coarsest exact pieces:
