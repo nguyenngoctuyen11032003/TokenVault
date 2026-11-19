@@ -34,7 +34,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from tokenvault.manager import secrets as tv_secrets
+from tokenvault.common import dpapi as tv_secrets
 
 log = logging.getLogger(__name__)
 

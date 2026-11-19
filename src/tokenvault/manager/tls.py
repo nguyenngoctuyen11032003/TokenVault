@@ -16,7 +16,7 @@ Choices
   check host names, so a later IP change does NOT trigger regeneration.
 * The private key is written as encrypted PKCS#8 (``BestAvailableEncryption``)
   under a random password; the password is stored next to it protected with
-  DPAPI (:mod:`tokenvault.manager.secrets`). A copied key file alone is
+  DPAPI (:mod:`tokenvault.common.dpapi`, fail closed). A copied key file alone is
   therefore useless on another account/machine. The file mode is also
   restricted best-effort (on Windows this only clears write bits; the
   per-user profile ACL is the real file guard).
@@ -42,7 +42,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.x509.oid import NameOID
 
-from tokenvault.manager import secrets as tv_secrets
+from tokenvault.common import dpapi as tv_secrets
 
 log = logging.getLogger(__name__)
 

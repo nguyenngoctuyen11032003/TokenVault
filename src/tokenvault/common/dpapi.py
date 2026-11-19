@@ -13,9 +13,8 @@ Blobs are self-describing:
 ``unprotect`` accepts both and raises ``ValueError`` on anything else (or when
 DPAPI refuses to decrypt, e.g. another user's blob).
 
-Same format (prefixes and entropy) as ``tokenvault.manager.secrets``, so blobs
-are interchangeable; this copy lets the Adapter use it without importing the
-Manager package.
+The Manager uses this same module (package secrets, TLS key password), so there is
+a single implementation and no plaintext fallback outside explicit test opt-in.
 """
 
 from __future__ import annotations

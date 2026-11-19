@@ -13,7 +13,7 @@ import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 
-from tokenvault.manager import secrets as tv_secrets
+from tokenvault.common import dpapi as tv_secrets
 from tokenvault.manager.tls import (
     CertificateError,
     CertInfo,
@@ -187,26 +187,23 @@ def test_dpapi_roundtrip_is_not_plaintext() -> None:
     assert tv_secrets.is_protected(blob)
 
 
-def test_fallback_is_flagged_and_roundtrips(
-    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_protect_fails_closed_without_dpapi(monkeypatch: pytest.MonkeyPatch) -> None:
     def boom(_data: bytes) -> bytes:
         raise OSError("no dpapi")
 
     monkeypatch.setattr(tv_secrets, "_dpapi_protect", boom)
-    with caplog.at_level(logging.WARNING, logger="tokenvault.manager.secrets"):
-        blob = tv_secrets.protect(b"abc")
-    assert blob.startswith(tv_secrets.PLAIN_PREFIX)
-    assert not tv_secrets.is_protected(blob)
-    assert any("NOT protected" in r.getMessage() for r in caplog.records)
-    assert tv_secrets.unprotect(blob) == b"abc"
+    with pytest.raises(tv_secrets.DpapiError):
+        tv_secrets.protect(b"abc")  # never a plaintext blob on disk
 
 
-def test_non_windows_uses_flagged_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_non_windows_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tv_secrets.sys, "platform", "linux")
-    blob = tv_secrets.protect(b"xyz")
-    assert blob.startswith(tv_secrets.PLAIN_PREFIX)
-    assert tv_secrets.unprotect(blob) == b"xyz"
+    with pytest.raises(tv_secrets.DpapiError):
+        tv_secrets.protect(b"xyz")
+
+
+def test_existing_plain_blobs_are_still_readable() -> None:
+    assert tv_secrets.unprotect(b"TVP1:abc") == b"abc"  # written by older versions
 
 
 def test_unprotect_rejects_unknown_format() -> None:
