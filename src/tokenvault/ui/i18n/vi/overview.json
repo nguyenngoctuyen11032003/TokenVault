@@ -1,0 +1,112 @@
+{
+  "overview": {
+    "title": "Tổng quan sử dụng",
+    "tokensUnit": "token",
+    "totals": {
+      "tokens": "Tổng token",
+      "input": "Đầu vào",
+      "output": "Đầu ra",
+      "cache_read": "Đọc cache",
+      "cache_write": "Ghi cache",
+      "sessions": "Phiên",
+      "events": "Lượt phản hồi",
+      "cost": "Chi phí ước tính"
+    },
+    "costNote": "Chi phí ước tính theo giá API, không phải hoá đơn thực tế.",
+    "costPartial": "Chưa tính token của model chưa có giá: {models}",
+    "costUnknown": "Không có giá cho model: {models}",
+    "costPartialHint": "Một phần token thuộc model chưa có giá, chi phí thực tế cao hơn.",
+    "unknownCost": "UNKNOWN",
+    "noProject": "(không rõ dự án)",
+    "chart": {
+      "tokens": "Token",
+      "cacheRead": "Đọc cache",
+      "cacheWrite": "Ghi cache"
+    },
+    "trend": {
+      "title": "Token theo thời gian",
+      "sub": "Tổng token (đầu vào, đầu ra, cache)",
+      "day": "Ngày",
+      "month": "Tháng",
+      "granularity": "Độ chi tiết của biểu đồ",
+      "peak": "Cao nhất {value} · {when}",
+      "last90": "Theo ngày chỉ hiển thị 90 ngày gần nhất của khoảng đã chọn.",
+      "label": {
+        "hour": "Biểu đồ token theo giờ hôm nay",
+        "day": "Biểu đồ token theo ngày",
+        "month": "Biểu đồ token theo tháng"
+      }
+    },
+    "cache": {
+      "title": "Token đọc từ cache",
+      "sub": "Đọc và ghi cache prompt",
+      "ratio": "Tỉ lệ đọc cache trung bình {pct}%",
+      "label": "Biểu đồ token cache theo ngày",
+      "labelHourly": "Biểu đồ token cache theo giờ hôm nay"
+    },
+    "projects": {
+      "title": "Token theo dự án",
+      "label": "Biểu đồ token theo dự án"
+    },
+    "models": {
+      "title": "Token theo model",
+      "label": "Tỉ lệ token theo model"
+    },
+    "tools": {
+      "title": "Công cụ dùng nhiều nhất",
+      "label": "Biểu đồ số lượt gọi công cụ",
+      "unit": "lượt",
+      "calls": "Lượt gọi"
+    },
+    "noData": {
+      "daily": "Không có token trong khoảng này.",
+      "cache": "Không có token cache trong khoảng này.",
+      "projects": "Chưa có dữ liệu dự án.",
+      "models": "Chưa có dữ liệu model.",
+      "tools": "Chưa có lượt gọi công cụ nào."
+    },
+    "recent": {
+      "heading": "Phiên gần đây",
+      "all": "Tất cả phiên",
+      "title": "Tiêu đề phiên",
+      "project": "Dự án",
+      "employee": "Nhân viên",
+      "tokens": "Token",
+      "cost": "Chi phí",
+      "started": "Bắt đầu",
+      "untitled": "(không có tiêu đề)",
+      "none": "Không có phiên nào trong khoảng này."
+    },
+    "empty": {
+      "lead": "Không có dữ liệu nào khớp với bộ lọc này.",
+      "hint": "Thử bỏ bớt điều kiện lọc hoặc chọn khoảng thời gian dài hơn.",
+      "hintRange": "Chưa có token nào được ghi nhận trong khoảng thời gian này. Hãy chọn khoảng dài hơn.",
+      "clear": "Xoá bộ lọc"
+    },
+    "badResponse": "dữ liệu trả về không hợp lệ",
+    "loadError": "Không tải được dữ liệu tổng quan: {detail}",
+    "retry": "Thử lại",
+    "filter": {
+      "label": "Bộ lọc dữ liệu",
+      "clear": "Xoá bộ lọc",
+      "noModel": "(no model)",
+      "noProject": "(không rõ dự án)",
+      "team": { "label": "Nhóm", "all": "Tất cả nhóm" },
+      "email": { "label": "Nhân viên", "all": "Tất cả nhân viên" },
+      "project": { "label": "Dự án", "all": "Tất cả dự án" },
+      "model": { "label": "Model", "all": "Tất cả model" },
+      "range": {
+        "label": "Khoảng thời gian",
+        "today": "Hôm nay",
+        "7d": "7 ngày",
+        "30d": "30 ngày",
+        "90d": "90 ngày",
+        "all": "Tất cả",
+        "from": "Từ",
+        "to": "đến",
+        "start": "Ngày bắt đầu",
+        "end": "Ngày kết thúc"
+      }
+    }
+  }
+}

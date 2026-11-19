@@ -1,0 +1,69 @@
+{
+  "session": {
+    "heading": "Chi tiết phiên",
+    "back": "Danh sách phiên",
+    "untitled": "(không có tiêu đề)",
+    "noProject": "(không rõ dự án)",
+    "noModel": "(no model)",
+    "tokensUnit": "token",
+    "timeSpan": "{start} → {end}",
+    "noRow": "Không tìm thấy thông tin phiên, chỉ hiển thị dữ liệu từ các lượt.",
+    "fact": {
+      "project": "Dự án",
+      "employee": "Nhân viên",
+      "models": "Model",
+      "time": "Thời gian",
+      "note": "Ghi chú",
+      "id": "Mã phiên"
+    },
+    "kpi": {
+      "tokens": "Tổng token",
+      "cost": "Chi phí ước tính",
+      "turns": "Số lượt",
+      "io": "Vào / ra",
+      "cache": "Cache đọc / ghi",
+      "side": "Token tác tử phụ"
+    },
+    "costNote": "Chi phí ước tính theo giá API, không phải hoá đơn thực tế.",
+    "unknownCost": "UNKNOWN",
+    "chart": {
+      "title": "Token theo từng lượt",
+      "sub": "Theo thứ tự thời gian",
+      "label": "Biểu đồ token theo từng lượt của phiên",
+      "bucket": "Mỗi cột gộp {n} lượt"
+    },
+    "kind": {
+      "input": "Đầu vào",
+      "output": "Đầu ra",
+      "cacheRead": "Đọc cache",
+      "cacheWrite": "Ghi cache",
+      "sidechain": "Tác tử phụ (sub-agent)"
+    },
+    "turnsTitle": "Các lượt",
+    "sidechain": "sub-agent",
+    "sidechainHint": "Lượt do tác tử phụ (sub-agent) thực hiện",
+    "noTurns": "Phiên này chưa có lượt nào.",
+    "col": {
+      "n": "#",
+      "time": "Giờ",
+      "model": "Model",
+      "input": "Vào",
+      "output": "Ra",
+      "cache_read": "Đọc cache",
+      "cache_write": "Ghi cache",
+      "total": "Tổng",
+      "cost": "Chi phí",
+      "tools": "Công cụ"
+    },
+    "pager": {
+      "info": "Lượt {from}–{to} / {total}",
+      "first": "Đầu",
+      "prev": "Trước",
+      "next": "Sau",
+      "last": "Cuối"
+    },
+    "badResponse": "dữ liệu trả về không hợp lệ",
+    "loadError": "Không tải được dữ liệu phiên: {detail}",
+    "retry": "Thử lại"
+  }
+}

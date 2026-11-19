@@ -1,0 +1,197 @@
+/* Shared by the overview / projects / sessions / session pages (Task 15): global filter bar
+ * (.tv-ovfilter, js/components/overview-filterbar.js), swatch + name (.tv-ov-name), empty state
+ * (.tv-ovempty), UNKNOWN cost (.tv-ov-unknown), session links. */
+
+/* ---------- filter bar ---------- */
+
+.tv-ovfilter {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tv-ovfilter__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  min-width: 0;
+}
+
+.tv-ovfilter__field {
+  display: inline-flex;
+  flex: 1 1 150px;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 260px;
+}
+
+.tv-ovfilter__label {
+  flex: none;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-ovfilter__select,
+.tv-ovfilter__date {
+  height: 30px;
+  border: 1px solid var(--tv-line-strong);
+  background: #0f0f12;
+  color: var(--tv-text);
+  font: inherit;
+  font-size: 13px;
+  color-scheme: dark;
+}
+
+.tv-ovfilter__select {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  padding: 0 6px;
+  text-overflow: ellipsis;
+}
+
+.tv-ovfilter__field--on .tv-ovfilter__select {
+  border-color: var(--tv-red);
+  box-shadow: inset 2px 0 0 var(--tv-red-hot);
+}
+
+.tv-ovfilter__date {
+  width: 136px;
+  padding: 0 6px;
+}
+
+.tv-ovfilter__select:focus-visible,
+.tv-ovfilter__date:focus-visible {
+  outline: none;
+  border-color: var(--tv-red-hot);
+  box-shadow: 0 0 0 1px var(--tv-red-hot);
+}
+
+.tv-ovfilter__clear {
+  flex: none;
+  padding: 4px 14px;
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-ovfilter__clear:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tv-ovfilter-range > button {
+  min-width: 70px;
+  padding: 5px 12px;
+}
+
+.tv-ovfilter__custom {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px;
+  border-left: 1px solid var(--tv-line);
+}
+
+.tv-ovfilter__custom--on .tv-ovfilter__date {
+  border-color: var(--tv-red);
+  box-shadow: inset 0 -2px 0 var(--tv-red-hot);
+}
+
+/* ---------- shared bits (projects / sessions / session pages too) ---------- */
+
+.tv-ov-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tv-ov-swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  clip-path: polygon(30% 0, 100% 0, 70% 100%, 0 100%);
+}
+
+.tv-ov-name__text {
+  flex: 1 1 auto;
+}
+
+.tv-ov-unknown {
+  color: var(--tv-amber);
+  font-size: var(--tv-fs-xs);
+  letter-spacing: 0.08em;
+}
+
+.tv-ovempty {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 28px 26px;
+  border: 1px dashed var(--tv-line-strong);
+  background: linear-gradient(135deg, rgb(255 45 63 / 0.06), transparent 55%), var(--tv-panel);
+}
+
+.tv-ovempty[hidden] {
+  display: none;
+}
+
+.tv-ovempty__mark {
+  flex: none;
+  width: 54px;
+  height: 54px;
+  border: 2px solid var(--tv-red-deep);
+  background:
+    repeating-linear-gradient(45deg, rgb(255 45 63 / 0.25) 0 2px, transparent 2px 9px);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+}
+
+.tv-ovempty__text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tv-ovempty__lead {
+  margin: 0;
+  color: var(--tv-text-strong);
+  font-size: var(--tv-fs-lg);
+}
+
+.tv-ovempty__hint {
+  margin: 0 0 6px;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-ov-link {
+  display: block;
+  color: var(--tv-text);
+  text-decoration: none;
+}
+
+.tv-ov-link:hover {
+  color: var(--tv-text-strong);
+  text-decoration: underline;
+  text-decoration-color: var(--tv-red-hot);
+}
+
+.tv-ov-untitled {
+  color: var(--tv-muted);
+  font-style: italic;
+}
+
+.tv-ov-time {
+  color: var(--tv-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-ov-meta {
+  color: var(--tv-text);
+  font-variant-numeric: tabular-nums;
+}

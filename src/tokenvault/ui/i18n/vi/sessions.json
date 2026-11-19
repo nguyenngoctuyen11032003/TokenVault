@@ -1,0 +1,34 @@
+{
+  "sessions": {
+    "title": "Phiên làm việc",
+    "listTitle": "Danh sách phiên",
+    "search": "Tìm theo tiêu đề, dự án, nhân viên, model…",
+    "count": "Hiển thị {shown} / {total} phiên",
+    "loadMore": "Tải thêm {n} phiên",
+    "noMatch": "Không có phiên nào khớp với từ khoá.",
+    "untitled": "(không có tiêu đề)",
+    "noProject": "(không rõ dự án)",
+    "noModel": "(no model)",
+    "sidechainTokens": "Có {tokens} token của tác tử phụ (sub-agent)",
+    "col": {
+      "title": "Tiêu đề phiên",
+      "project": "Dự án",
+      "employee": "Nhân viên",
+      "model": "Model",
+      "tokens": "Token",
+      "cost": "Chi phí",
+      "started": "Bắt đầu"
+    },
+    "costNote": "Chi phí ước tính theo giá API, không phải hoá đơn thực tế.",
+    "unknownCost": "UNKNOWN",
+    "empty": {
+      "lead": "Không có phiên nào khớp với bộ lọc này.",
+      "hint": "Thử bỏ bớt điều kiện lọc hoặc chọn khoảng thời gian dài hơn.",
+      "hintRange": "Chưa có phiên nào được ghi nhận trong khoảng thời gian này.",
+      "clear": "Xoá bộ lọc"
+    },
+    "badResponse": "dữ liệu trả về không hợp lệ",
+    "loadError": "Không tải được danh sách phiên: {detail}",
+    "retry": "Thử lại"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "projects": {
+    "title": "Dự án",
+    "chartTitle": "Token theo dự án",
+    "chartSub": "Các dự án dùng nhiều token nhất",
+    "chartLabel": "Biểu đồ token theo dự án",
+    "tableTitle": "Danh sách dự án",
+    "summary": "{count} dự án · {tokens} token",
+    "tokensUnit": "token",
+    "noProject": "(không rõ dự án)",
+    "col": {
+      "project": "Dự án",
+      "tokens": "Token",
+      "share": "Tỉ trọng",
+      "cost": "Chi phí",
+      "sessions": "Phiên",
+      "employees": "Nhân viên",
+      "last": "Dùng lần cuối"
+    },
+    "costNote": "Chi phí ước tính theo giá API, không phải hoá đơn thực tế.",
+    "costPartial": "Chưa tính token của model chưa có giá: {models}",
+    "unknownCost": "UNKNOWN",
+    "empty": {
+      "lead": "Không có dự án nào khớp với bộ lọc này.",
+      "hint": "Thử bỏ bớt điều kiện lọc hoặc chọn khoảng thời gian dài hơn.",
+      "hintRange": "Chưa có dự án nào được ghi nhận trong khoảng thời gian này.",
+      "clear": "Xoá bộ lọc"
+    },
+    "badResponse": "dữ liệu trả về không hợp lệ",
+    "loadError": "Không tải được danh sách dự án: {detail}",
+    "retry": "Thử lại"
+  }
+}

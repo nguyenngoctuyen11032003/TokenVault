@@ -1,0 +1,251 @@
+/* #/overview (Task 15). Every rule uses a tv-ov* class. The filter bar, swatch names, empty
+ * state and UNKNOWN cost shared with the projects / sessions / session pages are in
+ * overview-shared.css. */
+
+.tv-overview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tv-gap);
+  min-width: 0;
+}
+
+/* ---------- head: totals strip ---------- */
+
+.tv-ov-head .tv-ovfilter {
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--tv-line);
+}
+
+.tv-ovtotals {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  margin-top: 14px;
+  border: 1px solid var(--tv-line);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent);
+}
+
+.tv-ovtotals__item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 12px;
+  border-left: 1px solid var(--tv-line);
+}
+
+.tv-ovtotals__item:first-child {
+  border-left: 0;
+}
+
+.tv-ovtotals__label {
+  overflow: hidden;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-xs);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tv-ovtotals__value {
+  overflow: hidden;
+  color: var(--tv-text-strong);
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tv-ovtotals__item--tokens .tv-ovtotals__value {
+  color: var(--tv-red-hot);
+}
+
+.tv-ovtotals__item--cache_read .tv-ovtotals__value {
+  color: var(--tv-series-3);
+}
+
+.tv-ovtotals__item--cache_write .tv-ovtotals__value {
+  color: var(--tv-series-2);
+}
+
+.tv-ovtotals__item--input .tv-ovtotals__value {
+  color: var(--tv-series-4);
+}
+
+.tv-ovtotals__item--output .tv-ovtotals__value {
+  color: var(--tv-series-5);
+}
+
+.tv-ovtotals__value.tv-num--orange {
+  color: var(--tv-orange);
+}
+
+.tv-ovtotals__value.tv-ov-unknown {
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+@media (max-width: 1279px) {
+  .tv-ovtotals {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .tv-ovtotals__item:nth-child(4n + 1) {
+    border-left: 0;
+  }
+
+  .tv-ovtotals__item:nth-child(n + 5) {
+    border-top: 1px solid var(--tv-line);
+  }
+}
+
+.tv-ov-costrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+  margin-top: 10px;
+}
+
+.tv-ov-costinfo {
+  margin: 0;
+  min-width: 0;
+  color: var(--tv-amber);
+  font-size: var(--tv-fs-xs);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- chart grid ---------- */
+
+.tv-ov-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--tv-gap);
+  min-width: 0;
+}
+
+.tv-ov-panel {
+  min-width: 0;
+}
+
+.tv-ov-panel--trend,
+.tv-ov-panel--projects {
+  grid-column: span 7;
+}
+
+.tv-ov-panel--cache,
+.tv-ov-panel--models {
+  grid-column: span 5;
+}
+
+.tv-ov-panel--tools {
+  grid-column: span 4;
+}
+
+.tv-ov-panel--recent {
+  grid-column: span 8;
+}
+
+.tv-ov-panel--tools .tv-ov-chartbox {
+  height: 404px;
+}
+
+@media (max-width: 1100px) {
+  .tv-ov-grid > .tv-ov-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+.tv-ov-panel .tv-meta {
+  margin-bottom: 8px;
+}
+
+.tv-ov-chartbox {
+  height: 236px;
+}
+
+.tv-ov-chartbox--tall {
+  height: 300px;
+}
+
+.tv-ov-chartbox--plain {
+  border-color: transparent;
+  background: none;
+}
+
+.tv-ov-chart {
+  position: absolute;
+  inset: 0;
+}
+
+.tv-ov-nodata {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  padding: 0 16px;
+  text-align: center;
+}
+
+.tv-ov-chart:not([hidden]) ~ .tv-ov-nodata {
+  inset: auto 8px 6px auto;
+  display: block;
+  padding: 0;
+  font-size: var(--tv-fs-xs);
+}
+
+.tv-ov-gran > button {
+  min-width: 64px;
+  padding: 4px 12px;
+}
+
+/* ---------- recent sessions ---------- */
+
+.tv-ov-seeall {
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+  text-decoration: none;
+}
+
+.tv-ov-seeall:hover {
+  color: var(--tv-text-strong);
+  text-decoration: underline;
+  text-decoration-color: var(--tv-red-hot);
+}
+
+.tv-ov-tablewrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tv-ovrecent {
+  table-layout: fixed;
+  min-width: 560px;
+}
+
+.tv-ovrecent td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-ovrecent__col--project {
+  width: 20%;
+}
+
+.tv-ovrecent__col--employee {
+  width: 18%;
+}
+
+.tv-ovrecent__col--tokens {
+  width: 62px;
+}
+
+.tv-ovrecent__col--cost {
+  width: 86px;
+}
+
+.tv-ovrecent__col--started {
+  width: 92px;
+}
