@@ -1,0 +1,128 @@
+/* <tv-gauge>: 270° tick ring (grey), lit ticks up to value (red ramp), inner arc, glowing face.
+ * Driven by --tv-gauge-p (0..1, set by gauge.js); --tv-gauge-shown is its animated copy. */
+
+@property --tv-gauge-shown {
+  syntax: "<number>";
+  inherits: true;
+  initial-value: 0;
+}
+
+tv-gauge {
+  --size: 156px;
+  --tick-depth: 13px;
+  --sweep: 270deg;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tv-gauge__dial {
+  --tv-gauge-shown: var(--tv-gauge-p, 0);
+  --lit: calc(var(--tv-gauge-shown) * var(--sweep));
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+  transition: --tv-gauge-shown 900ms var(--tv-ease);
+}
+
+.tv-gauge__ticks,
+.tv-gauge__arc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+
+/* Tick ring = stripes ∩ ring ∩ sweep. */
+.tv-gauge__ticks {
+  background: #3e3e45;
+  --stripes: repeating-conic-gradient(from 225deg, #000 0 1.5deg, transparent 1.5deg 6.75deg);
+  --ring: radial-gradient(farthest-side, transparent calc(100% - var(--tick-depth)),
+      #000 calc(100% - var(--tick-depth) + 0.5px));
+  --range: conic-gradient(from 225deg, #000 0 calc(var(--sweep) + 1.5deg), transparent 0);
+  mask: var(--stripes), var(--ring), var(--range);
+  mask-composite: intersect;
+}
+
+.tv-gauge__ticks--lit {
+  background: conic-gradient(from 225deg, #8f0a18 0deg, var(--tv-red) 120deg, var(--tv-red-hot) 270deg);
+  --range: conic-gradient(from 225deg, #000 0 var(--lit), transparent 0);
+}
+
+/* Thin continuous arc just inside the ticks. */
+.tv-gauge__arc {
+  inset: calc(var(--tick-depth) + 5px);
+  background: conic-gradient(from 225deg, var(--tv-red-hot) 0 var(--lit), #2b2b30 0 var(--sweep),
+      transparent 0);
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2.5px));
+}
+
+.tv-gauge__face {
+  position: absolute;
+  inset: calc(var(--tick-depth) + 13px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  text-align: center;
+  background: radial-gradient(circle at 50% 30%, #222226 0%, #121214 55%, #0a0a0b 100%);
+  border: 1.5px solid var(--tv-red-ink);
+  box-shadow:
+    inset 0 0 calc(10px + var(--tv-gauge-shown) * 18px) rgb(160 10 24 / calc(0.35 + var(--tv-gauge-shown) * 0.45)),
+    0 0 0 4px #0b0b0d,
+    0 0 calc(var(--tv-gauge-shown) * 22px) rgb(225 11 31 / calc(var(--tv-gauge-shown) * 0.35));
+}
+
+.tv-gauge__value {
+  font-size: calc(var(--size) * 0.165);
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--tv-text-strong);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+
+.tv-gauge__unit {
+  margin-top: 4px;
+  font-size: var(--tv-fs-xs);
+  letter-spacing: 0.18em;
+  color: var(--tv-muted);
+  text-transform: uppercase;
+}
+
+.tv-gauge__label {
+  font-size: 13.5px;
+  color: var(--tv-text);
+  text-align: center;
+}
+
+tv-gauge[data-level="high"] .tv-gauge__value {
+  color: var(--tv-red-hot);
+}
+
+/* Row of gauges inside a panel. */
+.tv-gauge-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-around;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 4px 0;
+  container-type: inline-size;
+}
+
+/* Keep three gauges on one row in narrow panels (1100px window). */
+@container (max-width: 560px) {
+  tv-gauge {
+    --size: 128px;
+    --tick-depth: 11px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-gauge__dial {
+    transition: none;
+  }
+}

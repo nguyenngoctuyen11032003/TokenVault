@@ -1,0 +1,165 @@
+/* TokenVault theme tokens + base element styles (NitroSense: near-black, red accent). */
+
+:root {
+  /* Brand */
+  --tv-red: #e10b1f;
+  --tv-red-hot: #ff2d3f;
+  --tv-red-deep: #7a0b16;
+  --tv-red-ink: #4a0d12;
+  --tv-red-glow: rgb(255 45 63 / 0.45);
+  --tv-orange: #ff5a3c;
+  --tv-green: #2bd46a;
+  --tv-amber: #ffb020;
+
+  /* Surfaces */
+  --tv-bg: #0b0b0d;
+  --tv-bg-deep: #050506;
+  --tv-hatch-a: #131316;
+  --tv-hatch-b: #0d0d0f;
+  --tv-panel: #151518;
+  --tv-panel-2: #1c1c20;
+  --tv-panel-hi: #26262b;
+  --tv-line: #2a2a2f;
+  --tv-line-strong: #3b3b41;
+  --tv-chart-grid: #2a0a0d;
+  --tv-chart-bg: #0c0c0e;
+
+  /* Text (all >= 4.5:1 on --tv-panel) */
+  --tv-text: #e8e8eb;
+  --tv-text-strong: #f6f6f8;
+  --tv-muted: #a1a1a9;
+  --tv-dim: #6e6e76; /* decorative only, not for body text */
+
+  /* Categorical data palette (owner-approved; logic lives in js/palette.js) */
+  --tv-series-1: #ff4d5e;
+  --tv-series-2: #ffb020;
+  --tv-series-3: #2dd4bf;
+  --tv-series-4: #4da3ff;
+  --tv-series-5: #a78bfa;
+  --tv-series-6: #7ee787;
+  --tv-series-7: #f472b6;
+  --tv-series-8: #94a3b8;
+
+  /* Type */
+  --tv-font: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Helvetica Neue",
+    Arial, sans-serif;
+  --tv-font-display: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --tv-fs-xs: 11px;
+  --tv-fs-sm: 12.5px;
+  --tv-fs-md: 14px;
+  --tv-fs-lg: 16px;
+
+  /* Geometry */
+  --tv-chamfer: 30px;      /* window corners */
+  --tv-panel-cut: 18px;    /* panel corners */
+  --tv-gap: 14px;
+  --tv-focus: var(--tv-red-hot);
+
+  /* Motion */
+  --tv-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --tv-dur: 160ms;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--tv-font);
+  font-size: var(--tv-fs-md);
+  line-height: 1.45;
+  color: var(--tv-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+p {
+  margin: 0 0 0.6em;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+svg {
+  flex: none;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+::selection {
+  background: var(--tv-red);
+  color: #fff;
+}
+
+/* Visible focus ring for keyboard users everywhere. */
+:focus-visible {
+  outline: 2px solid var(--tv-focus);
+  outline-offset: 2px;
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Thin dark scrollbars with a red thumb on hover. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a40 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #34343a;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--tv-red);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,316 @@
+/* Frameless NitroSense window: chamfered silhouette, hatched plate, title hood, layout grid.
+ *
+ * Transparent mode (default): body is transparent and .tv-window is clipped to the chamfered
+ * shape, so the OS window itself looks cut. Opaque fallback (.window--opaque, when
+ * settings.transparent_window === false): a plain rectangle with the chamfered plate drawn
+ * 6px inside it.
+ */
+
+html,
+body {
+  overflow: hidden;
+  background: transparent;
+}
+
+/* Plain browser (dev server): give the transparent corners something dark to sit on. */
+html[data-tv-host="http"] body {
+  background: radial-gradient(120% 120% at 50% 0%, #1a1a1d, #050506 70%);
+}
+
+html.tv-opaque,
+html.tv-opaque body {
+  background: var(--tv-bg-deep);
+}
+
+.tv-window {
+  --tv-shape: polygon(
+    var(--tv-chamfer) 0,
+    calc(100% - var(--tv-chamfer)) 0,
+    100% var(--tv-chamfer),
+    100% calc(100% - var(--tv-chamfer) * 0.75),
+    calc(100% - var(--tv-chamfer) * 0.75) 100%,
+    calc(var(--tv-chamfer) * 0.75) 100%,
+    0 calc(100% - var(--tv-chamfer) * 0.75),
+    0 var(--tv-chamfer)
+  );
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: 60px minmax(0, 1fr);
+  row-gap: 10px;
+  width: 100vw;
+  height: 100vh;
+  min-width: 1100px;
+  min-height: 720px;
+  padding: 0 28px 26px;
+  clip-path: var(--tv-shape);
+}
+
+/* Frame edge (1px light rim fading to dark red at the bottom). */
+.tv-window::before,
+.tv-window::after {
+  content: "";
+  position: absolute;
+  clip-path: var(--tv-shape);
+  pointer-events: none;
+}
+
+.tv-window::before {
+  inset: 0;
+  z-index: -2;
+  background: linear-gradient(180deg, #4a4a52 0%, #26262b 22%, #1a1a1e 70%, #3a0c12 100%);
+}
+
+/* Hatched / brushed plate. */
+.tv-window::after {
+  inset: 1px;
+  z-index: -1;
+  background:
+    radial-gradient(90% 55% at 50% -12%, rgb(225 11 31 / 0.13), transparent 62%),
+    radial-gradient(130% 90% at 50% 115%, rgb(0 0 0 / 0.55), transparent 60%),
+    repeating-linear-gradient(135deg, rgb(255 255 255 / 0.03) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(135deg, var(--tv-hatch-a) 0 2px, var(--tv-hatch-b) 2px 4px);
+}
+
+.window--opaque.tv-window {
+  clip-path: none;
+  background: var(--tv-bg-deep);
+}
+
+.window--opaque.tv-window::before {
+  inset: 6px;
+}
+
+.window--opaque.tv-window::after {
+  inset: 7px;
+}
+
+/* Red trim on the two lower chamfers. */
+.tv-window__body::before,
+.tv-window__body::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: calc(var(--tv-chamfer) * 0.75);
+  height: calc(var(--tv-chamfer) * 0.75);
+  pointer-events: none;
+}
+
+.tv-window__body::before {
+  left: 0;
+  background: linear-gradient(45deg, transparent calc(50% - 1.5px), var(--tv-red) calc(50% - 1px),
+      var(--tv-red-hot) 50%, var(--tv-red) calc(50% + 1px), transparent calc(50% + 1.5px));
+}
+
+.tv-window__body::after {
+  right: 0;
+  background: linear-gradient(-45deg, transparent calc(50% - 1.5px), var(--tv-red) calc(50% - 1px),
+      var(--tv-red-hot) 50%, var(--tv-red) calc(50% + 1px), transparent calc(50% + 1.5px));
+}
+
+.window--opaque .tv-window__body::before {
+  left: 6px;
+  bottom: 6px;
+}
+
+.window--opaque .tv-window__body::after {
+  right: 6px;
+  bottom: 6px;
+}
+
+/* ---------- Title bar ---------- */
+
+.tv-window__titlebar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  user-select: none;
+}
+
+.tv-titlebar__brand {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding-left: calc(var(--tv-chamfer) * 0.55);
+}
+
+.tv-titlebar__badge {
+  position: relative;
+  padding-left: 16px;
+  font-family: var(--tv-font-display);
+  font-size: 18px;
+  font-weight: 800;
+  font-style: italic;
+  letter-spacing: 0.06em;
+  color: #d7d7dc;
+}
+
+.tv-titlebar__badge::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 8px;
+  height: 16px;
+  transform: translateY(-50%) skewX(-18deg);
+  background: linear-gradient(180deg, var(--tv-red-hot), var(--tv-red));
+  box-shadow: 0 0 10px var(--tv-red-glow);
+}
+
+/* Center "hood": dark trapezoid hanging from the top edge, red underline. */
+.tv-titlebar__title {
+  position: relative;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  height: 50px;
+  padding: 0 64px 2px;
+  font-family: var(--tv-font-display);
+  font-size: 21px;
+  letter-spacing: 0.42em;
+  color: #dedee3;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #232328 0%, #141417 100%);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 30px) 100%, 30px 100%);
+}
+
+.tv-titlebar__title b {
+  font-weight: 700;
+  color: var(--tv-text-strong);
+}
+
+.tv-titlebar__title span {
+  font-weight: 300;
+  margin-right: -0.42em; /* cancel trailing letter-spacing so the word is optically centred */
+}
+
+.tv-titlebar__title::after {
+  content: "";
+  position: absolute;
+  left: 30px;
+  right: 30px;
+  bottom: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--tv-red-deep), var(--tv-red-hot) 30%, var(--tv-red-hot) 70%,
+      var(--tv-red-deep));
+}
+
+.tv-titlebar__tools {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  align-self: stretch;
+  padding-right: calc(var(--tv-chamfer) * 0.35);
+}
+
+.tv-titlebar__spacer {
+  flex: 1;
+  align-self: stretch;
+}
+
+.tv-titlebar__buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.tv-titlebar__sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 8px;
+  background: var(--tv-line-strong);
+}
+
+/* Live indicator */
+.tv-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 14px 5px 10px;
+  font-size: var(--tv-fs-sm);
+  color: var(--tv-muted);
+  white-space: nowrap;
+  background: rgb(255 255 255 / 0.03);
+  border: 1px solid var(--tv-line);
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-live__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #55555c;
+}
+
+.tv-live[data-state="online"] {
+  color: var(--tv-text);
+}
+
+.tv-live[data-state="online"] .tv-live__dot {
+  background: var(--tv-green);
+  box-shadow: 0 0 8px var(--tv-green);
+  animation: tv-pulse 2.4s ease-in-out infinite;
+}
+
+.tv-live[data-state="waiting"] .tv-live__dot {
+  background: var(--tv-amber);
+  box-shadow: 0 0 6px rgb(255 176 32 / 0.6);
+}
+
+@keyframes tv-pulse {
+  50% {
+    box-shadow: 0 0 2px var(--tv-green);
+    opacity: 0.7;
+  }
+}
+
+/* ---------- Body: nav + view ---------- */
+
+.tv-window__body {
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr);
+  gap: 16px;
+  min-height: 0;
+  min-width: 0;
+}
+
+.tv-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tv-gap);
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding: 0 4px 6px 0;
+}
+
+.tv-view:focus {
+  outline: none;
+}
+
+.tv-view[aria-busy="true"] {
+  cursor: progress;
+}
+
+/* Skip link (button) shown only on keyboard focus. */
+.tv-skip {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  z-index: 10;
+  transform: translate(-50%, -200%);
+  padding: 8px 14px;
+  border: 0;
+  background: var(--tv-red);
+  color: #fff;
+  cursor: pointer;
+}
+
+.tv-skip:focus-visible {
+  transform: translate(-50%, 0);
+}

@@ -42,6 +42,7 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["src"]
+markers = ["ui: Playwright tests of the HTML/JS UI (headless chromium)"]
 
 [tool.ruff]
 line-length = 100

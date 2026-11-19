@@ -1,0 +1,7 @@
+/* Reserved for page-specific styles of later tasks.
+ *
+ * Do not add rules here from route modules running in parallel; instead each route module
+ * should ship its own stylesheet (e.g. css/pages/home.css) and load it with
+ * ctx.useStylesheet('css/pages/home.css'), scoping every rule under
+ * `.tv-view[data-route="home"]` or a `tv-<page>-` class prefix. See ui/README.md.
+ */
