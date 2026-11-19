@@ -280,3 +280,9 @@
     gap: 20px;
   }
 }
+
+/* Target platform selector (Windows exe / macOS zip) */
+.tv-installer-target { border: 0; padding: 0; margin: 0 0 var(--tv-space-4, 16px); min-width: 0; }
+.tv-installer-target legend { padding: 0; }
+.tv-installer-target__opt { display: inline-flex; align-items: center; gap: 8px; margin-right: 20px; cursor: pointer; }
+.tv-installer-target__opt input { accent-color: var(--tv-orange, #ff7a1a); }

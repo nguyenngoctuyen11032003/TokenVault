@@ -13,15 +13,20 @@ import contextlib
 import logging
 import os
 import secrets
+import shutil
+import stat
 import unicodedata
+import zipfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 from tokenvault.common.config_payload import (
+    CHUNK,
     MAX_HOSTS,
     PayloadConfig,
     append_payload,
+    encode_payload,
     valid_host,
 )
 from tokenvault.manager.enrollment import Enrollment
@@ -66,6 +71,63 @@ def _payload_team(team: str) -> str:
     return s.strip()[:MAX_NAME].strip() or "Team"
 
 
+MAC_APP_DIR = "TokenVault Adapter.app"
+MAC_PAYLOAD_NAME = "tokenvault-config.bin"
+MAC_INSTALL_SCRIPT = "Install.command"
+MAC_UNINSTALL_SCRIPT = "Uninstall.command"
+_MAC_SCRIPTS = (MAC_INSTALL_SCRIPT, MAC_UNINSTALL_SCRIPT)
+_EXEC = 0o100755 << 16
+_SECRET_FILE = 0o100600 << 16
+
+
+def _mac_zip_name_ok(name: str) -> bool:
+    parts = name.split("/")
+    return not (name.startswith("/") or "\\" in name or ".." in parts or "\x00" in name)
+
+
+def write_mac_zip(template_zip: Path, dst: Path, payload: bytes) -> None:
+    """Copy ``template_zip`` entry by entry (unix modes and symlinks kept) and add the
+    sidecar payload. The signed/unsigned Mach-O inside is never modified."""
+    with zipfile.ZipFile(template_zip) as zin, zipfile.ZipFile(
+        dst, "w", zipfile.ZIP_DEFLATED
+    ) as zout:
+        names = [i.filename for i in zin.infolist()]
+        if not all(_mac_zip_name_ok(n) for n in names):
+            raise PackagerError("The macOS template contains unsafe paths.")
+        if not any(n.startswith(MAC_APP_DIR + "/") for n in names) or not all(
+            s in names for s in _MAC_SCRIPTS
+        ):
+            raise PackagerError(
+                f"The macOS template must contain '{MAC_APP_DIR}', '{MAC_INSTALL_SCRIPT}' "
+                f"and '{MAC_UNINSTALL_SCRIPT}' at its top level."
+            )
+        if MAC_PAYLOAD_NAME in names:
+            raise PackagerError("The macOS template already contains a config payload.")
+        for info in zin.infolist():
+            out = zipfile.ZipInfo(info.filename, info.date_time)
+            out.create_system = 3
+            out.compress_type = zipfile.ZIP_DEFLATED
+            mode = info.external_attr
+            if info.filename in _MAC_SCRIPTS:
+                mode = _EXEC
+            elif not mode:
+                mode = (0o040755 if info.is_dir() else 0o100644) << 16
+            out.external_attr = mode
+            if info.is_dir():
+                zout.writestr(out, b"")
+            else:  # stream: the app bundle can be large
+                with zin.open(info) as fin, zout.open(out, "w") as fout:
+                    shutil.copyfileobj(fin, fout, CHUNK)
+        pinfo = zipfile.ZipInfo(MAC_PAYLOAD_NAME)
+        pinfo.create_system = 3
+        pinfo.external_attr = _SECRET_FILE
+        zout.writestr(pinfo, payload)
+
+
+def _is_exec(mode: int) -> bool:
+    return bool(stat.S_IMODE(mode >> 16) & 0o100)
+
+
 @dataclass(frozen=True)
 class BuiltInstaller:
     path: Path
@@ -100,11 +162,11 @@ class Packager:
         if not ok:
             raise PackagerError(f"Installer template is missing or empty: {self.template}")
 
-    def _publish(self, tmp: Path, base: str) -> Path:
+    def _publish(self, tmp: Path, base: str, ext: str = ".exe") -> Path:
         """Move ``tmp`` to a not-yet-existing final name (numeric suffix, never overwrite)."""
         n = 1
         while True:
-            name = f"{base}.exe" if n == 1 else f"{base} ({n}).exe"
+            name = f"{base}{ext}" if n == 1 else f"{base} ({n}){ext}"
             final = self.out_dir / name
             try:
                 os.link(tmp, final)  # atomic, fails if ``final`` exists
@@ -140,7 +202,11 @@ class Packager:
             raise PackagerError(f"The Manager port {port!r} is not valid.")
         return clean, port
 
-    def build_for_team(self, team: str, label: str | None) -> BuiltInstaller:
+    def build_for_team(self, team: str, label: str | None,
+                       target: str = "windows") -> BuiltInstaller:
+        if target not in ("windows", "mac"):
+            raise PackagerError(f"Unknown installer target {target!r}.")
+        mac = target == "mac"
         if not team.strip():
             raise PackagerError("Team name must not be empty.")
         self._check_template()
@@ -162,8 +228,13 @@ class Packager:
         try:
             cfg = PayloadConfig(self.manager_id, hosts, port, self.cert.fingerprint_sha256,
                                 pkg.secret, payload_team)
-            append_payload(self.template, tmp, cfg)
-            final = self._publish(tmp, f"TokenVault-Adapter-{safe_team_name(team)}")
+            if mac:
+                write_mac_zip(self.template, tmp, encode_payload(cfg))
+                final = self._publish(
+                    tmp, f"TokenVault-Adapter-{safe_team_name(team)}-mac", ".zip")
+            else:
+                append_payload(self.template, tmp, cfg)
+                final = self._publish(tmp, f"TokenVault-Adapter-{safe_team_name(team)}")
             size = final.stat().st_size
         except BaseException as e:
             try:
@@ -176,6 +247,8 @@ class Packager:
                     self.enrollment.revoke_package(pkg.package_id)
                 except Exception:  # noqa: BLE001
                     log.warning("could not revoke package %s after failed build", pkg.package_id)
+            if isinstance(e, zipfile.BadZipFile):
+                raise PackagerError(f"The macOS template is not a valid zip: {e}") from e
             if isinstance(e, (ValueError, OSError)) and not isinstance(e, PackagerError):
                 raise PackagerError(f"Cannot build the installer: {e}") from e
             raise

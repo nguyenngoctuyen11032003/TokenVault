@@ -160,6 +160,18 @@ def read_payload(exe: Path) -> PayloadConfig | None:
     return None if found is None else found[1]
 
 
+def encode_payload(cfg: PayloadConfig) -> bytes:
+    """The payload footer on its own (sidecar file for macOS; ``read_payload`` reads it)."""
+    cfg.validate()
+    payload = _to_json(cfg)
+    if len(payload) > MAX_PAYLOAD:
+        raise ValueError("payload too large")
+    return (
+        payload + struct.pack(">I", zlib.crc32(payload))
+        + struct.pack(">Q", len(payload)) + MAGIC
+    )
+
+
 def append_payload(src_exe: Path, dst_exe: Path, cfg: PayloadConfig) -> None:
     """Copy ``src_exe`` to ``dst_exe`` (1 MiB chunks) and append the payload footer.
 

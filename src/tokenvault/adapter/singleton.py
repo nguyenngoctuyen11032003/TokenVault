@@ -38,16 +38,28 @@ _INFINITE = 0xFFFFFFFF
 _WAIT_OBJECT_0 = 0
 
 
+def _mac() -> bool:
+    return sys.platform == "darwin"
+
+
 def mutex_name(user: str | None = None) -> str:
     override = os.environ.get("TOKENVAULT_MUTEX_NAME")
     if override and user is None:
         return override
+    if _mac():  # macOS: the "name" is the flock lock-file path (per user home)
+        from tokenvault.adapter.platform import mac, mac_singleton
+
+        return str(mac_singleton.lock_path(mac.data_dir()))
     u = (user if user is not None else getpass.getuser()).lower()
     return "Local\\TokenVaultAdapter-" + hashlib.sha256(u.encode("utf-8")).hexdigest()[:16]
 
 
 def reload_event_name(mutex: str | None = None) -> str:
     return (mutex or mutex_name()) + "-reload"
+
+
+def _mac_lock_for(event_name: str) -> str:
+    return event_name[: -len("-reload")] if event_name.endswith("-reload") else event_name
 
 
 def _kernel32() -> Any:
@@ -76,8 +88,15 @@ class SingleInstance:
     def __init__(self, name: str) -> None:
         self.name = name
         self._handle: int | None = None
+        self._mac_inst: Any = None
 
     def acquire(self) -> bool:
+        if _mac():
+            if self._mac_inst is None:
+                from tokenvault.adapter.platform.mac_singleton import FlockInstance
+
+                self._mac_inst = FlockInstance(self.name)
+            return bool(self._mac_inst.acquire())
         if not SUPPORTED:
             return True  # Windows-only product; dev runs elsewhere are not guarded
         if self._handle is not None:
@@ -95,6 +114,8 @@ class SingleInstance:
         return True
 
     def release(self) -> None:
+        if self._mac_inst is not None:
+            self._mac_inst.release()
         if self._handle is not None:
             _kernel32().CloseHandle(self._handle)
             self._handle = None
@@ -108,6 +129,10 @@ class SingleInstance:
 
 def is_running(name: str) -> bool:
     """True if some process in this session holds the mutex ``name``."""
+    if _mac():
+        from tokenvault.adapter.platform import mac_singleton
+
+        return bool(mac_singleton.is_running(name))
     if not SUPPORTED:
         return False
     k = _kernel32()
@@ -130,6 +155,10 @@ def wait_released(name: str, timeout_s: float, step_s: float = 0.1) -> bool:
 
 def signal_reload(event_name: str) -> bool:
     """Set the agent's reload event. False if no agent is listening."""
+    if _mac():
+        from tokenvault.adapter.platform import mac_singleton
+
+        return bool(mac_singleton.signal_reload(_mac_lock_for(event_name)))
     if not SUPPORTED:
         return False
     k = _kernel32()
@@ -151,8 +180,14 @@ class ReloadListener:
         self._handles: tuple[int, int] | None = None
         self._thread: threading.Thread | None = None
         self._stopping = False
+        self._mac_listener: Any = None
 
     def start(self) -> bool:
+        if _mac():
+            from tokenvault.adapter.platform.mac_singleton import SignalReloadListener
+
+            self._mac_listener = SignalReloadListener(self._on_reload)
+            return bool(self._mac_listener.start())
         if not SUPPORTED:
             return False
         k = _kernel32()
@@ -182,6 +217,9 @@ class ReloadListener:
                 log.exception("reload callback failed")
 
     def stop(self) -> None:
+        if self._mac_listener is not None:
+            self._mac_listener.stop()
+            self._mac_listener = None
         handles, self._handles = self._handles, None
         if handles is None:
             return

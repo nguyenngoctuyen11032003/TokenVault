@@ -132,6 +132,8 @@ STRINGS: dict[str, dict[str, str]] = {
     "state.connecting": {"vi": "Đang kết nối", "en": "Connecting"},
     "state.not_configured": {"vi": "Chưa cấu hình", "en": "Not configured"},
     "state.stopped": {"vi": "Đã dừng", "en": "Stopped"},
+    "state.no_indicator": {"vi": "Không hiện được biểu tượng – đã dừng thu thập",
+                           "en": "No indicator - collection stopped"},
     "state.crashed": {"vi": "Bị lỗi khi khởi động", "en": "Crashed at start"},
     "tray.status": {"vi": "{state} – {n} đang chờ gửi", "en": "{state} - {n} queued"},
     "tray.status_unavailable": {"vi": "Không đọc được trạng thái", "en": "Status unavailable"},
@@ -217,6 +219,17 @@ STRINGS: dict[str, dict[str, str]] = {
     "run.not_configured": {
         "vi": "Chưa có cấu hình hợp lệ trong {path}; hãy chạy bộ cài đặt.",
         "en": "No valid config in {path}; run the installer (setup).",
+    },
+    "run.no_indicator": {
+        "vi": "TokenVault không hiện được biểu tượng trên thanh menu nên đã dừng "
+              "và KHÔNG thu thập dữ liệu. Xem adapter.log.",
+        "en": "TokenVault cannot show its menu-bar icon, so it stopped and is NOT "
+              "collecting data. See adapter.log.",
+    },
+    "consent.view_full": {"vi": "Xem đầy đủ", "en": "View full text"},
+    "consent.short_hint": {
+        "vi": "Bấm “Xem đầy đủ” để đọc toàn bộ nội dung trước khi đồng ý.",
+        "en": "Click “View full text” to read everything before you accept.",
     },
     "run.crashed": {"vi": "Tác tử bị lỗi khi khởi động: {reason}. Xem adapter.log.",
                     "en": "The agent failed to start: {reason}. See adapter.log."},

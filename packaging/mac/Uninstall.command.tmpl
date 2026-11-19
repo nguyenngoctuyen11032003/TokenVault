@@ -1,0 +1,36 @@
+#!/bin/bash
+# Removes TokenVault Adapter from this Mac (only your own user's files).
+# Rendered by build/build-mac.sh (placeholders @@APP_NAME@@ and @@BIN_NAME@@).
+set -uo pipefail
+
+APP_NAME="@@APP_NAME@@"
+BIN_NAME="@@BIN_NAME@@"
+LABEL="vn.ics.tokenvault.adapter"
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+APP_PATH="$HOME/Applications/$APP_NAME"
+SUPPORT_DIR="$HOME/Library/Application Support/TokenVault"
+LOG_DIR="$HOME/Library/Logs/TokenVault"
+
+read -r -p "Gỡ TokenVault Adapter khỏi máy này? [y/N] " answer || answer=""
+case "$answer" in
+  y|Y|yes|YES) ;;
+  *) echo "Đã huỷ, không có gì bị gỡ."; exit 0 ;;
+esac
+
+launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
+rm -f "$PLIST"
+# Agent started outside launchd (right after install) or still shutting down.
+pkill -x "$BIN_NAME" 2>/dev/null || true
+sleep 1
+
+# Keychain items of this app (one per secret file); stop at the first miss.
+for _ in 1 2 3 4 5 6 7 8; do
+  security delete-generic-password -s "$LABEL" >/dev/null 2>&1 || break
+done
+
+rm -rf "$APP_PATH"
+rm -rf "$SUPPORT_DIR"
+rm -rf "$LOG_DIR"
+
+echo "Đã gỡ TokenVault Adapter (ứng dụng, tự khởi động, khoá Keychain, dữ liệu và nhật ký)."
+read -r -p "Nhấn Enter để đóng." _ || true

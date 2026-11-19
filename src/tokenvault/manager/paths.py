@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 TEMPLATE_NAME = "adapter-setup-template.exe"
+MAC_TEMPLATE_NAME = "adapter-mac.zip"
 _PKG_DIR = Path(__file__).resolve().parent  # src/tokenvault/manager
 _REPO_ROOT = _PKG_DIR.parents[2]
 
@@ -96,6 +97,22 @@ def template_path(override: str | Path | None = None) -> Path:
     if env:
         return Path(env)
     return install_dir() / TEMPLATE_NAME
+
+
+def mac_template_path(data_dir: Path) -> Path:
+    """macOS adapter template (a zip built on a Mac by ``build/build-mac.sh``).
+
+    ``TOKENVAULT_MAC_TEMPLATE`` wins; else ``<data dir>/templates/adapter-mac.zip``; else
+    ``<install dir>/adapter-mac.zip``. When none exists the first (data dir) is returned,
+    so the "missing" message tells the owner where to put it."""
+    env = os.environ.get("TOKENVAULT_MAC_TEMPLATE")
+    if env:
+        return Path(env)
+    primary = Path(data_dir) / "templates" / MAC_TEMPLATE_NAME
+    alt = install_dir() / MAC_TEMPLATE_NAME
+    if not primary.is_file() and alt.is_file():
+        return alt
+    return primary
 
 
 def _bundle_dir() -> Path:

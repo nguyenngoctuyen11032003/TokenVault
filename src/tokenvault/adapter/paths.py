@@ -18,9 +18,13 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from tokenvault.adapter.platform import mac
+
 
 def data_dir(env: Mapping[str, str] | None = None) -> Path:
     e = os.environ if env is None else env
+    if sys.platform == "darwin":
+        return mac.data_dir(mac.env_home(e))
     base = e.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
     return Path(base) / "TokenVault" / "Adapter"
 
@@ -68,6 +72,9 @@ class DataFiles:
 
     @property
     def log(self) -> Path:
+        # macOS keeps logs in ~/Library/Logs/TokenVault when using the default data dir.
+        if sys.platform == "darwin" and self.root == mac.data_dir():
+            return mac.log_dir() / "adapter.log"
         return self.root / "adapter.log"
 
     @property

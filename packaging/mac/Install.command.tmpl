@@ -1,0 +1,81 @@
+#!/bin/bash
+# TokenVault Adapter installer for macOS (right-click -> Open the first time).
+# Rendered by build/build-mac.sh (placeholders @@APP_NAME@@ and @@BIN_NAME@@).
+# Per-user install: no administrator rights, nothing outside your home folder.
+#
+# Order matters: the consent screen is shown from a STAGED copy first. Only after you
+# accept is the previous install (if any) replaced; declining leaves the old app and its
+# LaunchAgent exactly as they were.
+set -euo pipefail
+
+APP_NAME="@@APP_NAME@@"
+BIN_NAME="@@BIN_NAME@@"
+PAYLOAD_NAME="tokenvault-config.bin"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+DEST_DIR="$HOME/Applications"
+PAYLOAD="$HERE/$PAYLOAD_NAME"
+
+pause() { read -r -p "Nhấn Enter để đóng." _ || true; }
+
+if [ ! -d "$HERE/$APP_NAME" ] || [ ! -f "$PAYLOAD" ]; then
+  echo "Thiếu \"$APP_NAME\" hoặc $PAYLOAD_NAME. Hãy giải nén đầy đủ tệp .zip rồi chạy lại."
+  pause
+  exit 1
+fi
+
+# The files came from a download / chat: remove the Gatekeeper quarantine flag so the
+# unsigned (ad-hoc signed) app can start. Only the files of this installer are touched.
+xattr -dr com.apple.quarantine "$HERE/$APP_NAME" "$PAYLOAD" 2>/dev/null || true
+
+mkdir -p "$DEST_DIR"
+STAGE_DIR="$(mktemp -d "$DEST_DIR/.tokenvault-stage.XXXXXX")"
+cleanup() { rm -rf "$STAGE_DIR"; }
+trap cleanup EXIT
+
+cp -R "$HERE/$APP_NAME" "$STAGE_DIR/"
+STAGE_BIN="$STAGE_DIR/$APP_NAME/Contents/MacOS/$BIN_NAME"
+
+# 1. Consent first (nothing installed or changed yet).
+if "$STAGE_BIN" consent --from "$PAYLOAD"; then
+  :
+else
+  code=$?
+  echo
+  if [ "$code" -eq 3 ]; then
+    echo "Bạn đã từ chối. Không có gì được cài hoặc thay đổi."
+  else
+    echo "Không hiện được màn hình đồng ý (mã lỗi $code). Không có gì được cài hoặc thay đổi."
+  fi
+  pause
+  exit "$code"
+fi
+
+# 2. Swap the app in, keeping the old one until setup succeeds.
+OLD_APP="$DEST_DIR/$APP_NAME"
+BACKUP=""
+if [ -d "$OLD_APP" ]; then
+  BACKUP="$DEST_DIR/.$APP_NAME.old.$$"
+  mv "$OLD_APP" "$BACKUP"
+fi
+mv "$STAGE_DIR/$APP_NAME" "$OLD_APP"
+xattr -dr com.apple.quarantine "$OLD_APP" 2>/dev/null || true
+
+BIN="$OLD_APP/Contents/MacOS/$BIN_NAME"
+if "$BIN" setup --silent --accept --from "$PAYLOAD"; then  # consent was shown above
+  [ -n "$BACKUP" ] && rm -rf "$BACKUP"
+  echo
+  echo "Đã cài xong. TokenVault Adapter chạy ngầm và tự khởi động khi đăng nhập."
+  echo "Biểu tượng của nó nằm trên thanh menu. Muốn gỡ: chạy Uninstall.command."
+  status=0
+else
+  status=$?
+  rm -rf "$OLD_APP"
+  if [ -n "$BACKUP" ]; then
+    mv "$BACKUP" "$OLD_APP"
+    echo "Cài đặt không thành công (mã lỗi $status); đã khôi phục bản cũ."
+  else
+    echo "Cài đặt không thành công (mã lỗi $status). Xem ~/Library/Logs/TokenVault/adapter.log."
+  fi
+fi
+pause
+exit "$status"

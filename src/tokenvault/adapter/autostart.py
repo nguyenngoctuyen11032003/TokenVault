@@ -8,6 +8,7 @@ deleted. The registry is injectable for tests (anything with get/set/delete).
 from __future__ import annotations
 
 import subprocess
+import sys
 from collections.abc import Sequence
 from typing import Any, Protocol
 
@@ -62,14 +63,32 @@ def command_line(exe_path: str, args: Sequence[str] = ("run",)) -> str:
     return f'"{exe_path}" {tail}' if tail else f'"{exe_path}"'
 
 
+def _mac_agent() -> Any:
+    from tokenvault.adapter.platform.mac import LaunchAgent
+
+    return LaunchAgent()
+
+
+def _use_mac(registry: RunRegistry | None) -> bool:
+    return registry is None and sys.platform == "darwin"
+
+
 def enable(exe_path: str, registry: RunRegistry | None = None,
            args: Sequence[str] = ("run",)) -> None:
+    if _use_mac(registry):
+        _mac_agent().enable(str(exe_path), args)
+        return
     (registry or WinRunKey()).set(VALUE_NAME, command_line(str(exe_path), args))
 
 
 def disable(registry: RunRegistry | None = None) -> None:
+    if _use_mac(registry):
+        _mac_agent().disable()
+        return
     (registry or WinRunKey()).delete(VALUE_NAME)
 
 
 def is_enabled(registry: RunRegistry | None = None) -> bool:
+    if _use_mac(registry):
+        return bool(_mac_agent().is_enabled())
     return bool((registry or WinRunKey()).get(VALUE_NAME))

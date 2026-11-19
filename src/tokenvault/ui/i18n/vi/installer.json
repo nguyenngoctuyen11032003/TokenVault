@@ -14,6 +14,12 @@
     "labelLabel": "Ghi chú (không bắt buộc)",
     "labelHint": "Để bạn phân biệt các bộ cài của cùng một nhóm, ví dụ: Tầng 3, Chi nhánh HCM.",
     "labelPlaceholder": "Ví dụ: Tầng 3",
+    "targetLabel": "Hệ điều hành của nhân viên",
+    "target": {
+      "windows": "Windows (tệp .exe)",
+      "mac": "macOS (tệp .zip)"
+    },
+    "targetHint": "Bộ cài macOS là tệp .zip chưa ký số; cần có sẵn bộ mẫu build trên máy Mac (build/build-mac.sh).",
     "generate": "Tạo bộ cài",
     "generating": "Đang tạo bộ cài…",
     "busyNote": "Đang ghi địa chỉ Manager, cổng, chứng chỉ và mã đăng ký của nhóm vào bộ cài.",
@@ -34,6 +40,7 @@
     },
     "createError": "Không tạo được bộ cài: {detail}",
     "templateMissing": "Không tìm thấy tệp mẫu bộ cài nhân viên (adapter-setup-template.exe). Hãy cài lại TokenVault Manager rồi thử lại.",
+    "templateMissingMac": "Chưa có bộ mẫu Adapter cho macOS (adapter-mac.zip). Hãy build trên một máy Mac bằng build/build-mac.sh, rồi chép tệp vào thư mục templates trong thư mục dữ liệu của Manager và thử lại.",
     "retry": "Thử lại",
     "doneTitle": "Đã tạo bộ cài",
     "doneLead": "Gửi tệp này cho nhân viên nhóm {team} qua chat, email hoặc USB.",
@@ -59,6 +66,15 @@
       "l5": "4. TokenVault KHÔNG gửi: nội dung câu hỏi (prompt), câu trả lời của Claude, nội dung tệp, lệnh đã chạy hay đường dẫn đầy đủ.",
       "l6": "5. Sau khi cài, biểu tượng TokenVault nằm ở khay hệ thống và tự chạy khi đăng nhập Windows. Bấm vào biểu tượng, chọn “Những gì được gửi?” để xem dữ liệu thực tế.",
       "l7": "6. Muốn gỡ: Settings (Cài đặt) → Apps (Ứng dụng) → Apps & Features (Ứng dụng đã cài) → TokenVault Adapter → Uninstall (Gỡ cài đặt)."
+    },
+    "instrMac": {
+      "l1": "Hướng dẫn cài TokenVault trên Mac (nhóm {team})",
+      "l2": "1. Lưu tệp {file} vào máy rồi nhấp đúp để giải nén. Không cần quyền quản trị.",
+      "l3": "2. Mở thư mục vừa giải nén, nhấp chuột phải vào Install.command rồi chọn Open (Mở), bấm Open lần nữa nếu macOS cảnh báo. Bộ cài nội bộ chưa được ký số nên macOS Gatekeeper cảnh báo.",
+      "l4": "3. Đọc màn hình đồng ý rồi bấm Đồng ý. TokenVault chỉ gửi số liệu sử dụng Claude Code: số token, model, tên thư mục dự án (không phải đường dẫn đầy đủ), tiêu đề phiên, tên công cụ đã dùng, email tài khoản Claude, tên máy và tên người dùng macOS.",
+      "l5": "4. TokenVault KHÔNG gửi: nội dung câu hỏi (prompt), câu trả lời của Claude, nội dung tệp, lệnh đã chạy hay đường dẫn đầy đủ.",
+      "l6": "5. Sau khi cài, TokenVault Adapter nằm trong thư mục Applications của bạn và tự chạy khi đăng nhập macOS. Biểu tượng nằm trên thanh menu; chọn “Dữ liệu gửi đi là gì?” để xem dữ liệu thực tế.",
+      "l7": "6. Muốn gỡ: mở thư mục đã giải nén, nhấp chuột phải vào Uninstall.command rồi chọn Open (Mở). Tệp này gỡ ứng dụng, tự khởi động, khoá Keychain, dữ liệu và nhật ký."
     },
     "packagesTitle": "Bộ cài đã tạo",
     "packagesLabel": "Danh sách bộ cài đã tạo",
