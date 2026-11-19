@@ -61,10 +61,10 @@ def _story(data: ReportData, manager_name: str) -> list[Flowable]:
         (S.LBL_GENERATED, S.fmt_dt(data.now)),
         (S.LBL_MANAGER, manager_name or S.NONE),
     ]
-    single = spec.scope == "employee" and len(data.sections) == 1
+    single = data.single
     subtitle = ""
-    if single:
-        row = data.sections[0].row
+    if single and data.ranking_all:
+        row = data.ranking_all[0]
         email = row.email if row.email and row.email != data.scope_label else ""
         subtitle = " · ".join(x for x in (email, ", ".join(row.teams)) if x)
     story: list[Flowable] = [CoverBand(data.scope_label, meta, subtitle)]

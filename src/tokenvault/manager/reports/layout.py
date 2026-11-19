@@ -211,7 +211,10 @@ def numbered_canvas(
         def __init__(self, *args: Any, **kw: Any) -> None:
             super().__init__(*args, **kw)
             self._saved: list[dict[str, Any]] = []
-            self._doc.info._dateFormatter = lambda *_a: pdf_date
+            try:  # private reportlab hook; without it the date is reportlab's own
+                self._doc.info._dateFormatter = lambda *_a: pdf_date
+            except AttributeError:
+                pass
 
         def showPage(self) -> None:  # noqa: N802 - reportlab API
             self._saved.append(dict(self.__dict__))

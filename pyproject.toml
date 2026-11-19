@@ -15,7 +15,7 @@ dependencies = [
     "watchdog",
     "pystray",
     "Pillow",
-    "reportlab",
+    "reportlab>=4,<6",
 ]
 
 [project.optional-dependencies]

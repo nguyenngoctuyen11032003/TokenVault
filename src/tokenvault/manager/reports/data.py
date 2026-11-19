@@ -37,6 +37,7 @@ from tokenvault.manager.reports.spec import ReportSpec, local_now, range_label, 
 
 Progress = Callable[[float, str], None]
 SESSION_POOL = 3000  # most recent sessions scanned for the "top sessions by tokens" tables
+MIN_POOL = 200  # per selected employee in multi-employee reports
 MAX_RANKED = 60  # employees listed in the ranking table / given a detail page
 STACK_SERIES = 8  # employees in the stacked daily chart before "Khác"
 CHUNK_DAYS = agg_series.DAILY_DAYS
@@ -77,6 +78,14 @@ class ReportData:
     top_sessions: list[SessionRow]
     sections: list[EmployeeSection] = field(default_factory=list)
     stacked: list[tuple[str, list[int]]] = field(default_factory=list)
+    parts: int = 1  # >1: several employees merged (tool counts are approximate)
+    session_window: int | None = None  # sessions scanned when the recent-sessions pool was cut
+    single_devices: list[DeviceInfo] = field(default_factory=list)
+
+    @property
+    def single(self) -> bool:
+        """One selected employee: the summary *is* that employee (no detail page)."""
+        return self.spec.scope == "employee" and len(self.spec.employee_keys) == 1
 
     @property
     def is_empty(self) -> bool:
@@ -210,7 +219,7 @@ def gather(
     flts = (
         [replace(base, email=k) for k in spec.employee_keys] if spec.scope == "employee" else [base]
     )
-    pool_size = max(200, SESSION_POOL // len(flts))
+    pool_size = max(MIN_POOL, SESSION_POOL // len(flts))
     overviews, dailies, pools = [], [], []
     for i, f in enumerate(flts):
         ov = a.overview(f)
@@ -247,17 +256,20 @@ def gather(
         active_employees=sum(1 for r in ranking if r.total_tokens > 0),
         online_employees=sum(1 for r in ranking if r.online),
         top_sessions=all_sessions[: spec.top_n],
+        parts=len(flts),
+        session_window=(
+            sum(len(p) for p in pools) if any(len(p) >= pool_size for p in pools) else None
+        ),
     )
+    if data.single:
+        data.single_devices = a.employee(spec.employee_keys[0], "today").devices
 
     by_key = {r.key: r for r in ranking}
-    if spec.scope == "employee":
-        part = {k: i for i, k in enumerate(spec.employee_keys)}
-        keys = [r.key for r in ranking]
-    else:
-        part = {}
-        keys = [r.key for r in ranking if r.total_tokens > 0][:MAX_RANKED]
-        if not spec.per_employee_pages:
-            keys = []
+    part = {k: i for i, k in enumerate(spec.employee_keys)} if spec.scope == "employee" else {}
+    # Same rules for every scope: active employees only, tokens desc, capped, opt-out honoured.
+    keys = [r.key for r in ranking if r.total_tokens > 0][:MAX_RANKED]
+    if not spec.per_employee_pages or data.single:
+        keys = []
     per_section = spec.top_n if spec.scope == "employee" else min(spec.top_n, 8)
     for n, key in enumerate(keys):
         if key in part:

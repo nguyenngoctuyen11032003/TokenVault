@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 
@@ -160,7 +161,9 @@ def test_existing_but_empty_scope(store: Store, pricing: Pricing) -> None:
     data = gather(a, ReportSpec(scope="employee", employee_keys=["idle@x.com"]), LOCAL_NOW)
     assert data.is_empty and data.totals.total_tokens == 0 and data.totals.cost == 0
     assert len(data.daily) == 7 and data.busiest_day is None
-    assert len(data.sections) == 1 and data.sections[0].row.key == "idle@x.com"
+    assert data.single and data.sections == []  # the summary is the employee; no detail page
+    assert [d.hostname for d in data.single_devices] == ["PC9"]
+    assert [r.key for r in data.ranking_all] == ["idle@x.com"]
     team = gather(a, ReportSpec(scope="team", team="Ops"), LOCAL_NOW)
     assert team.is_empty and team.scope_label == "Nhóm Ops"
     nothing = gather(a, ReportSpec(range="today"), LOCAL_NOW)
@@ -192,3 +195,31 @@ def test_tz_offset_is_taken_from_aggregates(tmp_path: Path, pricing: Pricing) ->
     )
     assert vn.totals.total_tokens == 1_000_000
     s.close()
+
+
+def test_employee_scope_honours_caps_and_page_opt_out(store: Store, pricing: Pricing) -> None:
+    demo_dataset(store, employees=72, days=2, events_per_day=1)
+    a = make_agg(store, pricing)
+    keys = [email_of(i) for i in range(70)]
+    spec = ReportSpec(scope="employee", employee_keys=keys, range="7d")
+    with_pages = gather(a, spec, LOCAL_NOW)
+    assert len(with_pages.sections) == 60 and len(with_pages.employees) == 60
+    assert with_pages.employees_more == 10 and with_pages.parts == 70
+    toks = [s.row.total_tokens for s in with_pages.sections]
+    assert toks == sorted(toks, reverse=True) and all(toks)
+    no_pages = gather(a, replace(spec, per_employee_pages=False), LOCAL_NOW)
+    assert no_pages.sections == [] and no_pages.totals == with_pages.totals
+
+
+def test_session_window_reported_only_when_pool_is_cut(
+    store: Store, pricing: Pricing, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tokenvault.manager.reports import data as data_mod
+
+    demo_dataset(store, employees=2, days=10, session_every=1)
+    a = make_agg(store, pricing)
+    assert gather(a, ReportSpec(range="7d"), LOCAL_NOW).session_window is None
+    monkeypatch.setattr(data_mod, "SESSION_POOL", 5)
+    monkeypatch.setattr(data_mod, "MIN_POOL", 5)
+    cut = gather(a, ReportSpec(range="7d"), LOCAL_NOW)
+    assert cut.session_window == 5 and len(cut.top_sessions) == 5

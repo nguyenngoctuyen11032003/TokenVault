@@ -98,7 +98,7 @@ def _device_lines(devices: Sequence[DeviceInfo]) -> list[str]:
                 S.DEV_LAST_SEEN.format(when=S.fmt_dt(d.last_seen)) if d.last_seen else S.DEV_NEVER
             )
         )
-        who = f"{d.windows_user}@{d.hostname}" if d.windows_user or d.hostname else d.device_id
+        who = f"{d.windows_user}@{d.hostname}" if d.windows_user or d.hostname else S.NONE
         out.append(f"{who} · {d.team or S.NONE} · {state}")
     return out or [S.DEVICES_NONE]
 
@@ -116,9 +116,8 @@ def summary(data: ReportData) -> list[Flowable]:
             [S.SESSIONS_SUB.format(events=S.fmt_int(t.events))],
         ),
     ]
-    single = data.spec.scope == "employee" and len(data.sections) == 1
-    if single:
-        devs = data.sections[0].devices
+    if data.single:
+        devs = data.single_devices
         cards.append(Card(S.KPI_DEVICES, str(len(devs)), _device_lines(devs)))
     else:
         cards.append(
@@ -209,6 +208,9 @@ def chart_block(data: ReportData) -> list[Flowable]:
         out.append(_pair(tools, charts.hour_bars(hours_title, hour_labels, hour_vals, HALF, 165)))
     else:
         out += [tools, Spacer(1, 10)]
+    if data.parts > 1:
+        st = styles(fonts.ensure_fonts())
+        out += [Paragraph(S.TOOLS_APPROX, st["small"]), Spacer(1, 8)]
     if data.spec.scope != "employee" or len(data.ranking_all) > 1:
         top = [r for r in data.ranking_all if r.total_tokens > 0]
         h = 18 + 17 * min(len(top), 11) + 8
@@ -233,6 +235,13 @@ def chart_block(data: ReportData) -> list[Flowable]:
     return out
 
 
+def _sessions_note(data: ReportData) -> str:
+    note = f"top {len(data.top_sessions)}"
+    if data.session_window:
+        note += " · " + S.SESSIONS_WINDOW.format(n=S.fmt_int(data.session_window))
+    return note
+
+
 def tables(data: ReportData) -> list[Flowable]:
     spec = data.spec
     out: list[Flowable] = []
@@ -250,7 +259,7 @@ def tables(data: ReportData) -> list[Flowable]:
         ]
     if spec.include_sessions and data.top_sessions:
         out += [
-            SectionHeading(S.SEC_SESSIONS, f"top {len(data.top_sessions)}"),
+            SectionHeading(S.SEC_SESSIONS, _sessions_note(data)),
             Spacer(1, 6),
             sessions_table(
                 data.top_sessions,

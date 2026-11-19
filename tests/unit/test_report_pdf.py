@@ -97,7 +97,10 @@ def test_employee_team_and_custom_range(store: Store, agg: Aggregates, tmp_path:
         ReportSpec(scope="employee", employee_keys=[email_of(1), email_of(3)]),
         tmp_path / "e2.pdf",
     )
-    assert two.pages > one.pages and email_of(3) in flat(text_of(two.path))
+    two_text = flat(text_of(two.path))
+    assert two.pages > one.pages and email_of(3) in two_text
+    assert "Thống kê công cụ mang tính gần đúng" in two_text
+    assert "gần đúng" not in flat(text_of(one.path))
     team = build(agg, ReportSpec(scope="team", team="Data", range="30d"), tmp_path / "t.pdf")
     tb = flat(text_of(team.path))
     assert "Nhóm Data" in tb and email_of(2) in tb and email_of(0) not in tb
@@ -332,3 +335,10 @@ def test_visual_artifacts(store: Store, agg: Aggregates, tmp_path: Path) -> None
     s2.close()
     pngs += _render(u.path, "unpriced", [0])
     assert all(p.stat().st_size > 10_000 for p in pngs)
+
+
+def test_device_lines_never_show_raw_device_ids() -> None:
+    from tokenvault.manager.agg_models import DeviceInfo
+
+    lines = sections._device_lines([DeviceInfo("dev-secret-id", "", "", "", False, None)])
+    assert "dev-secret-id" not in lines[0] and lines[0].startswith("—")

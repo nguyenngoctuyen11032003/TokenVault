@@ -73,6 +73,8 @@ COL_TITLE = "Tiêu đề"
 COL_EMPLOYEE = "Nhân viên"
 COL_MODEL = "Model"
 COL_STARTED = "Bắt đầu"
+TOOLS_APPROX = "Thống kê công cụ mang tính gần đúng (gộp từ top công cụ của từng nhân viên)."
+SESSIONS_WINDOW = "trong {n} phiên gần nhất"
 MORE_PEOPLE = "và {n} người khác"
 MORE_ROWS = "và {n} mục khác"
 TITLES_HIDDEN = "Tiêu đề phiên đã được ẩn theo lựa chọn khi xuất báo cáo."
@@ -105,24 +107,29 @@ def fmt_int(n: float | int) -> str:
 
 
 def fmt_compact(n: float | int) -> str:
-    """Abbreviated number like the UI: 1234567 -> '1.23M', 340000 -> '340K'."""
-    a = abs(n)
-    for size, suffix in ((1e9, "B"), (1e6, "M"), (1e3, "K")):
-        if a >= size:
-            scaled = n / size
-            digits = 0 if abs(scaled) >= 100 else 1 if abs(scaled) >= 10 else 2
-            text = f"{scaled:.{digits}f}"
-            if "." in text:
-                text = text.rstrip("0").rstrip(".")
-            return text + suffix
-    return str(round(n))
+    """Abbreviated number like the UI: 1234567 -> '1.23M', 340000 -> '340K', 999999 -> '1M'."""
+    units = ((1e3, "K"), (1e6, "M"), (1e9, "B"))
+    if abs(n) < 1e3 and round(abs(n)) < 1000:
+        return str(round(n))
+    for idx, (size, suffix) in enumerate(units):
+        if abs(n) >= size * 1000 and idx + 1 < len(units):
+            continue
+        scaled = n / size
+        digits = 0 if abs(scaled) >= 100 else 1 if abs(scaled) >= 10 else 2
+        if abs(round(scaled, digits)) >= 1000 and idx + 1 < len(units):
+            continue  # 999.999K rounds to 1000K: roll over to the next unit
+        text = f"{scaled:.{digits}f}"
+        if "." in text:
+            text = text.rstrip("0").rstrip(".")
+        return text + suffix
+    return str(round(n))  # unreachable
 
 
 def fmt_cost(cost: float | None, partial: bool = False) -> str:
     """USD estimate like the UI: '$12.34', '<$0.01', '$1.2K'; None -> 'KHÔNG RÕ'; '+' if partial."""
     if cost is None:
         return COST_UNKNOWN
-    if abs(cost) >= 1000:
+    if abs(round(cost, 2)) >= 1000:  # 999.999 must not print as $1000.00
         text = f"${fmt_compact(cost)}"
     elif 0 < cost < 0.01:
         text = "<$0.01"

@@ -102,3 +102,19 @@ def test_unique_report_path_names_and_suffixes(tmp_path: Path) -> None:
     assert "NhanVien-3" in unique_report_path(tmp_path, many, now).name
     for p in (team, p1):
         assert not set('<>:"/\\|?*') & set(p.name)
+
+
+def test_number_and_cost_formatting_rolls_over() -> None:
+    from tokenvault.manager.reports.strings_vi import fmt_compact, fmt_cost
+
+    assert [fmt_compact(x) for x in (999, 999.6, 1234, 340_000, 999_999, 1_234_567)] == [
+        "999",
+        "1K",
+        "1.23K",
+        "340K",
+        "1M",
+        "1.23M",
+    ]
+    assert fmt_cost(999.999) == "$1K" and fmt_cost(999.994) == "$999.99"
+    assert fmt_cost(0.004) == "<$0.01" and fmt_cost(None) == "KHÔNG RÕ"
+    assert fmt_cost(5, partial=True) == "$5.00+"
