@@ -5,7 +5,10 @@
 // tests without a stub) every call falls back to `POST /api/<method>` with the JSON-encoded
 // argument list as body. Usage: `await api.overview(filter)`, `await api.call('overview', f)`.
 
-const WAIT_MS = Number(globalThis.TV_API_WAIT_MS ?? 1500);
+// No `window.pywebview` this long after DOMContentLoaded -> plain browser, use http at once.
+const ABSENT_MS = Number(globalThis.TV_API_ABSENT_MS ?? 300);
+// `window.pywebview` exists but its api is not ready yet -> wait this long for pywebviewready.
+const BRIDGE_WAIT_MS = Number(globalThis.TV_API_BRIDGE_WAIT_MS ?? 15000);
 
 export class ApiError extends Error {
   constructor(method, message, cause) {
@@ -31,18 +34,31 @@ function resolveMode() {
       resolve('pywebview');
       return;
     }
-    // If pywebview is injecting, wait for it; give a plain browser a short grace period.
-    const limit = globalThis.pywebview ? WAIT_MS * 10 : WAIT_MS;
-    const done = () => {
+    const timers = [];
+    let finished = false;
+    const done = (mode) => {
+      if (finished) return;
+      finished = true;
       window.removeEventListener('pywebviewready', onReady);
+      document.removeEventListener('DOMContentLoaded', armAbsentCheck);
+      timers.forEach((id) => clearTimeout(id));
       clearInterval(poll);
-      clearTimeout(timer);
-      resolve(hasBridge() ? 'pywebview' : 'http');
+      resolve(mode ?? (hasBridge() ? 'pywebview' : 'http'));
     };
     const onReady = () => done();
     window.addEventListener('pywebviewready', onReady);
-    const poll = setInterval(() => hasBridge() && done(), 50);
-    const timer = setTimeout(done, limit);
+    const poll = setInterval(() => hasBridge() && done('pywebview'), 50);
+    // Plain browser: nothing named pywebview shortly after the DOM is ready.
+    function armAbsentCheck() {
+      timers.push(setTimeout(() => !globalThis.pywebview && done('http'), ABSENT_MS));
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', armAbsentCheck, { once: true });
+    } else {
+      armAbsentCheck();
+    }
+    // pywebview present but its api never became ready: give up eventually.
+    timers.push(setTimeout(() => done(), BRIDGE_WAIT_MS));
   });
   return modePromise;
 }

@@ -46,10 +46,49 @@ async function boot() {
   globalThis.tv.filters = filters;
 
   await Promise.all([applyWindowMode(win), router.start()]);
+  globalThis.tv.bootMs = Math.round(performance.now()); // diagnostics: time to first render
   document.documentElement.dataset.tvReady = '1';
+}
+
+// Shown when boot fails. Deliberately hardcoded (English, inline styles, textContent only):
+// the strings file or the components may be exactly what failed to load.
+const BOOT_ERROR_TITLE = 'TokenVault could not start the interface.';
+const BOOT_ERROR_HINT = 'Reload the window. If this keeps happening, reinstall the Manager.';
+
+export function showBootError(err) {
+  const host = document.getElementById('tv-view') ?? document.body;
+  const panel = document.createElement('section');
+  panel.className = 'tv-boot-error';
+  panel.setAttribute('role', 'alert');
+  panel.style.cssText =
+    'margin:24px;padding:20px 24px;max-width:720px;background:#151518;color:#e8e8eb;' +
+    'border:1px solid #3b3b41;border-left:3px solid #ff2d3f;font:14px/1.5 "Segoe UI",system-ui,sans-serif;';
+  const title = document.createElement('h2');
+  title.textContent = BOOT_ERROR_TITLE;
+  title.style.cssText = 'margin:0 0 8px;font-size:16px;color:#f6f6f8;';
+  const detail = document.createElement('pre');
+  detail.className = 'tv-boot-error__detail';
+  detail.textContent = String(err?.stack || err?.message || err);
+  detail.style.cssText =
+    'margin:0 0 10px;white-space:pre-wrap;word-break:break-word;color:#a1a1a9;font-size:12px;';
+  const hint = document.createElement('p');
+  hint.textContent = BOOT_ERROR_HINT;
+  hint.style.cssText = 'margin:0 0 12px;';
+  const reload = document.createElement('button');
+  reload.type = 'button';
+  reload.textContent = 'Reload';
+  reload.style.cssText =
+    'padding:7px 18px;border:0;background:#e10b1f;color:#fff;font:inherit;cursor:pointer;';
+  reload.addEventListener('click', () => location.reload());
+  panel.append(title, detail, hint, reload);
+  host.replaceChildren(panel);
 }
 
 boot().catch((err) => {
   console.error('[app] boot failed', err);
-  document.documentElement.dataset.tvReady = 'error';
+  try {
+    showBootError(err);
+  } finally {
+    document.documentElement.dataset.tvReady = 'error';
+  }
 });

@@ -17,13 +17,22 @@ export async function loadI18n(language = 'vi') {
   return dict;
 }
 
-function deepMerge(target, source) {
-  for (const [key, value] of Object.entries(source)) {
-    if (value && typeof value === 'object' && !Array.isArray(value)) {
-      target[key] = deepMerge(
-        target[key] && typeof target[key] === 'object' ? target[key] : {},
-        value,
-      );
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isPlainObject(value) {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Merge `source` into `target`, never touching prototype-related keys. */
+export function deepMerge(target, source) {
+  for (const key of Object.keys(source)) {
+    if (UNSAFE_KEYS.has(key)) continue;
+    const value = source[key];
+    if (isPlainObject(value)) {
+      const base = Object.prototype.hasOwnProperty.call(target, key) && isPlainObject(target[key])
+        ? target[key]
+        : {};
+      target[key] = deepMerge(base, value);
     } else {
       target[key] = value;
     }
@@ -31,27 +40,33 @@ function deepMerge(target, source) {
   return target;
 }
 
-const extensions = new Map();
+const loaded = new Set(); // successful extensions only; failures are retried next time
 
 /**
- * Merge the optional per-page file i18n/<lang>/<name>.json (loaded once; missing file is fine).
- * The router calls this before rendering route <name>, so page tasks can ship their strings
- * without editing the shared vi.json.
+ * Merge the optional per-page file i18n/<lang>/<name>.json. Only the `<name>` namespace is
+ * accepted (other top-level keys are ignored with a warning) so a page cannot override shell
+ * strings. A missing file or failed fetch is not cached: the next navigation tries again.
+ * Resolves to true when strings for `name` are available.
  */
-export function loadI18nExtension(name) {
+export async function loadI18nExtension(name) {
   const cacheKey = `${lang}/${name}`;
-  if (!extensions.has(cacheKey)) {
+  if (loaded.has(cacheKey)) return true;
+  try {
     const url = new URL(`../i18n/${lang}/${name}.json`, import.meta.url);
-    const loading = fetch(url)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((extra) => {
-        if (extra && typeof extra === 'object') deepMerge(dict, extra);
-        return !!extra;
-      })
-      .catch(() => false);
-    extensions.set(cacheKey, loading);
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) return false;
+    const extra = await response.json();
+    if (!isPlainObject(extra)) return false;
+    const foreign = Object.keys(extra).filter((key) => key !== name);
+    if (foreign.length) {
+      console.warn(`[i18n] ${name}.json: ignoring keys outside "${name}.*": ${foreign.join(', ')}`);
+    }
+    if (isPlainObject(extra[name])) deepMerge(dict, { [name]: extra[name] });
+    loaded.add(cacheKey);
+    return true;
+  } catch {
+    return false;
   }
-  return extensions.get(cacheKey);
 }
 
 export function currentLang() {

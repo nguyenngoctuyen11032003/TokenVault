@@ -69,6 +69,10 @@ def test_shell_renders_titlebar_and_live_indicator(open_shell: Any) -> None:
     assert live.locator(".tv-live__text").inner_text() == "0 / 3 máy online"
     assert live.get_attribute("data-state") == "offline"
     assert page.evaluate("window.__seen.length") == 2
+    # Non-JSON string payloads are ignored (logged), not delivered and not fatal.
+    page.evaluate("tv.onLive('not json')")
+    assert page.evaluate("window.__seen.length") == 2
+    assert live.locator(".tv-live__text").inner_text() == "0 / 3 máy online"
 
     minimize = page.get_by_role("button", name="Thu nhỏ")
     close = page.get_by_role("button", name="Ẩn xuống khay")

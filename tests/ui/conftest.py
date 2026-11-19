@@ -22,10 +22,11 @@ UI_DIR = Path(__file__).resolve().parents[2] / "src" / "tokenvault" / "ui"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 ARTIFACTS_DIR = Path(__file__).resolve().parent / "_artifacts"
 
-# Test-only files mounted into the served tree (exercise the route extension contract).
+# Test-only files mounted into the served tree (exercise the route extension contract):
+# fixtures/routes/<name>.js -> js/routes/<name>.js, fixtures/i18n/<name>.json -> i18n/vi/<name>.json
 OVERLAY = {
-    "/js/routes/demo.js": FIXTURES_DIR / "demo_route.js",
-    "/i18n/vi/demo.json": FIXTURES_DIR / "demo_strings.json",
+    **{f"/js/routes/{p.name}": p for p in (FIXTURES_DIR / "routes").glob("*.js")},
+    **{f"/i18n/vi/{p.name}": p for p in (FIXTURES_DIR / "i18n").glob("*.json")},
 }
 
 # Canned answers for the http fallback (`fetch('/api/<method>')`) used when pywebview is absent.
@@ -51,6 +52,15 @@ class _UiHandler(SimpleHTTPRequestHandler):
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
+
+    def do_HEAD(self) -> None:
+        path = self.path.split("?", 1)[0]
+        if path in OVERLAY:
+            self.send_response(200)
+            self.send_header("Content-Type", self.extensions_map[OVERLAY[path].suffix])
+            self.end_headers()
+            return
+        super().do_HEAD()
 
     def do_GET(self) -> None:
         path = self.path.split("?", 1)[0]
@@ -82,10 +92,16 @@ class _UiHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
+class _Server(ThreadingHTTPServer):
+    # The default listen backlog (5) drops connections when Chromium opens many at once.
+    request_queue_size = 128
+    daemon_threads = True
+
+
 @pytest.fixture(scope="session")
 def ui_server() -> Iterator[str]:
     handler = partial(_UiHandler, directory=str(UI_DIR))
-    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    httpd = _Server(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
     try:
@@ -107,8 +123,13 @@ def browser() -> Iterator[Any]:
         b.close()
 
 
-def stub_script(settings: dict[str, Any] | None) -> str:
-    """Init script installing a fake pywebview bridge that records calls."""
+def stub_script(settings: dict[str, Any] | None, late_api_ms: int | None = None) -> str:
+    """Init script installing a fake pywebview bridge that records calls.
+
+    With ``late_api_ms``, ``window.pywebview`` exists at once but its api only appears (and
+    ``pywebviewready`` fires) after that delay, like a slow real bridge.
+    """
+    late = "null" if late_api_ms is None else str(int(late_api_ms))
     settings_json = json.dumps(settings if settings is not None else {"transparent_window": True})
     return f"""
     (() => {{
@@ -119,12 +140,22 @@ def stub_script(settings: dict[str, Any] | None) -> str:
         calls.push({{name, args}});
         return Promise.resolve(value);
       }};
-      window.pywebview = {{ api: {{
+      const api = {{
         settings: rec('settings', settings),
         window_min: rec('window_min', null),
         window_close: rec('window_close', null),
         echo: (...args) => Promise.resolve({{args}}),
-      }} }};
+      }};
+      const late = {late};
+      if (late === null) {{
+        window.pywebview = {{ api }};
+      }} else {{
+        window.pywebview = {{}};
+        setTimeout(() => {{
+          window.pywebview.api = api;
+          window.dispatchEvent(new Event('pywebviewready'));
+        }}, late);
+      }}
     }})();
     """
 
@@ -144,18 +175,35 @@ def open_shell(browser: Any, ui_server: str) -> Iterator[OpenShell]:
         height: int = 900,
         settings: dict[str, Any] | None = None,
         pywebview: bool = True,
+        late_api_ms: int | None = None,
+        init_script: str | None = None,
+        setup: Callable[[Any], None] | None = None,
+        ready: str = "1",
     ) -> Any:
         ctx = browser.new_context(viewport={"width": width, "height": height})
         ctx.set_default_timeout(10_000)
         contexts.append(ctx)
         if pywebview:
-            ctx.add_init_script(stub_script(settings))
+            ctx.add_init_script(stub_script(settings, late_api_ms))
+        if init_script:
+            ctx.add_init_script(init_script)
+        if setup:
+            setup(ctx)
         page = ctx.new_page()
         errors: list[str] = []
+        console: list[str] = []
         page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.on("console", lambda msg: console.append(f"{msg.type}: {msg.text}"))
         page.goto(f"{ui_server}/index.html{route}")
-        page.wait_for_selector("html[data-tv-ready='1']")
+        try:
+            page.wait_for_selector(f"html[data-tv-ready='{ready}']", state="attached")
+        except Exception as exc:
+            state = page.evaluate("document.documentElement.dataset.tvReady ?? null")
+            raise AssertionError(
+                f"shell not ready (data-tv-ready={state!r}); errors={errors}; console={console}"
+            ) from exc
         page.tv_errors = errors  # type: ignore[attr-defined]
+        page.tv_console = console  # type: ignore[attr-defined]
         return page
 
     yield _open

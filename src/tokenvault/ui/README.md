@@ -31,12 +31,15 @@ vendor/               echarts.min.js (Apache-2.0, see LICENSE-echarts.txt)
    loads it on demand; until the file exists the router shows a "page not built yet" panel.
 2. Default-export `render(container, ctx)` — or an object `{ render, destroy }`. Optional
    named export `destroy()`; `render` may also return a cleanup function. `render` may be async.
-3. Put the page's strings in `i18n/vi/<name>.json` under a page namespace
-   (e.g. `{"home": {"tokens": "Tổng token"}}`) and use `ctx.t('home.tokens')`. The router merges
-   that file before calling `render`, so page tasks never edit the shared `i18n/vi.json`.
-   Strings needed outside the route itself (components shared by several pages) go in the file
-   of the route that owns the component. Never hardcode Vietnamese in js/html/css —
-   `tests/ui/test_shell.py` fails on it.
+3. Put the page's strings in `i18n/vi/<name>.json`, **only** under the route's own namespace
+   (`i18n/vi/home.json` = `{"home": {"tokens": "Tổng token"}}`), and use `ctx.t('home.tokens')`.
+   The router merges that file before calling `render`, so page tasks never edit the shared
+   `i18n/vi.json`. Any other top-level key in a per-page file is ignored with a console warning
+   (a page cannot override shell strings); `__proto__` / `constructor` / `prototype` keys are
+   skipped. A missing file or failed fetch is retried on the next visit (only successes are
+   cached). Components shared by several pages keep their strings under the namespace of the
+   route that owns them. Never hardcode Vietnamese in js/html/css — `tests/ui/test_shell.py`
+   fails on it.
 
 ```js
 // js/routes/projects.js
@@ -63,10 +66,31 @@ export function destroy() { /* dispose charts, timers */ }
 | `navigate(route, ...args)` | sets the hash |
 | `useStylesheet(href)` | links a stylesheet once (path relative to ui/); resolves on load |
 | `onCleanup(fn)` | run `fn` when the route is left |
+| `signal` | `AbortSignal` aborted when the route is left (pass to long waits, check before work) |
+| `container` | same element as the `container` argument |
 
-The container is `<main id="tv-view" data-route="<name>">`; it is emptied between routes and gets
-`data-route-state="ready|missing|error"` after rendering. Use `esc()` from `js/dom.js` when
-interpolating data (emails, session titles) into HTML strings.
+### Route lifetime (async renders are safe)
+
+Each navigation gets its own scope and its own wrapper `<div class="tv-route">`, which is the
+`container` passed to `render`. It is attached inside `<main id="tv-view" data-route="<name>">`
+**before** `render` starts (so layout sizes are real and progressive rendering is fine: ECharts
+can measure its element). When the user leaves, even while an async `render` is still awaiting:
+
+- the scope is marked dead and `ctx.signal` is aborted;
+- cleanups registered so far run (newest first), then `destroy()`, exactly once;
+- the wrapper is detached, so anything the stale render still writes goes to a detached node and
+  never into the live view;
+- a cleanup function returned later by the stale `render` runs immediately;
+- `ctx.onLive`, `ctx.filters.subscribe` and `ctx.onCleanup` called after that do nothing (or
+  run the cleanup at once); callbacks of a dead scope are never invoked;
+  `ctx.filters.set` / `ctx.navigate` from a dead scope are ignored.
+
+If `render` throws (or rejects), its cleanups and `destroy()` run and an error panel
+(`tv-panel.tv-route-error`) replaces the page; the nav keeps working. `#tv-view` gets
+`data-route-state="ready|missing|error"` once the route settles. Route names must match
+`[a-z0-9][a-z0-9-]*` after decoding; anything else (e.g. `#/..%2fx`) shows the "not built" panel
+without importing anything. Use `esc()` from `js/dom.js` when interpolating data (emails,
+session titles) into HTML strings.
 
 ## Navigation
 
@@ -102,7 +126,13 @@ tasks. Ship `css/pages/<name>.css`, load it with `ctx.useStylesheet`, and scope 
 - `settings().transparent_window === false` switches the window to `.window--opaque` (rectangle,
   chamfer drawn inside). Missing setting or a failed call keeps the transparent window.
 - Live push: `window.evaluate_js("tv.onLive(<json>)")` (object or JSON string; `tv.emitLive` is
-  the same). The titlebar reads `{online, total}` or `{devices: {online, total}}`.
+  the same). A string that is not valid JSON is ignored (logged with `console.error`) and not
+  delivered to subscribers. The titlebar reads `{online, total}` or `{devices: {online, total}}`.
+- Bridge detection: if `window.pywebview` is still undefined 300 ms after DOMContentLoaded the
+  UI uses the http fallback at once; if `window.pywebview` exists but its api is not ready, it
+  waits up to 15 s for `pywebviewready` (overridable: `TV_API_ABSENT_MS`, `TV_API_BRIDGE_WAIT_MS`).
+- Boot failure (strings or components failed to load): a hardcoded English panel
+  (`.tv-boot-error`, role=alert) shows the error text and a Reload button.
 - Frameless drag: elements with class `pywebview-drag-region` (titlebar brand, title, spacer).
 - Serve this folder over http (pywebview's built-in server): ES modules do not load from
   `file://`, and `.js` must be served as `text/javascript`.
