@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from tokenvault.common.models import UsageEvent
-from tokenvault.manager.store import Store
+from tokenvault.manager.store import SchemaTooNewError, Store
 
 TOKEN_FIELDS = ("input", "output", "cache_read", "cache_5m", "cache_1h")
 
@@ -50,7 +50,7 @@ def store(tmp_path: Path) -> Store:
 
 
 def _raw(store: Store, sql: str, params: tuple[object, ...] = ()) -> list[tuple[object, ...]]:
-    return [tuple(r) for r in store.fetchall(sql, params)]
+    return [tuple(r) for r in store._fetchall(sql, params)]
 
 
 def test_schema_uses_wal_and_user_version(tmp_path: Path) -> None:
@@ -149,7 +149,7 @@ def test_events_create_device_row_if_missing(store: Store) -> None:
 def test_rollup_totals_equal_raw_sum(tmp_path: Path) -> None:
     for seed in range(5):
         rnd = random.Random(seed)
-        s = Store(tmp_path / f"p{seed}.db")
+        s = Store(tmp_path / f"p{seed}.db", tz_offset_minutes=[0, 420, -300, 330, 345][seed])
         pool: list[UsageEvent] = []
         for _ in range(40):
             batch: list[UsageEvent] = []
@@ -200,7 +200,8 @@ def test_rollup_totals_equal_raw_sum(tmp_path: Path) -> None:
         cols = ", ".join(f"SUM({c})" for c in TOKEN_FIELDS)
         raw = _raw(s, f"SELECT {cols}, COUNT(*) FROM events")
         assert raw == _raw(s, f"SELECT {cols}, SUM(events) FROM rollup_hour")
-        assert raw == _raw(s, f"SELECT {cols}, SUM(events) FROM rollup_day")
+        for table in ("rollup_day", "rollup_month"):
+            assert raw == _raw(s, f"SELECT {cols}, SUM(events) FROM {table}")
         assert raw == _raw(s, f"SELECT {cols}, SUM(events) FROM rollup_session")
         # grouped equality, not just grand totals
         g = "device_id, email, project, model, sidechain, hour"
@@ -212,9 +213,8 @@ def test_rollup_totals_equal_raw_sum(tmp_path: Path) -> None:
         for (tn,) in _raw(s, "SELECT tool_names FROM events"):
             for t in json.loads(str(tn)):
                 raw_tools[t] = raw_tools.get(t, 0) + 1
-        assert raw_tools == dict(
-            _raw(s, "SELECT tool, SUM(calls) FROM rollup_tool_hour GROUP BY tool")
-        )
+        for table in ("rollup_tool_hour", "rollup_tool_day", "rollup_tool_month"):
+            assert raw_tools == dict(_raw(s, f"SELECT tool, SUM(calls) FROM {table} GROUP BY tool"))
         s.close()
 
 
@@ -228,6 +228,98 @@ def test_concurrent_writers_are_serialised(store: Store) -> None:
         t.start()
     for t in threads:
         t.join()
-    assert _raw(store, "SELECT COUNT(*), SUM(events) FROM rollup_hour") != []
+    per_dev = _raw(store, "SELECT device_id, SUM(events), SUM(input) FROM rollup_hour GROUP BY 1")
+    assert per_dev == [(f"d{i}", 50, 500) for i in range(4)]
     assert _raw(store, "SELECT COUNT(*) FROM events") == [(200,)]
     assert _raw(store, "SELECT SUM(events) FROM rollup_hour") == [(200,)]
+
+
+def test_title_does_not_regress_on_resend_of_older_event(store: Store) -> None:
+    store.upsert_events("dev1", [ev(1, timestamp="2026-11-19T10:00:00Z", session_title="Old")])
+    store.upsert_events("dev1", [ev(2, timestamp="2026-11-19T11:00:00Z", session_title="New")])
+    # resend of the older event, still carrying the older title
+    store.upsert_events("dev1", [ev(1, timestamp="2026-11-19T10:00:00Z", session_title="Old")])
+    assert _raw(store, "SELECT title FROM session_meta") == [("New",)]
+    # same inside one batch, older event last
+    store.upsert_events(
+        "dev1",
+        [
+            ev(4, session_id="s2", timestamp="2026-11-19T12:00:00Z", session_title="B"),
+            ev(3, session_id="s2", timestamp="2026-11-19T09:00:00Z", session_title="A"),
+        ],
+    )
+    assert _raw(store, "SELECT title FROM session_meta WHERE session_id='s2'") == [("B",)]
+
+
+def test_identity_frozen_at_ingest(store: Store) -> None:
+    store.upsert_device("dev1", "Dev", None, 1.0, "alice", "PC1")
+    store.upsert_events("dev1", [ev(1, claude_account_email=None)])
+    store.upsert_device("dev1", "Dev", "later@x.com", 2.0)  # device learns an e-mail
+    store.upsert_events("dev1", [ev(1, claude_account_email=None, output_tokens=99)])
+    store.upsert_events("dev1", [ev(2, claude_account_email=None)])
+    rows = _raw(store, "SELECT msg_key, email, account_email FROM events ORDER BY msg_key")
+    # old row stays unattributed even after growing; new row gets device e-mail
+    assert rows == [("msg_1", "", None), ("msg_2", "later@x.com", None)]
+    assert _raw(store, "SELECT email, SUM(output) FROM rollup_hour GROUP BY email ORDER BY 1") == [
+        ("", 99),
+        ("later@x.com", 20),
+    ]
+
+
+def test_upsert_commits_in_chunks(tmp_path: Path) -> None:
+    s = Store(tmp_path / "c.db", chunk_rows=10)
+    commits = []
+    s._con.set_trace_callback(lambda sql: commits.append(sql) if sql == "COMMIT" else None)
+    assert s.upsert_events("dev1", [ev(i) for i in range(35)]) == 35
+    assert len(commits) == 4
+    assert _raw(s, "SELECT COUNT(*), SUM(events) FROM rollup_hour") == [(1, 35)]
+    s.close()
+
+
+def test_schema_newer_than_supported_is_refused(tmp_path: Path) -> None:
+    Store(tmp_path / "n.db").close()
+    con = sqlite3.connect(tmp_path / "n.db")
+    con.execute("PRAGMA user_version=99")
+    con.close()
+    with pytest.raises(SchemaTooNewError, match="99"):
+        Store(tmp_path / "n.db")
+
+
+def test_migration_v1_backfills_identity_once(tmp_path: Path) -> None:
+    db = tmp_path / "v1.db"
+    s = Store(db)
+    s.upsert_events(
+        "dev1", [ev(1, claude_account_email=None, session_title="T", tool_names=("Read", "Skill"))]
+    )
+    s.upsert_events("dev2", [ev(2, device_id="dev2", claude_account_email="b@x")])
+    s.close()
+    # downgrade to the v1 layout, then give dev1 an e-mail as v1 would have
+    con = sqlite3.connect(db)
+    con.executescript(
+        "ALTER TABLE events DROP COLUMN account_email; ALTER TABLE events DROP COLUMN title_ts;"
+        "ALTER TABLE session_meta DROP COLUMN title_ts;"
+        "DROP TABLE meta; DROP TABLE rollup_month; DROP TABLE rollup_tool_day;"
+        "DROP TABLE rollup_tool_month; DROP INDEX ix_rs_project;"
+        "UPDATE rollup_hour SET email = '';"  # v1 rollups keyed the empty e-mail
+        "UPDATE devices SET email='a@x' WHERE device_id='dev1'; PRAGMA user_version=1;"
+    )
+    con.close()
+    s = Store(db)
+    assert _raw(s, "SELECT device_id, email, account_email FROM events ORDER BY 1") == [
+        ("dev1", "a@x", None),
+        ("dev2", "b@x", "b@x"),
+    ]
+    assert _raw(s, "SELECT device_id, email, events FROM rollup_hour ORDER BY 1") == [
+        ("dev1", "a@x", 1),
+        ("dev2", "b@x", 1),
+    ]
+    assert _raw(s, "SELECT COUNT(*) FROM rollup_session") == [(2,)]
+    assert _raw(s, "SELECT email, SUM(calls) FROM rollup_tool_hour GROUP BY 1") == [("a@x", 2)]
+    assert _raw(s, "PRAGMA user_version") == [(2,)]
+    for table in ("rollup_day", "rollup_month"):
+        assert _raw(s, f"SELECT email, SUM(events) FROM {table} GROUP BY 1") == [
+            ("a@x", 1),
+            ("b@x", 1),
+        ]
+    assert _raw(s, "SELECT SUM(calls) FROM rollup_tool_month") == [(2,)]
+    s.close()

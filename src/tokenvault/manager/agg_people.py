@@ -1,43 +1,51 @@
-"""Employee views for :class:`~tokenvault.manager.aggregates.Aggregates`.
-
-Split out of ``aggregates.py`` to keep files small. Employee identity is the
-Claude account e-mail; devices without one get the key ``"device:<id>"`` and
-the label ``"Unknown account (windows_user@hostname)"``.
+"""Employee views. Identity = the e-mail frozen on each event at ingest; rows
+without one get the key ``"device:<id>"`` and the label
+``"Unknown account (windows_user@hostname)"`` (never dropped).
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import TYPE_CHECKING
 
 from tokenvault.manager.agg_models import DeviceInfo, EmployeeRow, EmployeeView, Filter
-
-if TYPE_CHECKING:
-    from tokenvault.manager.aggregates import Aggregates
+from tokenvault.manager.agg_series import (
+    daily,
+    hourly,
+    project_rows,
+    session_counts,
+    session_total,
+    sessions,
+    summary,
+    totals,
+)
+from tokenvault.manager.agg_sql import KEY, SUMS, Acc, QueryContext, tok
 
 
 def _device_key(device_id: str, email: str | None) -> str:
     return email if email else f"device:{device_id}"
 
 
-def employees(agg: Aggregates, flt: Filter) -> list[EmployeeRow]:
-    from tokenvault.manager.aggregates import _JOIN, _KEY, _SUMS, _Acc, _tok
+def employees(ctx: QueryContext, flt: Filter) -> list[EmployeeRow]:
+    """One row per employee key; the same e-mail on several devices merges.
 
-    where, params = agg._where(flt)
-    rows = agg._q(
-        f"SELECT r.device_id, {_KEY} AS k, r.model, {_SUMS}, SUM(r.events) "
-        f"FROM rollup_hour r {_JOIN}{where} GROUP BY r.device_id, k, r.model",
-        params,
+    Devices with no matching usage are listed too (zero tokens, keyed by the
+    device's current e-mail) unless the filter names a project or model.
+    """
+    rows = ctx.seg_query(
+        flt,
+        "usage",
+        f"r.device_id, {KEY}, r.model, {SUMS}, SUM(r.events)",
+        f"r.device_id, {KEY}, r.model",
     )
-    sessions = agg._session_counts(flt, _KEY)
-    devices = {d.device_id: d for d in agg.store.list_devices()}
-    online = set(agg.store.devices_online(agg._now()))
-    names = agg._names()
+    sess = session_counts(ctx, flt, KEY)
+    devices = {d.device_id: d for d in ctx.devices()}
+    online = ctx.online()
+    names = ctx.names()
 
-    accs: dict[str, _Acc] = defaultdict(_Acc)
+    accs: dict[str, Acc] = defaultdict(Acc)
     devs: dict[str, set[str]] = defaultdict(set)
-    for dev, key, model, *rest in rows:
-        accs[key].add(agg.pricing, model, rest[:5], rest[5])
+    for _, (dev, key, model, *rest) in rows:
+        accs[key].add(ctx.pricing, model, rest[:5], rest[5])
         devs[key].add(dev)
     seen = {d for ds in devs.values() for d in ds}
     if flt.project is None and flt.model is None:
@@ -47,7 +55,7 @@ def employees(agg: Aggregates, flt: Filter) -> list[EmployeeRow]:
             key = _device_key(d.device_id, d.email)
             if flt.email is not None and key != flt.email:
                 continue
-            accs[key]  # noqa: B018 - create the zero row
+            accs.setdefault(key, Acc())
             devs[key].add(d.device_id)
 
     grand = sum(a.total for a in accs.values())
@@ -58,40 +66,36 @@ def employees(agg: Aggregates, flt: Filter) -> list[EmployeeRow]:
         last = max((d.last_seen for d in known if d.last_seen), default=None)
         out.append(
             EmployeeRow(
-                **_tok(a.t),
+                **tok(a.t),
                 key=key,
                 email=None if key.startswith("device:") else key,
-                display_name=agg._display(key, names),
+                display_name=ctx.display(key, names),
                 devices=ds,
                 teams=sorted({d.team for d in known if d.team}),
                 online=any(d in online for d in ds),
-                last_seen=agg._iso(last),
+                last_seen=ctx.iso(last),
                 events=a.events,
-                sessions=sessions.get(key, 0),
+                sessions=sess.get(key, 0),
                 cost=a.cost,
                 cost_partial=a.partial,
                 share=round(a.total / grand, 6) if grand else 0.0,
             )
         )
-    return sorted(out, key=lambda r: (-r.total_tokens, r.display_name))
+    return sorted(out, key=lambda r: (-r.total_tokens, r.display_name, r.key))
 
 
-def employee(agg: Aggregates, key: str, rng: str) -> EmployeeView:
-    from tokenvault.manager.aggregates import _JOIN
-
-    f = agg._range_filter(rng, Filter(email=key))
-    s = agg._summary(f)
-    total = s["total"]
-    n_sess = sum(agg._session_counts(f, "1").values())
-    names = agg._names()
-
-    where, params = agg._where(Filter(email=key))
-    dev_ids = {str(r[0]) for r in agg._q(
-        f"SELECT DISTINCT r.device_id FROM rollup_hour r {_JOIN}{where}", params
-    )}  # fmt: skip
-    all_devs = agg.store.list_devices()
+def employee(ctx: QueryContext, key: str, rng: str) -> EmployeeView:
+    """Detail for one employee key (e-mail or ``device:<id>``) over a range."""
+    f = ctx.range_filter(rng, Filter(email=key))
+    s = summary(ctx, f)
+    days, _ = daily(ctx, f)
+    n_sess = session_total(ctx, f)
+    names = ctx.names()
+    used = ctx.seg_query(Filter(email=key), "usage", "r.device_id", "r.device_id")
+    dev_ids = {str(r[0]) for _, r in used}
+    all_devs = ctx.devices()
     dev_ids |= {d.device_id for d in all_devs if _device_key(d.device_id, d.email) == key}
-    online = set(agg.store.devices_online(agg._now()))
+    online = ctx.online()
     infos = [
         DeviceInfo(
             d.device_id,
@@ -99,7 +103,7 @@ def employee(agg: Aggregates, key: str, rng: str) -> EmployeeView:
             d.windows_user,
             d.hostname,
             d.device_id in online,
-            agg._iso(d.last_seen) if d.last_seen else None,
+            ctx.iso(d.last_seen) if d.last_seen else None,
         )
         for d in all_devs
         if d.device_id in dev_ids
@@ -107,14 +111,15 @@ def employee(agg: Aggregates, key: str, rng: str) -> EmployeeView:
     return EmployeeView(
         key=key,
         email=None if key.startswith("device:") else key,
-        display_name=agg._display(key, names),
+        display_name=ctx.display(key, names),
         range=rng,
-        totals=agg._totals(total, n_sess),
-        hourly=agg._hourly(f),
-        daily=s["daily"],
-        by_project=agg._project_rows(f, s["by_project"]),
-        by_model=s["by_model"],
-        sessions=agg._sessions(f, 200),
+        totals=totals(s.total, n_sess),
+        hourly=hourly(ctx, f),
+        daily=days,
+        monthly=s.monthly,
+        by_project=project_rows(ctx, f, s.by_project),
+        by_model=s.by_model,
+        sessions=sessions(ctx, f, 200),
         devices=infos,
-        unknown_cost_models=sorted(total.unknown),
+        unknown_cost_models=s.total.unknown_models,
     )

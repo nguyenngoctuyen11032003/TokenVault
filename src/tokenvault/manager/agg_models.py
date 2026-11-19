@@ -4,6 +4,11 @@ Everything here is JSON-serialisable via ``dataclasses.asdict``: costs are
 ``float`` USD (rounded to 6 places) or ``None`` when UNKNOWN, timestamps are
 ISO-8601 strings in the Manager's local offset, days are ``"YYYY-MM-DD"``.
 "Total tokens" always means input + output + cache_read + cache_5m + cache_1h.
+Cost semantics everywhere: ``cost`` sums the priced models; ``cost_partial`` is
+True when some tokens are from unpriced models (listed in
+``unknown_cost_models``); ``cost`` is ``None`` when there are tokens but none
+from a priced model, and ``0.0`` for an empty group. A missing model is shown
+as ``"(no model)"``.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from datetime import datetime
 class Filter:
     """Global UI filter; every field optional.
 
+    ``model`` uses the displayed label (``"(no model)"`` for events without one).
     ``email`` is an employee key: an account e-mail, or ``"device:<id>"`` for
     a device with no known account (see ``EmployeeRow.key``).
     ``start``/``end`` accept ``datetime`` or ISO strings. A date-only string is
@@ -53,12 +59,25 @@ class Totals(Tokens):
 @dataclass
 class HourPoint(Tokens):
     hour: str = ""  # local "YYYY-MM-DDTHH:00"
+    cost: float | None = 0.0
+    cost_partial: bool = False
+    unknown_cost_models: list[str] = field(default_factory=list)
 
 
 @dataclass
 class DayPoint(Tokens):
     day: str = ""
     cost: float | None = 0.0
+    cost_partial: bool = False
+    unknown_cost_models: list[str] = field(default_factory=list)
+
+
+@dataclass
+class MonthPoint(Tokens):
+    month: str = ""  # local "YYYY-MM"
+    cost: float | None = 0.0
+    cost_partial: bool = False
+    unknown_cost_models: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -84,7 +103,7 @@ class ProjectRow(Tokens):
 
 @dataclass
 class ModelRow(Tokens):
-    model: str = ""  # '' = event had no model
+    model: str = ""  # "(no model)" when the event had none
     events: int = 0
     cost: float | None = 0.0  # None = UNKNOWN price
 
@@ -117,7 +136,8 @@ class SessionRow(Tokens):
 class Overview:
     totals: Totals
     hourly: list[HourPoint]
-    daily: list[DayPoint]
+    daily: list[DayPoint]  # at most the last 90 local days of the range
+    monthly: list[MonthPoint]  # whole range, local months
     cache_daily: list[CacheDayPoint]
     by_project: list[ProjectRow]
     by_model: list[ModelRow]
@@ -160,7 +180,8 @@ class EmployeeView:
     range: str
     totals: Totals
     hourly: list[HourPoint]
-    daily: list[DayPoint]
+    daily: list[DayPoint]  # at most the last 90 local days of the range
+    monthly: list[MonthPoint]  # whole range, local months
     by_project: list[ProjectRow]
     by_model: list[ModelRow]
     sessions: list[SessionRow]

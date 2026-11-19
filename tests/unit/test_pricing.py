@@ -76,3 +76,9 @@ def test_repo_pricing_file_loads_with_reference_rates() -> None:
     assert p.cost("claude-opus-4-7", 0, 0, 0, m, 0) == Decimal("18.75")
     assert p.cost("claude-haiku-4-5", 0, 0, 0, 0, m) == Decimal("2")
     assert p.cost("gpt-4o", m, 0, 0, 0, 0) is None
+
+
+def test_alias_to_unknown_model_is_rejected(tmp_path: Path) -> None:
+    doc = {"models": {}, "aliases": {"claude-x-2025": "claude-x"}}
+    with pytest.raises(ValueError, match="claude-x-2025"):
+        Pricing.load(_write(tmp_path, doc))

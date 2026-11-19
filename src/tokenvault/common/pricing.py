@@ -55,6 +55,9 @@ class Pricing:
                 raise ValueError(f"pricing for {name!r} lacks {e.args[0]!r}") from None
             rates[str(name)] = ModelRates(*vals)
         aliases = {str(k): str(v) for k, v in (doc.get("aliases") or {}).items()}
+        for alias, target in aliases.items():
+            if target not in rates:
+                raise ValueError(f"pricing alias {alias!r} points to unknown model {target!r}")
         return cls(rates, aliases)
 
     def rates(self, model: str | None) -> ModelRates | None:
