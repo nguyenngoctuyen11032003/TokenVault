@@ -35,14 +35,18 @@ tokenvault-manager = "tokenvault.manager.app:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-tokenvault = ["ui/**/*"]
+tokenvault = ["ui/**/*", "manager/*.sql"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 pythonpath = ["src"]
-markers = ["ui: Playwright tests of the HTML/JS UI (headless chromium)"]
+markers = [
+    "ui: Playwright tests of the HTML/JS UI (headless chromium)",
+    "slow: long-running tests (run with: pytest -m slow)",
+]
+addopts = "-m 'not slow'"
 
 [tool.ruff]
 line-length = 100
