@@ -13,6 +13,7 @@ never load them.
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import time
 from collections.abc import Callable
@@ -166,6 +167,7 @@ class Tray:
         self._thread: threading.Thread | None = None
         self._shown_state: str | None = None
         self._ready = threading.Event()
+        self._main_thread: bool | None = None  # tests; None = decide by OS
         self.refresh = Throttle(self._refresh_now)
 
     def _status_text(self) -> str:
@@ -185,9 +187,20 @@ class Tray:
             t("tray.tooltip", status=self._status_text()),
             menu=to_pystray_menu(self._entries),
         )
+        if self.main_thread_mode:
+            return  # macOS: pystray must own the main thread; the app calls run_blocking()
         self._thread = threading.Thread(target=self._run, name="tv-tray", daemon=True)
         self._thread.start()
         self._ready.wait(5)
+
+    @property
+    def main_thread_mode(self) -> bool:
+        return self._main_thread if self._main_thread is not None else sys.platform == "darwin"
+
+    def run_blocking(self) -> None:
+        """Run the icon on the CALLING (main) thread until :meth:`stop`."""
+        if self._icon is not None:
+            self._run()
 
     def _run(self) -> None:
         def setup(icon: Any) -> None:

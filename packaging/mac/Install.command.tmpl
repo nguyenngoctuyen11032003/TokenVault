@@ -1,0 +1,40 @@
+#!/bin/bash
+# TokenVault Adapter installer for macOS (double-click / right-click -> Open).
+# Rendered by build/build-mac.sh (placeholders @@APP_NAME@@ and @@BIN_NAME@@).
+# Per-user install: no administrator rights, nothing outside your home folder.
+set -euo pipefail
+
+APP_NAME="@@APP_NAME@@"
+BIN_NAME="@@BIN_NAME@@"
+PAYLOAD_NAME="tokenvault-config.bin"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+DEST_DIR="$HOME/Applications"
+
+if [ ! -d "$HERE/$APP_NAME" ] || [ ! -f "$HERE/$PAYLOAD_NAME" ]; then
+  echo "Thiếu \"$APP_NAME\" hoặc $PAYLOAD_NAME. Hãy giải nén đầy đủ tệp .zip rồi chạy lại."
+  read -r -p "Nhấn Enter để đóng." _ || true
+  exit 1
+fi
+
+# The files came from a download / chat: remove the Gatekeeper quarantine flag so the
+# unsigned (ad-hoc signed) app can start. Only the files of this installer are touched.
+xattr -dr com.apple.quarantine "$HERE/$APP_NAME" "$HERE/$PAYLOAD_NAME" 2>/dev/null || true
+
+mkdir -p "$DEST_DIR"
+# Stop a previous Adapter before replacing it (setup also asks it to reload).
+rm -rf "$DEST_DIR/$APP_NAME"
+cp -R "$HERE/$APP_NAME" "$DEST_DIR/"
+xattr -dr com.apple.quarantine "$DEST_DIR/$APP_NAME" 2>/dev/null || true
+
+BIN="$DEST_DIR/$APP_NAME/Contents/MacOS/$BIN_NAME"
+if "$BIN" setup --from "$HERE/$PAYLOAD_NAME"; then
+  echo
+  echo "Đã cài xong. TokenVault Adapter chạy ngầm và tự khởi động khi đăng nhập."
+  status=0
+else
+  status=$?
+  echo
+  echo "Cài đặt chưa hoàn tất (mã lỗi $status). Nếu bạn đã chọn Từ chối thì không có gì được cài."
+fi
+read -r -p "Nhấn Enter để đóng." _ || true
+exit "$status"

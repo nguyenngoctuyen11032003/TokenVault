@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import sys
 import textwrap
 from collections.abc import Sequence
 
@@ -48,6 +49,11 @@ def ask_consent(text: str) -> bool | None:  # pragma: no cover - interactive
     display) - the caller must NOT treat that as a decline.
     Keyboard: Tab moves between buttons, Enter/Space presses the focused one.
     """
+    if sys.platform == "darwin":  # osascript dialog (tkinter is unreliable in a bundle)
+        from tokenvault.adapter.platform import mac
+
+        return mac.ask_consent(text, t("consent.window_title"), t("consent.accept"),
+                               t("consent.decline"))
     try:
         import tkinter as tk
         from tkinter import ttk

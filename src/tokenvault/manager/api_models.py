@@ -39,8 +39,15 @@ class ApiError(Exception):
 class TemplateMissingError(ApiError):
     """The adapter template file is missing or empty (``[template_missing]``)."""
 
-    def __init__(self, path: object) -> None:
-        super().__init__(f"adapter template missing: {path}", "template_missing")
+    def __init__(self, path: object, target: str = "windows") -> None:
+        if target == "mac":
+            msg = (
+                "Chưa có bộ mẫu Adapter cho macOS. Hãy build trên một máy Mac "
+                "(chạy build/build-mac.sh) rồi chép tệp adapter-mac.zip vào: " + str(path)
+            )
+        else:
+            msg = f"adapter template missing: {path}"
+        super().__init__(msg, "template_missing")
 
 
 def parse_filter(obj: Any) -> Filter:

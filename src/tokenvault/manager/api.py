@@ -164,8 +164,8 @@ class Api:
         return mg.revoke_package(self._m, package_id)
 
     @_api
-    def create_installer(self, team: Any, label: Any = None) -> Any:
-        return mg.create_installer(self._m, team, label)
+    def create_installer(self, team: Any, label: Any = None, target: Any = "windows") -> Any:
+        return mg.create_installer(self._m, team, label, target)
 
     @_api
     def reveal_in_explorer(self, path: Any) -> Any:

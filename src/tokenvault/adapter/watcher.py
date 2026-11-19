@@ -48,6 +48,10 @@ class _CollectorLike(Protocol):
 
 def set_background_priority() -> bool:
     """Set this process to BELOW_NORMAL priority on Windows; no-op elsewhere."""
+    if sys.platform == "darwin":
+        from tokenvault.adapter.platform import mac
+
+        return mac.set_background_priority()
     if sys.platform != "win32":
         return False
     try:

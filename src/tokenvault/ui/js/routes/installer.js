@@ -37,7 +37,7 @@ export default async function render(container, ctx) {
   container.append(root);
   const bump = revCounter(root);
   let dialogOpen = false;
-  let last = { team: '', label: null };
+  let last = { team: '', label: null, target: 'windows' };
 
   // ---------- step indicator ----------
   const steps = [1, 2, 3].map((n) =>
@@ -65,6 +65,17 @@ export default async function render(container, ctx) {
     type: 'text', id: 'tv-installer-label', name: 'label', class: 'tv-installer-field__input',
     autocomplete: 'off', maxlength: '60', placeholder: t('labelPlaceholder'), 'aria-describedby': 'tv-installer-label-hint',
   });
+  // Target platform: Windows exe (default) or macOS zip.
+  const targetRadios = ['windows', 'mac'].map((value) => h('input', {
+    type: 'radio', name: 'target', value, id: `tv-installer-target-${value}`,
+    checked: value === 'windows', dataset: { target: value },
+  }));
+  const targetField = h('fieldset', { class: 'tv-installer-field tv-installer-target' },
+    h('legend', { class: 'tv-installer-field__label' }, t('targetLabel')),
+    ...['windows', 'mac'].map((value, i) => h('label', { class: 'tv-installer-target__opt', for: `tv-installer-target-${value}` },
+      targetRadios[i], h('span', null, t(`target.${value}`)))),
+    h('p', { class: 'tv-installer-field__hint' }, t('targetHint')));
+  const selectedTarget = () => (targetRadios[1].checked ? 'mac' : 'windows');
   const suggest = h('div', { class: 'tv-installer-suggest', role: 'group', 'aria-label': t('suggestLabel') });
   const generate = h('button', { type: 'submit', class: 'tv-btn tv-btn--primary tv-installer-generate', dataset: { action: 'generate' } }, t('generate'));
   const busyRow = h('div', { class: 'tv-installer-busy', role: 'status', hidden: true },
@@ -93,6 +104,7 @@ export default async function render(container, ctx) {
       h('p', { class: 'tv-installer-field__hint', id: 'tv-installer-team-hint' }, t('teamHint', { max: TEAM_MAX })),
       teamError,
       suggest),
+    targetField,
     h('div', { class: 'tv-installer-field' },
       h('label', { class: 'tv-installer-field__label', for: 'tv-installer-label' }, t('labelLabel')),
       labelInput,
@@ -160,6 +172,7 @@ export default async function render(container, ctx) {
     const busy = state === 'busy';
     teamInput.disabled = busy;
     labelInput.disabled = busy;
+    targetRadios.forEach((r) => { r.disabled = busy; });
     generate.disabled = busy;
     generate.textContent = busy ? t('generating') : t('generate');
     suggest.querySelectorAll('button').forEach((b) => { b.disabled = busy; });
@@ -181,16 +194,20 @@ export default async function render(container, ctx) {
   }
   teamInput.addEventListener('input', clearTeamError);
 
-  function instructionsText(team, file) {
-    return [1, 2, 3, 4, 5, 6, 7].map((n) => t(`instr.l${n}`, { team, file })).join('\n');
+  function instructionsText(team, file, target) {
+    const key = target === 'mac' ? 'instrMac' : 'instr';
+    return [1, 2, 3, 4, 5, 6, 7].map((n) => t(`${key}.l${n}`, { team, file })).join('\n');
   }
 
-  async function create(team, label) {
-    last = { team, label };
+  async function create(team, label, target = 'windows') {
+    last = { team, label, target };
     errorSlot.replaceChildren();
     setState('busy');
     try {
-      const result = await ctx.api.create_installer(team, label);
+      // Windows keeps the original 2-argument call; macOS adds the target.
+      const result = target === 'mac'
+        ? await ctx.api.create_installer(team, label, 'mac')
+        : await ctx.api.create_installer(team, label);
       if (ctx.signal.aborted) return;
       const file = String(result?.file_name ?? '');
       resultPath = String(result?.path ?? '');
@@ -200,7 +217,7 @@ export default async function render(container, ctx) {
       const mb = Number(result?.bytes) / (1024 * 1024);
       res.size.textContent = Number.isFinite(mb) && mb > 0 ? t('sizeMb', { mb: mb.toFixed(1) }) : '';
       res.lead.textContent = t('doneLead', { team: String(result?.team ?? team) });
-      res.instructions.textContent = instructionsText(String(result?.team ?? team), file);
+      res.instructions.textContent = instructionsText(String(result?.team ?? team), file, target);
       res.revealError.hidden = true;
       setState('done');
       doneView.querySelector('.tv-installer-result__title').focus({ preventScroll: true });
@@ -210,7 +227,7 @@ export default async function render(container, ctx) {
       console.warn('[installer] create_installer failed', err);
       const { code, text } = describeError(
         err,
-        { template_missing: t('templateMissing'), invalid_team: t('err.server') },
+        { template_missing: t(target === 'mac' ? 'templateMissingMac' : 'templateMissing'), invalid_team: t('err.server') },
         (detail) => t('createError', { detail }),
       );
       setState('form');
@@ -221,7 +238,7 @@ export default async function render(container, ctx) {
         errorSlot.replaceChildren(errorBanner({
           text,
           retryLabel: t('retry'),
-          onRetry: () => create(last.team, last.label),
+          onRetry: () => create(last.team, last.label, last.target),
           attr: 'data-create-error',
           kind: code === 'template_missing' ? 'template' : 'generic',
         }));
@@ -242,7 +259,7 @@ export default async function render(container, ctx) {
     clearTeamError();
     teamInput.value = check.value;
     const label = labelInput.value.trim();
-    create(check.value, label || null);
+    create(check.value, label || null, selectedTarget());
   });
 
   async function reveal() {

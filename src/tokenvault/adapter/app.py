@@ -278,6 +278,10 @@ class AdapterApp:
             raise
         if threading.current_thread() is threading.main_thread():
             self._install_console_handler()
+        tray = self._tray
+        if (tray is not None and tray.main_thread_mode
+                and threading.current_thread() is threading.main_thread()):
+            tray.run_blocking()  # macOS: returns when stop() stops the icon
         self._stopped.wait()
         return 0
 

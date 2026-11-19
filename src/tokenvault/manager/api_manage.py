@@ -23,6 +23,7 @@ from tokenvault.manager.api_models import (
 )
 from tokenvault.manager.lifecycle import CertRestartError, Manager
 from tokenvault.manager.packager import Packager, PackagerError
+from tokenvault.manager.paths import mac_template_path
 from tokenvault.manager.settings_store import SettingsError
 
 REGENERATE_WARNING = (
@@ -142,25 +143,50 @@ def template_ok(m: Manager) -> bool:
         return False
 
 
-def create_installer(m: Manager, team: Any, label: Any = None) -> dict[str, Any]:
+def _mac_template(m: Manager) -> Path:
+    return mac_template_path(m.paths.root)
+
+
+def _file_ok(t: Path) -> bool:
+    try:
+        return t.is_file() and t.stat().st_size > 0
+    except OSError:
+        return False
+
+
+def create_installer(m: Manager, team: Any, label: Any = None,
+                     target: Any = "windows") -> dict[str, Any]:
     """Copy the template + payload. Runs on pywebview's per-call worker thread, so the
     UI thread is never blocked; builds are serialised (one at a time)."""
     t = clean_team(team, allow_empty=False)
     lbl = clean_label(label)
-    if not template_ok(m):
-        raise TemplateMissingError(m.cfg.template)
+    if target is None:
+        target = "windows"
+    if target not in ("windows", "mac"):
+        raise ApiError("target must be 'windows' or 'mac'", "invalid_args")
+    mac = target == "mac"
+
+    def current() -> Path:
+        return _mac_template(m) if mac else m.cfg.template
+
+    def present() -> bool:
+        return _file_ok(current()) if mac else template_ok(m)
+
+    if not present():
+        raise TemplateMissingError(current(), target)
     with m.installer_lock:
-        packager = Packager(m.cfg.template, m.enrollment, m.cert, m.paths.installers,
+        packager = Packager(current(), m.enrollment, m.cert, m.paths.installers,
                             m.endpoint, m.manager_id)
         try:
-            built = packager.build_for_team(t, lbl)
+            built = (packager.build_for_team(t, lbl, "mac") if mac
+                     else packager.build_for_team(t, lbl))
         except PackagerError as e:
-            if not template_ok(m):  # removed/emptied between the check and the build
-                raise TemplateMissingError(m.cfg.template) from e
+            if not present():  # removed/emptied between the check and the build
+                raise TemplateMissingError(current(), target) from e
             raise ApiError(str(e)) from e
     m.notify_change()
     return {"path": str(built.path), "file_name": built.file_name, "team": built.team,
-            "bytes": built.bytes, "package_id": built.package_id}
+            "bytes": built.bytes, "package_id": built.package_id, "target": target}
 
 
 def reveal_in_explorer(m: Manager, path: Any) -> dict[str, Any]:

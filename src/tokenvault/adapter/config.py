@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from tokenvault.common import dpapi
+from tokenvault.common import dpapi, secret_store
 from tokenvault.common.config_payload import PayloadConfig
 
 log = logging.getLogger("tokenvault.adapter.config")
@@ -93,8 +93,15 @@ def load_config(path: Path) -> AdapterConfig | None:
 
 
 def write_secret(path: Path, value: str) -> None:
-    """Store ``value`` DPAPI-protected (current user). Never logs the value."""
-    atomic_write(path, dpapi.protect(value.encode("utf-8")))
+    """Store ``value`` DPAPI-protected (current user) or, on macOS, in the Keychain
+    (the file then holds only a pointer). Never logs the value."""
+    store = secret_store.active_store()
+    if store is None:
+        atomic_write(path, dpapi.protect(value.encode("utf-8")))
+        return
+    account = secret_store.account_for(path)
+    store.set(account, value.encode("utf-8"))  # raises (fail closed) before any file exists
+    atomic_write(path, secret_store.MARKER + account.encode("ascii"))
 
 
 def read_secret(path: Path) -> str | None:
@@ -107,8 +114,17 @@ def read_secret(path: Path) -> str | None:
         log.warning("cannot read %s: %s", path.name, e)
         return None
     try:
-        value = dpapi.unprotect(blob).decode("utf-8")
-    except (ValueError, UnicodeDecodeError) as e:
+        account = secret_store.marker_account(blob)
+        if account is not None:
+            store = secret_store.active_store()
+            raw = store.get(account) if store is not None else None
+            if raw is None:
+                log.warning("%s: Keychain item is missing", path.name)
+                return None
+            value = raw.decode("utf-8")
+        else:
+            value = dpapi.unprotect(blob).decode("utf-8")
+    except (ValueError, UnicodeDecodeError, OSError) as e:
         log.warning("%s is unusable: %s", path.name, e)
         return None
     return value or None
@@ -151,5 +167,16 @@ def read_enroll_secret(path: Path, cfg: AdapterConfig) -> str | None:
 
 
 def delete_file(path: Path) -> None:
+    store = secret_store.active_store()
+    if store is not None:
+        try:
+            with open(path, "rb") as fh:
+                account = secret_store.marker_account(fh.read(256))
+            if account is not None:
+                store.delete(account)
+        except FileNotFoundError:
+            pass
+        except (OSError, ValueError):
+            log.warning("could not remove the Keychain item for %s", path.name)
     with contextlib.suppress(FileNotFoundError):
         path.unlink()

@@ -43,7 +43,7 @@ from tokenvault.adapter.identity import Identity, default_identity, read_identit
 from tokenvault.adapter.paths import DataFiles
 from tokenvault.adapter.strings import t
 from tokenvault.adapter.watcher import set_background_priority
-from tokenvault.common import dpapi
+from tokenvault.common import dpapi, secret_store
 from tokenvault.common.config_payload import read_payload
 
 log = logging.getLogger("tokenvault.adapter.main")
@@ -119,6 +119,7 @@ def _start_file_logging(files: DataFiles) -> None:
     _stop_file_logging()
     try:
         files.root.mkdir(parents=True, exist_ok=True)
+        files.log.parent.mkdir(parents=True, exist_ok=True)
         h = logging.handlers.RotatingFileHandler(
             files.log, maxBytes=LOG_BYTES, backupCount=LOG_BACKUPS, encoding="utf-8", delay=True
         )
@@ -186,10 +187,13 @@ def agent_command(args: argparse.Namespace) -> list[str]:
 
 def launch_detached(cmd: list[str]) -> None:
     flags = 0
+    extra: dict[str, Any] = {}
     if sys.platform == "win32":
         flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        extra["start_new_session"] = True  # survive the installer / Terminal closing
     subprocess.Popen(  # argv list -> list2cmdline quoting
-        cmd, creationflags=flags, close_fds=True, stdin=subprocess.DEVNULL,
+        cmd, creationflags=flags, close_fds=True, **extra, stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
     )
 
@@ -228,7 +232,7 @@ def cmd_setup(args: argparse.Namespace) -> int:
         _err(t("setup.declined"))
         return EXIT_DECLINED
     try:
-        dpapi.protect(b"probe")  # fail before touching anything (or the old agent)
+        secret_store.probe()  # fail before touching anything (or the old agent)
     except dpapi.DpapiError as e:
         _err(t("setup.dpapi", reason=e))
         return EXIT_DPAPI
