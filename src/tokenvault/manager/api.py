@@ -24,6 +24,7 @@ from collections.abc import Callable
 from typing import Any, Protocol, TypeVar, cast
 
 from tokenvault.manager import api_manage as mg
+from tokenvault.manager import api_reports as rp
 from tokenvault.manager.api_models import (
     ApiError,
     jsonable,
@@ -44,6 +45,7 @@ EXPOSED = (
     "devices", "set_device_team", "revoke_device", "packages", "revoke_package",
     "create_installer", "reveal_in_explorer", "settings", "save_settings", "diagnostics",
     "connectivity_test", "regenerate_certificate",
+    "report_options", "export_report", "report_progress", "open_path",
     "window_min", "window_close", "window_ready",
     "window_toggle_maximize", "window_maximize", "window_restore", "window_set_fullscreen",
     "window_toggle_fullscreen", "window_state", "window_get_bounds", "window_set_bounds",
@@ -91,6 +93,7 @@ class Api:
     def __init__(self, manager: Manager, window: WindowControl | None = None) -> None:
         self._m = manager
         self._window = window
+        self._reports = rp.ReportState()
         self._headless = WindowGeometry(VirtualNative())  # dev server / no window yet
 
     def _set_window(self, window: WindowControl | None) -> None:
@@ -190,6 +193,23 @@ class Api:
     @_api
     def regenerate_certificate(self) -> Any:
         return mg.regenerate_certificate(self._m)
+
+    # ----------------------------------------------------------- reports
+    @_api
+    def report_options(self) -> Any:
+        return rp.report_options(self._m)
+
+    @_api
+    def export_report(self, spec: Any) -> Any:
+        return rp.export_report(self._m, self._reports, spec)
+
+    @_api
+    def report_progress(self) -> Any:
+        return rp.report_progress(self._reports)
+
+    @_api
+    def open_path(self, path: Any, reveal: Any = False) -> Any:
+        return rp.open_path(self._m, self._reports, path, reveal)
 
     # ------------------------------------------------------------ window
     @_api

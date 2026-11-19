@@ -112,3 +112,9 @@
 .tv-employees .tv-costnote {
   margin-top: 14px;
 }
+
+.tv-employees-export {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}

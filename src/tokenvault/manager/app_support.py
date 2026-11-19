@@ -46,6 +46,28 @@ def reveal_explorer(path: Path) -> None:
     subprocess.Popen(["explorer", f"/select,{path}"])  # noqa: S603,S607 - fixed program
 
 
+def open_file(path: Path) -> None:
+    """Open a file with its default program (the report in the PDF viewer)."""
+    if sys.platform == "win32":
+        os.startfile(path)  # noqa: S606 - a vetted .pdf path
+
+
+def pick_save_path(name: str, folder: Path) -> Path | None:
+    """Native "save as" dialog (pywebview) for a PDF; None = cancelled."""
+    import webview
+
+    if not webview.windows:
+        return None
+    folder.mkdir(parents=True, exist_ok=True)
+    save_mode = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
+    res = webview.windows[0].create_file_dialog(
+        save_mode, directory=str(folder), save_filename=name,
+        file_types=("PDF (*.pdf)",))
+    if not res:
+        return None
+    return Path(res if isinstance(res, str) else res[0])
+
+
 def install_crash_hooks() -> None:
     """Uncaught exceptions go to manager.log with a traceback (the windowed exe has no
     console); a fatal main-thread error also shows a short native message box."""
