@@ -15,6 +15,7 @@ dependencies = [
     "watchdog",
     "pystray",
     "Pillow",
+    "reportlab",
 ]
 
 [project.optional-dependencies]
@@ -25,6 +26,8 @@ dev = [
     "mypy",
     "pyinstaller",
     "playwright",
+    "pypdf",
+    "pypdfium2",
 ]
 
 [project.scripts]
