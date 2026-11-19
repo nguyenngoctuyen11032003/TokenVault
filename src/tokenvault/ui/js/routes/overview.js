@@ -40,6 +40,8 @@ import {
   shortTime,
 } from '../components/homekit.js';
 
+import { createReportButton } from '../components/report-dialog.js';
+
 const FILTER_SHARE_MS = 1500; // a filter change may reuse an answer this young
 const TOTALS = ['tokens', 'input', 'output', 'cache_read', 'cache_write', 'sessions', 'events', 'cost'];
 
@@ -52,6 +54,15 @@ export default async function render(container, ctx) {
   ]);
   if (ctx.signal.aborted) return;
   const bar = await createFilterBar(ctx);
+  const exportBtn = await createReportButton({
+    api: ctx.api,
+    signal: ctx.signal,
+    attrs: { 'data-report-open': 'all', slot: 'actions' },
+    preset: () => {
+      const f = ctx.filters.get();
+      return { scope: f.team ? 'team' : 'all', team: f.team ?? undefined, range: f.range };
+    },
+  });
   if (ctx.signal.aborted) return;
   const charts = loadECharts().catch((err) => {
     console.error('[overview] charts unavailable', err);
@@ -173,7 +184,7 @@ export default async function render(container, ctx) {
     h(
       'tv-panel',
       { heading: t('title'), class: 'tv-ov-head' },
-      bar.clear, bar.el,
+      exportBtn, bar.clear, bar.el,
       totalsStrip,
       h('div', { class: 'tv-ov-costrow' }, h('p', { class: 'tv-costnote', 'data-cost-note': '' }, t('costNote')), costInfo),
     ),

@@ -1,0 +1,57 @@
+{
+  "report": {
+    "button": "Xuất PDF",
+    "buttonSelected": "Xuất đã chọn ({n})",
+    "buttonSelectedHidden": "Xuất đã chọn ({n}, {hidden} đang ẩn)",
+    "buttonOne": "Xuất báo cáo PDF",
+    "title": "Xuất báo cáo PDF",
+    "export": "Xuất báo cáo",
+    "cancel": "Hủy",
+    "close": "Đóng",
+    "scope": {
+      "legend": "Phạm vi",
+      "all": "Tất cả nhân viên",
+      "team": "Một nhóm",
+      "teamLabel": "Chọn nhóm",
+      "one": "Nhân viên này",
+      "selected": "Các nhân viên đã chọn ({n})"
+    },
+    "range": {
+      "legend": "Khoảng thời gian",
+      "today": "Hôm nay",
+      "7d": "7 ngày",
+      "30d": "30 ngày",
+      "custom": "Tùy chọn",
+      "start": "Từ ngày",
+      "end": "Đến ngày",
+      "fallback": "Khoảng thời gian đang chọn không có sẵn ở đây; đã dùng 30 ngày gần nhất."
+    },
+    "tooMany": "Tối đa {max} nhân viên mỗi báo cáo (đang chọn {n}). Hãy bỏ bớt hoặc xuất theo nhóm.",
+    "perEmployee": "Thêm trang chi tiết cho từng nhân viên",
+    "dest": {
+      "legend": "Nơi lưu",
+      "default": "Thư mục mặc định",
+      "choose": "Chọn nơi lưu…"
+    },
+    "progress": {
+      "label": "Tiến độ tạo báo cáo",
+      "start": "Đang tạo báo cáo…"
+    },
+    "done": "Đã tạo báo cáo.",
+    "doneMeta": "{pages} trang · {size} · {range}",
+    "openFile": "Mở file",
+    "openFolder": "Mở thư mục",
+    "err": {
+      "generic": "Không tạo được báo cáo: {detail}",
+      "invalid_args": "Yêu cầu không hợp lệ: {detail}",
+      "invalid_report_spec": "Lựa chọn chưa hợp lệ: {detail}",
+      "empty_scope": "Không tìm thấy nhân viên hoặc nhóm đã chọn.",
+      "font_missing": "Thiếu phông chữ để tạo PDF tiếng Việt: {detail}",
+      "report_failed": "Không tạo được báo cáo: {detail}",
+      "write_failed": "Không ghi được file: {detail}",
+      "busy": "Đang có một báo cáo khác được tạo, vui lòng chờ.",
+      "not_found": "Không tìm thấy file.",
+      "cancelled": "Đã hủy."
+    }
+  }
+}

@@ -86,6 +86,9 @@ class ManagerConfig:
     presence_interval: float = 10.0
     hosts_provider: Callable[[], list[str]] = netinfo.default_hosts
     reveal: Callable[[Path], None] | None = None
+    open_file: Callable[[Path], None] | None = None  # open a report in the PDF viewer
+    pick_save_path: Callable[[str, Path], Path | None] | None = None  # save dialog
+    reports_dir: Path | None = None  # None = Documents/TokenVault Reports
     autostart: Callable[[bool], None] | None = None
     version: str = field(default_factory=app_version)
 
