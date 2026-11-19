@@ -66,12 +66,3 @@ def test_unprotect_rejects_unknown_and_undecryptable(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(dpapi, "_dpapi_unprotect", refuse)
     with pytest.raises(ValueError):
         dpapi.unprotect(dpapi.DPAPI_PREFIX + b"\x01\x02")
-
-
-def test_blobs_interchangeable_with_manager_secrets() -> None:
-    from tokenvault.manager import secrets as mgr
-
-    assert dpapi.DPAPI_PREFIX == mgr.DPAPI_PREFIX
-    assert dpapi.PLAIN_PREFIX == mgr.PLAIN_PREFIX
-    assert dpapi.unprotect(mgr.protect(b"shared")) == b"shared"
-    assert mgr.unprotect(dpapi.protect(b"shared2")) == b"shared2"

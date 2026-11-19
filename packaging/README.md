@@ -48,6 +48,10 @@ Software Foundation), vendored wheels, TokenVault's Python source and `.cmd`/`.p
   Remove: `Uninstall.cmd`.
 * Manager: extract `TokenVault-Manager-portable.zip`; `Start-Manager.cmd` runs it in place,
   `Install-Manager.ps1` adds Start-menu/Desktop shortcuts and one elevated firewall step.
+* Shipped Manager: `packaginguild.ps1` copies `templates\portable-runtime` to `<install dir>\portable-runtime` (that is where
+  the Manager looks; the installer ships it with the exe). Without it the windows-portable target is unavailable;
+  `--selftest` prints a `portable_runtime` step and Diagnostics reports `portable_runtime.present`. A portable
+  Manager ZIP also carries the adapter scripts under `scripts/` (copied by `Install-Manager.ps1`).
 * Check the runtime: `runtime\python.exe -m tokenvault.adapter --selftest` (or
   `-m tokenvault.manager --selftest`) prints a `runtime:` line with the signature status.
 * Hand the ZIP out via a network share, USB stick or chat file transfer (no Mark-of-the-Web, so no

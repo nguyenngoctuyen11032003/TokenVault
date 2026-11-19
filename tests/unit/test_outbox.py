@@ -185,3 +185,54 @@ def test_session_titles_persist(tmp_path: Path):
         ob.set_session_title("s-2", "Other")
     with Outbox(db) as ob:
         assert ob.session_titles() == {"s-1": "Tiêu đề", "s-2": "Other"}
+
+
+def test_poison_rows_never_block_the_head(tmp_path: Path) -> None:
+    path = tmp_path / "o.db"
+    ob = Outbox(path)
+    raw = sqlite3.connect(str(path), isolation_level=None)
+    for i in range(250):
+        raw.execute(
+            "INSERT INTO events (message_id, session_id, payload, delivered, enqueued_at, "
+            "revision) VALUES (?, 's', 'not json', 0, ?, 0)", (f"bad{i}", 1.0 + i))
+    raw.close()
+    ob.enqueue([_event("g1"), _event("g2")])
+    got = ob.pending(100)
+    assert [p.message_id for p in got] == ["g1", "g2"]
+    assert ob.stats().waiting == 2  # poison rows are out of the queue for good
+    assert [p.message_id for p in ob.pending(100)] == ["g1", "g2"]
+    ob.close()
+
+
+def test_lenient_decode_defaults_missing_fields(tmp_path: Path) -> None:
+    import json
+
+    from tokenvault.common.protocol import event_to_dict
+
+    ob = Outbox(tmp_path / "o.db")
+    ob.enqueue([_event("m1")])
+    d = event_to_dict(_event("m1"))
+    del d["reasoning_effort"], d["device_id"]
+    d["future_field"] = 1
+    ob._db.execute("UPDATE events SET payload=?", (json.dumps(d),))
+    (p,) = ob.pending(10)
+    assert p.event.reasoning_effort is None and p.event.device_id == ""
+    ob.close()
+
+
+def test_prune_deletes_old_delivered_and_keeps_counts(tmp_path: Path) -> None:
+    import time
+
+    ob = Outbox(tmp_path / "o.db")
+    ob.enqueue([_event("old"), _event("new"), _event("wait")])
+    ob.ack([(p.message_id, p.revision) for p in ob.pending(2)])
+    ob.set_offset("src", SourceOffset("f", 5, "h", 5))
+    ob._db.execute("UPDATE events SET enqueued_at=? WHERE message_id='old'",
+                   (time.time() - 40 * 86400,))
+    assert ob.prune() == 1
+    assert ob.stats() == OutboxStats(queued=2, delivered=1, waiting=1)
+    assert ob.get_offset("src") is not None
+    ob.close()
+    ob2 = Outbox(tmp_path / "o.db")
+    assert ob2.stats() == OutboxStats(queued=2, delivered=1, waiting=1)
+    ob2.close()

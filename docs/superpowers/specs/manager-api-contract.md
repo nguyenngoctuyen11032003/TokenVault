@@ -22,12 +22,13 @@ which is `"device:<id>"` for devices without a Claude account), `start`/`end` ar
 ## Management methods (Tasks 12/17)
 - `devices() -> [{device_id, email, display_name, windows_user, hostname, team, online, last_seen, package_id}]`
 - `set_device_team(device_id, team) -> {ok}` · `revoke_device(device_id) -> {ok}` (closes live session)
+- `reset_device(device_id) -> {ok}` (owner action: drops the device's key and closes its live session so the real machine may enroll ONE more time; a device that already holds a key can never be re-enrolled otherwise; `not_found` if unknown or revoked)
 - `packages() -> [{package_id, team, label, created_at, revoked, devices}]` · `revoke_package(package_id) -> {ok}`
 - `create_installer(team, label|null) -> {path, file_name, team, bytes}` (raises if template missing)
 - `reveal_in_explorer(path) -> {ok}`
 - `settings() -> {transparent_window: bool, start_with_windows: bool, port: int, manager_id: str, hosts: [str] (RAW configured list; empty = automatic), hosts_auto: [str] (detected), installer_hosts: [str] (what goes into new installers), window_shape: str, fingerprint: str, static_ip_hint: str, tz_offset_minutes: int, version: str}`
 - `save_settings(patch) -> settings` (allowed keys: transparent_window, start_with_windows, hosts, window_shape)
-- `diagnostics() -> {port, port_requested, fingerprint, connected: [device_id], connected_count, last_event_at|null, rejected_count, firewall_rule_present: bool, cert_expires_at, db_path, queue: {events, devices}, warnings: [str]}`
+- `diagnostics() -> {port, port_requested, fingerprint, connected: [device_id], connected_count, last_event_at|null, rejected_count, firewall_rule_present: bool, cert_expires_at, db_path, queue: {events, devices}, warnings: [str], portable_runtime: {present: bool, path: str}}`
 - `connectivity_test() -> {ok, checks: [{name, ok, detail}]}` (bind, firewall rule, LAN IPs, certificate)
 - `regenerate_certificate() -> {fingerprint, warning}` (explicit; invalidates all installed adapters)
 

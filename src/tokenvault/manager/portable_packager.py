@@ -61,16 +61,42 @@ MANAGER_ONLY_APP = ("tokenvault/manager", "tokenvault/ui")
 WINDOWS_PORTABLE = "windows-portable"
 
 
+def _exe_dir() -> Path:
+    return Path(sys.executable).resolve().parent
+
+
+def _embedded_package_root() -> Path | None:
+    """Running from the embeddable runtime (``<root>/runtime/app/tokenvault/manager``):
+    the folder that holds ``runtime/`` (and ``scripts/``), else None."""
+    rt = Path(__file__).resolve().parents[3]
+    if rt.name.lower() == "runtime" and (rt / "python.exe").is_file():
+        return rt.parent
+    return None
+
+
 def default_scripts_dir() -> Path:
+    """Where the adapter package scripts live when the runtime folder has no ``scripts/``:
+    next to the shipped exe, inside the portable Manager install, or in a source checkout."""
+    if getattr(sys, "frozen", False):
+        return _exe_dir() / "portable-runtime" / "scripts"
+    root = _embedded_package_root()
+    if root is not None:
+        return root / "scripts"
     return Path(__file__).resolve().parents[3] / "packaging" / "portable"
 
 
 def default_runtime_dir() -> Path:
+    """The prepared runtime folder (``runtime/`` + ``scripts/``), for all three layouts:
+    shipped Manager (``<exe dir>/portable-runtime``), portable Manager install/ZIP (the
+    folder holding ``runtime/``), source checkout (``templates/portable-runtime``)."""
     env = os.environ.get("TOKENVAULT_PORTABLE_RUNTIME")
     if env:
         return Path(env)
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent / "portable-runtime"
+        return _exe_dir() / "portable-runtime"
+    root = _embedded_package_root()
+    if root is not None:
+        return root
     return Path(__file__).resolve().parents[3] / "templates" / "portable-runtime"
 
 
@@ -211,12 +237,17 @@ class PortablePackager:
 
 
 def _write_zip(dst: Path, runtime: Path, scripts: Path, script_names: Sequence[str], *,
-               adapter_only: bool, extra: dict[str, Path] | None = None) -> None:
+               adapter_only: bool, extra: dict[str, Path] | None = None,
+               nested_scripts: Sequence[str] = ()) -> None:
     with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
         for name in script_names:
             src = scripts / name
             if src.is_file():
                 z.write(src, name)
+        for name in nested_scripts:  # kept under scripts/ so the installed Manager can build
+            src = scripts / name  # adapter packages (see default_runtime_dir)
+            if src.is_file():
+                z.write(src, "scripts/" + name)
         for name, src in (extra or {}).items():
             z.write(src, name)
         for p, rel in _iter_runtime(runtime, adapter_only=adapter_only):
@@ -230,14 +261,15 @@ def build_manager_zip(runtime_dir: Path, out_zip: Path, scripts_dir: Path | None
         raise PackagerError(f"The portable runtime is missing under {runtime_dir}")
     sd = Path(scripts_dir) if scripts_dir else (
         runtime_dir / "scripts" if (runtime_dir / "scripts").is_dir() else default_scripts_dir())
-    missing = [n for n in MANAGER_SCRIPTS if not (sd / n).is_file()]
+    missing = [n for n in (*MANAGER_SCRIPTS, *ADAPTER_SCRIPTS) if not (sd / n).is_file()]
     if missing:
         raise PackagerError(f"Manager package scripts are missing: {', '.join(missing)}")
     out_zip = Path(out_zip)
     out_zip.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_zip.with_name(out_zip.name + ".partial")
     try:
-        _write_zip(tmp, runtime_dir / "runtime", sd, MANAGER_SCRIPTS, adapter_only=False)
+        _write_zip(tmp, runtime_dir / "runtime", sd, MANAGER_SCRIPTS, adapter_only=False,
+                   nested_scripts=ADAPTER_SCRIPTS)
         os.replace(tmp, out_zip)
     finally:
         with contextlib.suppress(OSError):

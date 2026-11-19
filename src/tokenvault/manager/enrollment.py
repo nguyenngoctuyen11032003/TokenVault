@@ -7,10 +7,11 @@
   (:func:`Enrollment.package_secret`); it is deleted when the package is revoked.
 * A *device* enrolls once with a package secret and receives a random device
   key; only the key's SHA-256 is stored and it is compared with
-  ``hmac.compare_digest``. Re-enrolling with a valid secret of the SAME package
-  issues a NEW key and invalidates the old one; a secret of a DIFFERENT package
-  is refused (a device never moves between packages/teams by itself; the
-  refusal looks exactly like a bad secret). The device's team is the package's.
+  ``hmac.compare_digest``. A device that already holds a key can NOT enroll again
+  (anyone with the package secret could otherwise hijack it by claiming its id):
+  the owner must :meth:`Enrollment.reset_device` it first, which drops the key and
+  lets the real machine enroll once more. A secret of a DIFFERENT package is always
+  refused. The device's team is the package's.
 * Revoking a device blocks its key and any re-enrollment of the same
   ``device_id`` (the installer still holds the secret);
   :meth:`Enrollment.delete_device` forgets it so it may enroll again.
@@ -33,7 +34,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from tokenvault.manager import secrets as tv_secrets
+from tokenvault.common import dpapi as tv_secrets
 
 log = logging.getLogger(__name__)
 
@@ -176,12 +177,17 @@ class Enrollment:
 
     # -------------------------------------------------------------- devices
     def register_device(self, secret: str, device_id: str, team: str) -> str | None:
-        """Enroll ``device_id`` with a package secret; return a new device key or None.
+        """Enroll ``device_id`` with a package secret; return a new device key or None."""
+        return self.try_register(secret, device_id, team)[0]
+
+    def try_register(self, secret: str, device_id: str, team: str) -> tuple[str | None, str]:
+        """Like :meth:`register_device` but also says why it was refused:
+        ``ok``, ``refused`` (bad secret / revoked / other package) or ``already_enrolled``.
 
         ``team`` is what the adapter claims; the package's team is used instead.
         """
         if not secret or not device_id or not _text_ok(secret, device_id):
-            return None
+            return None, "refused"
         key = secrets.token_urlsafe(32)
         with self._tx() as db:
             pkg = db.execute(
@@ -190,12 +196,13 @@ class Enrollment:
                 (_h(secret),),
             ).fetchone()
             if pkg is None:
-                return None
+                return None, "refused"
             dev = db.execute(
-                "SELECT revoked_at, package_id FROM devices WHERE device_id = ?", (device_id,)
+                "SELECT revoked_at, package_id, key_hash FROM devices WHERE device_id = ?",
+                (device_id,),
             ).fetchone()
             if dev is not None and dev[0] is not None:
-                return None
+                return None, "refused"
             if dev is not None and dev[1] != pkg[0]:
                 log.warning(
                     "device %r tried to re-enroll with package %s but belongs to package %s; "
@@ -204,7 +211,14 @@ class Enrollment:
                     pkg[0],
                     dev[1],
                 )
-                return None
+                return None, "refused"
+            if dev is not None and dev[2]:
+                log.warning(
+                    "device %r tried to enroll again but already holds a key; refused "
+                    "(reset the device in the Manager if this is a legitimate reinstall)",
+                    device_id,
+                )
+                return None, "already_enrolled"
             db.execute(
                 "INSERT INTO devices (device_id, package_id, team, key_hash, enrolled_at) "
                 "VALUES (?, ?, ?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET "
@@ -214,7 +228,20 @@ class Enrollment:
             )
         if team != pkg[1]:
             log.info("device enrolled into team %r (it claimed %r)", pkg[1], team)
-        return key
+        return key, "ok"
+
+    def reset_device(self, device_id: str) -> bool:
+        """Drop the device's key so the real machine can enroll once more (owner action).
+        Does not undo a revocation. Returns False if the device is unknown."""
+        with self._tx() as db:
+            cur = db.execute(
+                "UPDATE devices SET key_hash = '' WHERE device_id = ? AND revoked_at IS NULL",
+                (device_id,),
+            )
+            n = cur.rowcount
+        if n:
+            log.warning("device %r was reset by the owner; it may enroll once more", device_id)
+        return n > 0
 
     def verify_device(self, device_id: str, device_key: str) -> bool:
         if not device_key or not _text_ok(device_id, device_key):

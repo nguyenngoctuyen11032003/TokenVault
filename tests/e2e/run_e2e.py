@@ -95,7 +95,11 @@ class Agent:
 
     @property
     def device_id(self) -> str:
-        return f"{HOST}:{self.emp.user}"
+        # the adapter picks host:user:<random> on first setup and keeps it in device.id
+        try:
+            return (self.data_dir / "device.id").read_text(encoding="utf-8").strip()
+        except OSError:
+            return f"{HOST}:{self.emp.user}"
 
     @property
     def key(self) -> str:
@@ -787,6 +791,8 @@ class Harness:
         # b) re-install on the revoked device (fresh data dir, same device id) -> refused
         re = Agent(lap.emp, self.run_id, tag="-reinstall")
         self.extra_agents.append(re)
+        re.data_dir.mkdir(parents=True, exist_ok=True)  # same machine: same device id
+        (re.data_dir / "device.id").write_text(lap.device_id, encoding="utf-8")
         r = re.setup(self.installers["Dev"])
         s.check(r.returncode == 0, f"re-install setup exit {r.returncode}")
         re.set_port(self.proxy_port)

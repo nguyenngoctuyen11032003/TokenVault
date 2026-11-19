@@ -122,6 +122,63 @@ def test_manager_zip_has_launcher_and_full_runtime(tmp_path: Path, runtime: Path
     assert "tokenvault-config.bin" not in names  # generic: no credential
 
 
+def test_manager_zip_carries_adapter_scripts_so_an_installed_manager_can_build(
+        tmp_path: Path, enr: Enrollment, runtime: Path) -> None:
+    out = pp.build_manager_zip(runtime, tmp_path / "m.zip", scripts_dir=SCRIPTS)
+    with zipfile.ZipFile(out) as z:
+        names = set(z.namelist())
+        assert {"scripts/" + n for n in pp.ADAPTER_SCRIPTS} <= names
+        z.extractall(tmp_path / "installed")
+    # layout of an extracted/installed portable Manager: <root>/runtime + <root>/scripts
+    root = tmp_path / "installed"
+    packager = pp.PortablePackager(root, enr, CertInfo(tmp_path / "c", tmp_path / "k", FP),
+                                   tmp_path / "out", lambda: (["192.168.1.5"], 47800), "mgr-1")
+    assert packager.scripts_dir == root / "scripts"
+    assert packager.build_for_team("Dev", None).path.is_file()
+
+
+def test_default_dirs_work_in_all_three_layouts(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("TOKENVAULT_PORTABLE_RUNTIME", raising=False)
+    # a) source checkout
+    assert pp.default_runtime_dir() == REPO / "templates" / "portable-runtime"
+    assert pp.default_scripts_dir() == SCRIPTS
+    # b) shipped Manager exe: portable-runtime next to it
+    exe = tmp_path / "TokenVault-Manager.exe"
+    monkeypatch.setattr(pp.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(pp.sys, "executable", str(exe))
+    assert pp.default_runtime_dir() == tmp_path / "portable-runtime"
+    assert pp.default_scripts_dir() == tmp_path / "portable-runtime" / "scripts"
+    # c) portable Manager (running from <root>/runtime/app/tokenvault/manager)
+    monkeypatch.setattr(pp.sys, "frozen", False, raising=False)
+    monkeypatch.setattr(pp, "_embedded_package_root", lambda: tmp_path / "root")
+    assert pp.default_runtime_dir() == tmp_path / "root"
+    assert pp.default_scripts_dir() == tmp_path / "root" / "scripts"
+    monkeypatch.setenv("TOKENVAULT_PORTABLE_RUNTIME", str(tmp_path / "env"))
+    assert pp.default_runtime_dir() == tmp_path / "env"
+
+
+def test_diagnostics_reports_portable_runtime(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime: Path) -> None:
+    from tokenvault.manager.api_manage import _portable_runtime
+
+    monkeypatch.setenv("TOKENVAULT_PORTABLE_RUNTIME", str(runtime))
+    assert _portable_runtime() == {"present": True, "path": str(runtime)}
+    monkeypatch.setenv("TOKENVAULT_PORTABLE_RUNTIME", str(tmp_path / "none"))
+    assert _portable_runtime()["present"] is False
+
+
+def test_consent_runs_before_old_install_is_touched() -> None:
+    ps = (SCRIPTS / "install.ps1").read_text()
+    consent = ps.index("'consent'")
+    assert consent < ps.index("Stop-Process") < ps.index("Copy-Item")
+    assert ps.index("exit 3") < ps.index("Stop-Process")  # decline leaves the old agent alone
+    iss = (REPO / "packaging" / "adapter-template.iss").read_text()
+    prep = iss[iss.index("function PrepareToInstall"):]
+    assert prep.index("AskConsentFirst") < prep.index("StopAgent")
+    assert "'consent --from" in iss
+
+
 def test_scripts_are_ascii_and_reference_the_documented_commands() -> None:
     for f in SCRIPTS.iterdir():
         f.read_bytes().decode("ascii")  # PowerShell 5.1 reads BOM-less files as ANSI

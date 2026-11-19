@@ -64,6 +64,7 @@ from tokenvault.common.dpapi import DpapiError
 from tokenvault.common.protocol import PROTOCOL_VERSION, Hello
 
 log = logging.getLogger("tokenvault.adapter.app")
+PRUNE_INTERVAL_S = 6 * 3600
 
 
 class IndicatorUnavailable(RuntimeError):
@@ -95,7 +96,7 @@ class AdapterApp:
         self.files = files
         self.config: AdapterConfig = cfg
         self.projects_dir = Path(projects_dir)
-        self.identity = identity if identity is not None else default_identity()
+        self.identity = identity if identity is not None else default_identity(files.root)
         self.state = "offline"
         self._tray_enabled = tray
         self._resolver = resolver
@@ -117,6 +118,8 @@ class AdapterApp:
         self._used_key = False  # did the last Hello carry the device key?
         self._halted = False  # "not_configured": no usable credential
         self._state_writer = Throttle(self._write_state)
+        self._prune_stop = threading.Event()
+        self._prune_thread: threading.Thread | None = None
 
     # ----------------------------------------------------------- credentials
     def hello_factory(self) -> Hello:
@@ -170,6 +173,9 @@ class AdapterApp:
                 log.warning("device key rejected (%s); will re-enroll with the installer's "
                             "secret", reason)
                 delete_file(self.files.device_key)
+        if state == "rejected" and "already enrolled" in reason:
+            log.error("the Manager refuses to enroll this device again: %s",
+                      t("status.reset_needed"))
         self._state_writer()
         if self._tray is not None:
             self._tray.refresh()
@@ -254,13 +260,28 @@ class AdapterApp:
             self._transport.start()
             self._watcher.start()
             self._watcher.backfill(max_age_days=self._backfill_days)
+            self._prune_thread = threading.Thread(
+                target=self._prune_loop, args=(ob,), name="outbox-prune", daemon=True)
+            self._prune_thread.start()
         log.info("adapter started (device %s, team %r)", self.identity.device_id, cfg.team)
+
+    def _prune_loop(self, ob: Outbox) -> None:
+        """Drop delivered rows older than 30 days at start and every 6 hours."""
+        while not self._prune_stop.is_set():
+            try:
+                ob.prune()
+            except Exception:  # noqa: BLE001 - housekeeping must never kill the agent
+                log.exception("outbox prune failed")
+            self._prune_stop.wait(PRUNE_INTERVAL_S)
 
     def stop(self) -> None:
         """Clean shutdown: reload listener, watcher, transport, tray, timers, outbox."""
         with self._life_lock:
             if self._stopped.is_set():
                 return
+            self._prune_stop.set()
+            if self._prune_thread is not None:
+                self._prune_thread.join(timeout=5)
             if self._reload is not None:
                 self._reload.stop()
             if self._watcher is not None:

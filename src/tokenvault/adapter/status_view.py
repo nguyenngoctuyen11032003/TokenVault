@@ -154,7 +154,13 @@ def format_text(d: dict[str, Any]) -> str:
     labels = [t(k) for k, _ in rows]
     width = max(len(s) for s in labels) + 1
     lines = [f"{lbl:<{width}} {val}" for lbl, (_, val) in zip(labels, rows, strict=True)]
-    return "\n".join([*lines, "", t("status.hint")])
+    extra = [t("status.reset_needed"), ""] if _needs_reset(d) else []
+    return "\n".join([*lines, "", *extra, t("status.hint")])
+
+
+def _needs_reset(d: dict[str, Any]) -> bool:
+    """The Manager refused to re-enroll this device (it already holds a key there)."""
+    return d.get("connection") == "rejected" and "already enrolled" in str(d.get("last_error"))
 
 
 _STATE_KEYS = {f"state.{s}" for s in (

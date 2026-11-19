@@ -2,7 +2,8 @@
 // host + Windows user, team <select> (reassign; "new team..." asks via the page), last seen,
 // revoke button. Keyed in-place updates so live refreshes keep focus and open selects.
 //   const table = createDeviceTable({ t, onTeam: (device, team|NEW_TEAM) => Promise,
-//                                     onRevoke: (device) => Promise });
+//                                     onRevoke: (device) => Promise,
+//                                     onReset: (device) => Promise });
 //   table.update(devices, teamNames);
 // `t` is scoped to settings.* keys. Untrusted values only reach textContent / attributes.
 
@@ -10,7 +11,7 @@ import { clipText, deviceName, fmtWhen, h } from './installer-kit.js';
 
 export const NEW_TEAM = '__new__';
 
-export function createDeviceTable({ t, onTeam, onRevoke }) {
+export function createDeviceTable({ t, onTeam, onRevoke, onReset }) {
   const body = h('tbody');
   const table = h(
     'table',
@@ -44,13 +45,14 @@ export function createDeviceTable({ t, onTeam, onRevoke }) {
     const select = h('select', { class: 'tv-settings-select' });
     const seen = h('td', { class: 'tv-settings-seen' });
     const revoke = h('button', { type: 'button', class: 'tv-installer-linkbtn', dataset: { action: 'revoke-device' } }, t('revoke'));
+    const reset = h('button', { type: 'button', class: 'tv-installer-linkbtn', dataset: { action: 'reset-device' } }, t('reset'));
     const tr = h('tr', null,
       h('td', null, h('div', { class: 'tv-settings-who' }, dot, name, state)),
       h('td', null, host),
       h('td', { dataset: { col: 'team' } }, select),
       seen,
-      h('td', { class: 'tv-settings-rowaction' }, revoke));
-    const row = { tr, dot, name, state, host, select, seen, revoke, device };
+      h('td', { class: 'tv-settings-rowaction' }, reset, revoke));
+    const row = { tr, dot, name, state, host, select, seen, revoke, reset, device };
     select.addEventListener('change', async () => {
       const value = select.value;
       const prev = row.device.team ?? '';
@@ -64,6 +66,7 @@ export function createDeviceTable({ t, onTeam, onRevoke }) {
       }
     });
     revoke.addEventListener('click', () => onRevoke(row.device));
+    reset.addEventListener('click', () => onReset?.(row.device));
     return row;
   }
 
@@ -88,6 +91,8 @@ export function createDeviceTable({ t, onTeam, onRevoke }) {
     row.seen.textContent = device.online ? t('online') : fmtWhen(device.last_seen) || t('never');
     row.seen.classList.toggle('is-online', !!device.online);
     row.revoke.setAttribute('aria-label', t('revokeAria', { name: label }));
+    row.reset.setAttribute('aria-label', t('resetAria', { name: label }));
+    row.reset.hidden = !onReset;
   }
 
   function update(devices, teamNames) {

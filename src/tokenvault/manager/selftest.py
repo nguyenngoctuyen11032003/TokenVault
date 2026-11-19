@@ -162,6 +162,13 @@ def run(template: Path | None = None, *, require_template: bool = False) -> int:
             return len(sent[0])
 
         step("live_push", live)
+        def portable() -> str:
+            d = api.diagnostics()["portable_runtime"]
+            return ("present" if d["present"] else
+                    "MISSING (windows-portable installers unavailable; run "
+                    "build\\build-portable.ps1) ") + f"- {d['path']}"
+
+        step("portable_runtime", portable)  # informational: never fails the selftest
         real = template or template_path()
         exists = real.is_file() and real.stat().st_size > 0
         steps.append({"step": "real_template", "ok": exists or not require_template,

@@ -66,10 +66,11 @@ poll. `Watcher` now uses `Observer(timeout=0.1)`: median 1.58 s became 0.66 s, a
 from about 0.1% to about 0.2-0.3% of one core. Regression tests are in `tests/unit/test_watcher.py`.
 
 Findings that are not code bugs (owner decision):
-- **Pricing: every model the owner actually uses today (`claude-opus-5-5`, `claude-sonnet-5-5`,
-  `claude-haiku-5-5`, `claude-fable-5`, `claude-fable-5-1`) is missing from `data/pricing.json`.**
-  On the owner's real data, about 99.99% of tokens would show cost UNKNOWN or partial. Token
-  numbers are correct. Rates must be added by the owner; they were not guessed.
+- **Pricing (resolved 2026-11-19).** At the time of the run the models the owner uses today
+  (`claude-opus-5-5`, `claude-sonnet-5-5`, `claude-haiku-5-5`, `claude-fable-5`,
+  `claude-fable-5-1`) were missing from `data/pricing.json` and showed cost UNKNOWN. They are now
+  present, with rates verified on 2026-11-19 against the official pricing page (see
+  `_comment_sources` in the file). Models that are still unlisted show UNKNOWN, never a guess.
 - A session title written after the session's last response does not reach the Manager until the
   next response, because titles ride on events.
 - The adapter's `state.json` (used by `status`) is written at most every 5 s, so a failure reason

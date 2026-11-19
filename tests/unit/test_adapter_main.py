@@ -547,3 +547,11 @@ def test_consent_subcommand_exit_codes(
     plain.write_bytes(b"nothing")
     assert main.main(["consent", "--from", str(plain)]) == 2
     assert calls == {"autostart": [], "launch": []}  # consent alone changes nothing
+
+
+def test_setup_skips_launch_when_launchd_already_started_the_agent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, calls: dict[str, list[Any]]
+) -> None:
+    monkeypatch.setattr(autostart, "enable", lambda *a, **k: True)
+    assert run_setup(tmp_path / "data", fake_exe(tmp_path), "--silent", "--accept") == 0
+    assert calls["launch"] == []

@@ -536,3 +536,24 @@ def test_singleton_module_dispatches_on_darwin(
     assert singleton.reload_event_name(lock) == lock + "-reload"
     assert singleton._mac_lock_for(lock + "-reload") == lock
     assert singleton.is_running(str(tmp_path / "missing.lock")) is False
+
+
+def test_enable_reports_whether_launchd_started_the_agent(tmp_path: Path) -> None:
+    assert mac.LaunchAgent(tmp_path, uid=1, runner=Rec()).enable("/A/bin") is True
+    assert mac.LaunchAgent(tmp_path, uid=1, runner=Rec(rc=5), sleep=lambda s: None
+                           ).enable("/A/bin") is False
+
+
+def test_consent_dialog_has_no_timeout_but_keychain_runner_keeps_one(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[Any] = []
+
+    def fake_run(argv: Any, **kw: Any) -> subprocess.CompletedProcess[bytes]:
+        seen.append(kw["timeout"])
+        return subprocess.CompletedProcess(argv, 0, b"button returned:OK", b"")
+
+    monkeypatch.setattr(mac.subprocess, "run", fake_run)
+    assert mac.ask_consent("t", "T", "OK", "No") is True
+    assert seen == [None]
+    mac.run_command(["x"])
+    assert seen[-1] == mac.RUN_TIMEOUT_S

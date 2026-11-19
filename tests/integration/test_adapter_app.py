@@ -57,6 +57,10 @@ class RecordingEnrollment:
         self.secrets.append(secret)
         return self.inner.register_device(secret, device_id, team)
 
+    def try_register(self, secret: str, device_id: str, team: str) -> tuple[str | None, str]:
+        self.secrets.append(secret)
+        return self.inner.try_register(secret, device_id, team)
+
     def __getattr__(self, name: str) -> Any:
         return getattr(self.inner, name)
 

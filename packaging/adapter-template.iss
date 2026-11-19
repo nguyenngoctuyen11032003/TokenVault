@@ -46,6 +46,8 @@ WizardStyle=modern
 
 [Files]
 Source: "{#AdapterExe}"; DestDir: "{app}"; DestName: "{#ExeName}"; Flags: ignoreversion
+; Unpacked to {tmp} early so the consent screen can run before the old install is touched.
+Source: "{#AdapterExe}"; DestName: "{#ExeName}"; Flags: dontcopy
 
 [Code]
 const
@@ -112,10 +114,41 @@ begin
   end;
 end;
 
+var
+  ConsentGiven: Boolean;
+
+{ Show ONLY the consent screen (new adapter exe unpacked to {tmp}) BEFORE anything of an
+  existing install is touched. Declined / no UI: the old agent keeps running untouched. }
+function AskConsentFirst: String;
+var
+  Rc: Integer;
+begin
+  Result := '';
+  { Test runs (ADAPTERARGS with --silent) never show a window. }
+  if Pos('--silent', ExpandConstant('{param:ADAPTERARGS|}')) > 0 then Exit;
+  ExtractTemporaryFile(ExeImage);
+  if not Exec(ExpandConstant('{tmp}\' + ExeImage),
+              'consent --from "' + ExpandConstant('{srcexe}') + '"', '', SW_SHOWNORMAL,
+              ewWaitUntilTerminated, Rc) then
+    Rc := -1;
+  if Rc = 0 then
+    ConsentGiven := True
+  else if Rc = EXIT_DECLINED then
+    Result := 'Installation cancelled: you declined the consent screen. Nothing was changed ' +
+              'and nothing was sent.'
+  else if Rc = EXIT_NO_PAYLOAD then
+    Result := 'This file has no TokenVault configuration, so it cannot be set up. Ask your ' +
+              'manager for your team''s installer.'
+  else
+    Result := 'The consent screen could not be shown (code ' + IntToStr(Rc) +
+              '). Nothing was changed.';
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 begin
+  Result := AskConsentFirst;
+  if Result <> '' then Exit;
   StopAgent;   { files must be replaceable }
-  Result := '';
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -126,6 +159,7 @@ begin
   if CurStep <> ssPostInstall then Exit;
   Args := 'setup --from "' + ExpandConstant('{srcexe}') + '" ' +
           ExpandConstant('{param:ADAPTERARGS|}');
+  if ConsentGiven then Args := Args + ' --silent --accept';  { already consented above }
   { The adapter shows its own consent window, writes the config, registers autostart
     and (re)starts the agent. }
   if not Exec(ExpandConstant('{app}\{#ExeName}'), Args, '', SW_SHOWNORMAL,
