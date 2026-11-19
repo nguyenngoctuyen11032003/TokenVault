@@ -17,9 +17,14 @@
     "targetLabel": "Hệ điều hành của nhân viên",
     "target": {
       "windows": "Windows (tệp .exe)",
+      "windows-portable": "Windows – gói không cần exe (cho máy chặn file chưa ký)",
       "mac": "macOS (tệp .zip)"
     },
-    "targetHint": "Bộ cài macOS là tệp .zip chưa ký số; cần có sẵn bộ mẫu build trên máy Mac (build/build-mac.sh).",
+    "targetHint": {
+      "windows": "Dùng cho máy Windows bình thường. SmartScreen có thể cảnh báo: bấm “More info” → “Run anyway”. Nếu máy chặn hẳn tệp .exe chưa ký (Smart App Control / Application Control) thì chọn gói không cần exe.",
+      "windows-portable": "Gói .zip chạy bằng Python đã được ký số sẵn, không có tệp .exe chưa ký nên qua được máy chặn file chưa ký. Cần chạy build/build-portable.ps1 một lần trên máy Manager.",
+      "mac": "Bộ cài macOS là tệp .zip chưa ký số; cần có sẵn bộ mẫu build trên máy Mac (build/build-mac.sh)."
+    },
     "generate": "Tạo bộ cài",
     "generating": "Đang tạo bộ cài…",
     "busyNote": "Đang ghi địa chỉ Manager, cổng, chứng chỉ và mã đăng ký của nhóm vào bộ cài.",
@@ -98,6 +103,18 @@
     "cancel": "Huỷ",
     "revokeError": "Không thu hồi được bộ cài: {detail}",
     "alreadyRevoked": "Bộ cài này đã được thu hồi trước đó. Danh sách đã được cập nhật.",
-    "loadError": "Không tải được danh sách bộ cài: {detail}"
+    "loadError": "Không tải được danh sách bộ cài: {detail}",
+    "templateMissingPortable": "Chưa có thư mục runtime cho gói không cần exe. Hãy chạy build\\build-portable.ps1 trên máy Manager; script tạo thư mục templates\\portable-runtime (cạnh thư mục cài Manager hoặc thư mục mã nguồn), rồi thử lại.",
+    "instrPortable": {
+      "l1": "Hướng dẫn cài TokenVault, gói không cần exe (nhóm {team})",
+      "l2": "1. Lưu tệp {file} vào máy rồi giải nén toàn bộ ra một thư mục bình thường (ví dụ Downloads\\TokenVault).",
+      "l3": "2. Nhấp đúp Install.cmd. Không cần quyền quản trị và không cần bấm “Run anyway”: gói không chứa tệp .exe chưa ký, Install.cmd tự bỏ dấu “tải từ Internet” (Unblock-File).",
+      "l4": "3. Đọc màn hình đồng ý rồi bấm Đồng ý. TokenVault chỉ gửi số liệu sử dụng Claude Code: số token, model, tên thư mục dự án (không phải đường dẫn đầy đủ), tiêu đề phiên, tên công cụ đã dùng, email tài khoản Claude, tên máy và tên người dùng Windows.",
+      "l5": "4. TokenVault KHÔNG gửi: nội dung câu hỏi (prompt), câu trả lời của Claude, nội dung tệp, lệnh đã chạy hay đường dẫn đầy đủ.",
+      "l6": "5. Sau khi cài, biểu tượng TokenVault nằm ở khay hệ thống và tự chạy khi đăng nhập Windows. Bấm vào biểu tượng, chọn “Những gì được gửi?” để xem dữ liệu thực tế.",
+      "l7": "6. Muốn gỡ: chạy Uninstall.cmd trong thư mục đã giải nén (thêm -RemoveData nếu muốn xoá cả dữ liệu đã thu thập)."
+    },
+    "portableNote": "Gói này không có tệp .exe chưa ký, chỉ chạy Python đã ký số và mã nguồn TokenVault, nên dùng được trên máy chặn file chưa ký. Gửi qua chia sẻ mạng, USB hoặc chat để tránh dấu “tải từ Internet”.",
+    "macNote": "Bộ cài macOS chưa được ký số nên Gatekeeper sẽ cảnh báo. Đã có hướng dẫn chuột phải → Open trong phần hướng dẫn."
   }
 }

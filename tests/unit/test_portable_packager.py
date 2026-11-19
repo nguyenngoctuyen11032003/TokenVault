@@ -161,8 +161,23 @@ def test_api_target_windows_portable(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert Path(res["path"]).is_file()
         exe = api.create_installer("Dev", None)  # default target unchanged
         assert exe["file_name"].endswith(".exe")
-        with pytest.raises(Exception, match="Unknown installer target"):
+        with pytest.raises(Exception, match="target must be"):
             api.create_installer("Dev", None, "amiga")
+    finally:
+        m.stop()
+
+
+def test_api_portable_missing_runtime_has_template_missing_prefix(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from tokenvault.manager.api import Api
+
+    monkeypatch.setenv("TOKENVAULT_PORTABLE_RUNTIME", str(tmp_path / "nothing"))
+    m = Manager(make_cfg(tmp_path))
+    m.start()
+    try:
+        with pytest.raises(Exception, match=r"^\[template_missing\].*build.portable\.ps1"):
+            Api(m).create_installer("Dev", None, "windows-portable")
+        assert m.enrollment.list_packages() == []
     finally:
         m.stop()
 

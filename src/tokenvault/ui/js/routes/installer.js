@@ -7,6 +7,7 @@
 // Below: previously created packages with a confirmed "Revoke". Untrusted values -> textContent.
 
 import { confirmDialog } from '../components/installer-dialog.js';
+import { DEFAULT_TARGET, TARGETS, targetById } from '../components/installer-targets.js';
 import { describeError } from '../components/installer-errors.js';
 import {
   clipText,
@@ -37,7 +38,7 @@ export default async function render(container, ctx) {
   container.append(root);
   const bump = revCounter(root);
   let dialogOpen = false;
-  let last = { team: '', label: null, target: 'windows' };
+  let last = { team: '', label: null, target: DEFAULT_TARGET };
 
   // ---------- step indicator ----------
   const steps = [1, 2, 3].map((n) =>
@@ -65,17 +66,19 @@ export default async function render(container, ctx) {
     type: 'text', id: 'tv-installer-label', name: 'label', class: 'tv-installer-field__input',
     autocomplete: 'off', maxlength: '60', placeholder: t('labelPlaceholder'), 'aria-describedby': 'tv-installer-label-hint',
   });
-  // Target platform: Windows exe (default) or macOS zip.
-  const targetRadios = ['windows', 'mac'].map((value) => h('input', {
-    type: 'radio', name: 'target', value, id: `tv-installer-target-${value}`,
-    checked: value === 'windows', dataset: { target: value },
+  // Target platform: one radio per entry of TARGETS (see installer-targets.js).
+  const targetRadios = TARGETS.map(({ id }) => h('input', {
+    type: 'radio', name: 'target', value: id, id: `tv-installer-target-${id}`,
+    checked: id === DEFAULT_TARGET, dataset: { target: id },
   }));
   const targetField = h('fieldset', { class: 'tv-installer-field tv-installer-target' },
     h('legend', { class: 'tv-installer-field__label' }, t('targetLabel')),
-    ...['windows', 'mac'].map((value, i) => h('label', { class: 'tv-installer-target__opt', for: `tv-installer-target-${value}` },
-      targetRadios[i], h('span', null, t(`target.${value}`)))),
-    h('p', { class: 'tv-installer-field__hint' }, t('targetHint')));
-  const selectedTarget = () => (targetRadios[1].checked ? 'mac' : 'windows');
+    ...TARGETS.map(({ id }, i) => h('label', { class: 'tv-installer-target__opt', for: `tv-installer-target-${id}` },
+      targetRadios[i], h('span', null, t(`target.${id}`)))),
+    h('p', { class: 'tv-installer-field__hint', 'data-target-hint': '' }, t(targetById(DEFAULT_TARGET).hintKey)));
+  const targetHint = targetField.querySelector('[data-target-hint]');
+  const selectedTarget = () => TARGETS[Math.max(0, targetRadios.findIndex((r) => r.checked))].id;
+  targetField.addEventListener('change', () => { targetHint.textContent = t(targetById(selectedTarget()).hintKey); });
   const suggest = h('div', { class: 'tv-installer-suggest', role: 'group', 'aria-label': t('suggestLabel') });
   const generate = h('button', { type: 'submit', class: 'tv-btn tv-btn--primary tv-installer-generate', dataset: { action: 'generate' } }, t('generate'));
   const busyRow = h('div', { class: 'tv-installer-busy', role: 'status', hidden: true },
@@ -119,6 +122,7 @@ export default async function render(container, ctx) {
     size: h('dd'),
     lead: h('p', { class: 'tv-installer-result__lead' }),
     instructions: h('pre', { class: 'tv-installer-instructions', 'data-instructions': '', tabindex: '0' }),
+    note: h('p', { class: 'tv-installer-smartscreen', 'data-result-note': '' }),
     revealError: h('p', { class: 'tv-installer-field__error', role: 'alert', hidden: true }),
   };
   let resultPath = '';
@@ -142,7 +146,7 @@ export default async function render(container, ctx) {
       h('div', { class: 'tv-meta tv-installer-instrbox__head' },
         h('h3', { class: 'tv-installer-instrbox__title' }, t('instructionsTitle')),
         copyButton({ label: t('copyInstructions'), ...copyLabels, action: 'copy-instructions', getText: () => res.instructions.textContent, target: () => res.instructions })),
-      h('p', { class: 'tv-installer-smartscreen' }, t('smartscreenNote')),
+      res.note,
       res.instructions));
 
   const wizard = h('div', { class: 'tv-installer-wizard', dataset: { state: 'form' } }, formView, doneView);
@@ -195,19 +199,18 @@ export default async function render(container, ctx) {
   teamInput.addEventListener('input', clearTeamError);
 
   function instructionsText(team, file, target) {
-    const key = target === 'mac' ? 'instrMac' : 'instr';
+    const key = targetById(target).instrKey;
     return [1, 2, 3, 4, 5, 6, 7].map((n) => t(`${key}.l${n}`, { team, file })).join('\n');
   }
 
-  async function create(team, label, target = 'windows') {
+  async function create(team, label, target = DEFAULT_TARGET) {
     last = { team, label, target };
     errorSlot.replaceChildren();
     setState('busy');
+    const cfg = targetById(target);
     try {
-      // Windows keeps the original 2-argument call; macOS adds the target.
-      const result = target === 'mac'
-        ? await ctx.api.create_installer(team, label, 'mac')
-        : await ctx.api.create_installer(team, label);
+      // Windows exe keeps the original 2-argument call; other targets pass their API name.
+      const result = await ctx.api.create_installer(...(cfg.apiTarget ? [team, label, cfg.apiTarget] : [team, label]));
       if (ctx.signal.aborted) return;
       const file = String(result?.file_name ?? '');
       resultPath = String(result?.path ?? '');
@@ -218,6 +221,7 @@ export default async function render(container, ctx) {
       res.size.textContent = Number.isFinite(mb) && mb > 0 ? t('sizeMb', { mb: mb.toFixed(1) }) : '';
       res.lead.textContent = t('doneLead', { team: String(result?.team ?? team) });
       res.instructions.textContent = instructionsText(String(result?.team ?? team), file, target);
+      res.note.textContent = t(cfg.noteKey);
       res.revealError.hidden = true;
       setState('done');
       doneView.querySelector('.tv-installer-result__title').focus({ preventScroll: true });
@@ -227,7 +231,7 @@ export default async function render(container, ctx) {
       console.warn('[installer] create_installer failed', err);
       const { code, text } = describeError(
         err,
-        { template_missing: t(target === 'mac' ? 'templateMissingMac' : 'templateMissing'), invalid_team: t('err.server') },
+        { template_missing: t(cfg.missingKey), invalid_team: t('err.server') },
         (detail) => t('createError', { detail }),
       );
       setState('form');

@@ -32,9 +32,18 @@ Chi tiết: [docs/architecture.md](docs/architecture.md).
 
 | Cách | Dành cho | Trạng thái |
 |---|---|---|
-| **Windows - bộ cài .exe** (Inno Setup, cài theo người dùng, Adapter không cần quyền admin) | máy chỉ có SmartScreen: "More info" -> "Run anyway" | Đã có (Task 10, 18) |
-| **Windows - gói "no-exe"** (ZIP, Python embeddable có chữ ký của Python Software Foundation, `Install.cmd`) | máy chặn mọi exe chưa ký (Smart App Control / AppLocker) | **Đang triển khai (Task 25) - sẽ cập nhật sau khi hoàn thiện; chưa kiểm chứng** |
-| **macOS - ZIP** (`TokenVault-Adapter-<team>-mac.zip`, `Install.command`) | máy Mac của nhân viên; build trên Mac | **Đang triển khai (Task 24) - sẽ cập nhật sau khi hoàn thiện; cần kiểm chứng trên Mac thật** |
+| **Windows - bộ cài .exe** (Inno Setup, cài theo người dùng, Adapter không cần quyền admin) | máy chỉ có SmartScreen: "More info" -> "Run anyway" | Đã có và kiểm thử (Task 10, 18) |
+| **Windows - gói "no-exe"** (`TokenVault-Adapter-<team>-portable.zip`: Python embeddable do Python Software Foundation ký + mã nguồn TokenVault, `Install.cmd`/`Uninstall.cmd`; Manager: `Start-Manager.cmd`, `Install-Manager.ps1`) | máy chặn exe chưa ký (Smart App Control / Application Control) | Đã có (Task 25), đã chạy thật trên máy phát triển; **chưa thử trên máy đang bị chặn thật**. Cần chạy `build\build-portable.ps1` một lần |
+| **macOS - ZIP** (`TokenVault-Adapter-<team>-mac.zip`: `Install.command`, `Uninstall.command`; biểu tượng menu bar bắt buộc, khoá trong Keychain, tự chạy bằng LaunchAgent) | máy Mac của nhân viên; mẫu build trên Mac bằng `build/build-mac.sh` | Đã có mã (Task 24), kiểm thử bằng giả lập trên Windows; **chưa kiểm chứng trên Mac thật** ([danh sách](docs/e2e-checklist.md)) |
+
+### Gói nào cho máy nào?
+| Máy nhân viên | Chọn | Ghi chú |
+|---|---|---|
+| Windows bình thường, SmartScreen chỉ cảnh báo | **exe** | Bấm "More info" -> "Run anyway" |
+| Windows bị Application Control / Smart App Control chặn exe chưa ký (không có nút "Run anyway", hoặc exe không chạy) | **portable (no-exe)** | Không có exe chưa ký nào trong gói; không cần quyền admin |
+| macOS 11+ | **mac** | Chuột phải `Install.command` -> Open |
+
+Tránh Mark-of-the-Web: gửi file qua **thư mục chia sẻ mạng / USB / chat chuyển tệp**, không qua trình duyệt hay email. Chi tiết: [docs/packaging.md](docs/packaging.md).
 
 Manager hiện chỉ chạy trên Windows 10 21H2+/11 (cần WebView2).
 
@@ -42,7 +51,7 @@ Manager hiện chỉ chạy trên Windows 10 21H2+/11 (cần WebView2).
 
 1. Cài **TokenVault-Manager-Setup.exe** trên một máy Windows bật suốt giờ làm việc. Một lần UAC để mở cổng tường lửa (47800 TCP, 47801 UDP). SmartScreen cảnh báo: "More info" -> "Run anyway".
 2. Mở Manager. **Nên đặt IP tĩnh / giữ IP theo địa chỉ MAC** cho máy này (Cài đặt có gợi ý).
-3. Vào trang **Tạo bộ cài**, nhập tên nhóm (ví dụ `Dev`) -> được `TokenVault-Adapter-Dev.exe`.
+3. Vào trang **Tạo bộ cài**, nhập tên nhóm (ví dụ `Dev`), chọn hệ điều hành (Windows .exe / Windows không cần exe / macOS) -> được `TokenVault-Adapter-Dev.exe` (hoặc `-portable.zip`, `-mac.zip`).
 4. Gửi file cho nhân viên qua **thư mục chia sẻ mạng hoặc USB** (xem [packaging.md](docs/packaging.md) về SmartScreen) cùng [hướng dẫn nhân viên](docs/employee-guide.vi.md).
 5. Khi nhân viên cài xong và dùng Claude Code, họ xuất hiện trong bảng điều khiển sau 1-2 giây.
 

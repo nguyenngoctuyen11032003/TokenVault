@@ -6,7 +6,7 @@
 * Cùng mạng nội bộ với máy nhân viên. Không hỗ trợ truy cập từ xa/Internet.
 
 ## 2. Cài đặt
-1. Chạy `TokenVault-Manager-Setup.exe` (cài theo người dùng; chỉ bước tường lửa cần UAC). SmartScreen: "More info" -> "Run anyway". Máy chặn mọi exe chưa ký: xem gói "no-exe" trong [packaging.md](packaging.md) (**Task 25, sẽ cập nhật sau khi hoàn thiện**).
+1. Chạy `TokenVault-Manager-Setup.exe` (cài theo người dùng; chỉ bước tường lửa cần UAC). SmartScreen: "More info" -> "Run anyway". Máy chặn hẳn exe chưa ký (Smart App Control / Application Control): dùng gói "no-exe" - giải nén `TokenVault-Manager-portable.zip` (tạo bằng `build\build-portable.ps1`), chạy `Start-Manager.cmd`, hoặc `Install-Manager.ps1` để có lối tắt và quy tắc tường lửa (một lần UAC). Xem [packaging.md](packaging.md).
 2. Lần chạy đầu Manager tự tạo chứng chỉ TLS tự ký (không cần openssl) và cơ sở dữ liệu trong `%APPDATA%\TokenVault\Manager`. Khoá bí mật được bảo vệ bằng DPAPI.
 3. Cổng mặc định **47800** (TCP, WebSocket qua TLS). Nếu bận, Manager dùng cổng kế tiếp (tối đa +20); cổng thực tế hiện ở Cài đặt/Chẩn đoán. Cổng khám phá **47801/UDP**.
 4. Đóng cửa sổ chỉ ẩn vào khay hệ thống, ingest vẫn chạy. Có tuỳ chọn khởi động cùng Windows trong Cài đặt.
@@ -16,7 +16,17 @@ Bộ cài nhân viên chứa IP/hostname của Manager. Hãy đặt IP tĩnh ho�
 
 ## 4. Tạo bộ cài cho nhân viên
 Trang **Tạo bộ cài**: nhập tên nhóm và nhãn tuỳ chọn -> `TokenVault-Adapter-<Nhóm>.exe` (mặc định trong `%APPDATA%\TokenVault\Manager\installers`). Gói chứa **mã đăng ký (enrollment secret)** - coi như mật khẩu, chỉ gửi cho đúng nhóm. Lộ thì thu hồi gói ở trang Cài đặt/Nhân viên.
-Loại đích khác (xem [packaging.md](packaging.md)): Windows no-exe và macOS - **đang triển khai (Task 25, Task 24), sẽ cập nhật sau khi hoàn thiện**.
+Chọn **Hệ điều hành của nhân viên** (xem [packaging.md](packaging.md)):
+
+| Lựa chọn | Tệp tạo ra | Khi nào dùng | Chuẩn bị một lần |
+|---|---|---|---|
+| Windows (tệp .exe) | `TokenVault-Adapter-<Nhóm>.exe` | máy Windows bình thường (SmartScreen: "More info" -> "Run anyway") | đã có sẵn khi cài Manager |
+| Windows - gói không cần exe | `TokenVault-Adapter-<Nhóm>-portable.zip` | máy chặn hẳn exe chưa ký (Smart App Control / Application Control) | chạy `build\build-portable.ps1` (cần Internet) để có thư mục `templates\portable-runtime`; chưa có thì trang báo lỗi và nhắc chạy script |
+| macOS (tệp .zip) | `TokenVault-Adapter-<Nhóm>-mac.zip` | máy Mac | build `adapter-mac.zip` trên một máy Mac bằng `build/build-mac.sh`, chép vào `%APPDATA%\TokenVault\Manager\templates\adapter-mac.zip` |
+
+Gói portable: nhân viên chạy `Install.cmd` (không cần admin). Gói Mac: `Install.command` (chuột phải -> Open). Trang kết quả hiện hướng dẫn gửi kèm đúng loại gói. macOS chưa được kiểm chứng trên Mac thật.
+
+**Chọn gói nào?** SmartScreen chỉ cảnh báo -> exe. Bị chặn hẳn (không có "Run anyway") -> portable. Mac -> mac. Gửi qua chia sẻ mạng/USB để tránh Mark-of-the-Web.
 
 ## 5. Phân phối khi không có chứng chỉ ký số
 * Gửi qua **thư mục chia sẻ mạng hoặc USB**: file không mang Mark-of-the-Web nên SmartScreen không chặn.

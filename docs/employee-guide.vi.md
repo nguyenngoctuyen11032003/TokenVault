@@ -8,7 +8,9 @@ TokenVault Adapter là chương trình nhỏ chạy nền, gửi **số token đ
 3. Màn hình đồng ý liệt kê chính xác dữ liệu được gửi. Đọc và bấm đồng ý.
 4. Cài xong, biểu tượng TokenVault hiện ở khay hệ thống (góc phải thanh tác vụ) và tự chạy mỗi lần đăng nhập. Không cần quyền admin.
 
-Máy bị chặn chạy file .exe lạ? Báo người quản lý để nhận gói "no-exe" (**đang hoàn thiện, sẽ cập nhật sau**). Mac: gói ZIP có `Install.command` (**đang hoàn thiện, sẽ cập nhật sau**; lần đầu macOS có thể yêu cầu System Settings -> Privacy & Security -> "Open Anyway").
+**Máy chặn hẳn file .exe lạ** (không có nút "Run anyway")? Báo người quản lý để nhận gói **"không cần exe"** (`TokenVault-Adapter-<Nhóm>-portable.zip`): giải nén toàn bộ ra một thư mục, bấm đúp `Install.cmd` (không cần quyền admin, tự bỏ dấu "tải từ Internet"), đọc màn hình đồng ý rồi đồng ý. Gỡ: chạy `Uninstall.cmd` trong thư mục đó.
+
+**Máy Mac:** nhận `TokenVault-Adapter-<Nhóm>-mac.zip`, nhấp đúp để giải nén, chuột phải `Install.command` -> **Open** (macOS 15: nếu không có tuỳ chọn này, vào System Settings -> Privacy & Security -> "Open Anyway"). Màn hình đồng ý hiện trước khi cài; từ chối thì không có gì thay đổi. Cài xong, biểu tượng nằm trên **thanh menu** (bắt buộc, không ẩn được; nếu không hiện được biểu tượng, chương trình dừng thu thập và báo bằng thông báo), khoá bí mật nằm trong Keychain, tự chạy khi đăng nhập. Gỡ: chuột phải `Uninstall.command` -> Open. Bản Mac chưa được kiểm chứng trên máy Mac thật.
 
 ## 2. Dữ liệu nào được gửi?
 Mỗi câu trả lời của Claude: số token (vào/ra/cache), mô hình, thời điểm, mã phiên, **chỉ tên thư mục cuối** của dự án, tiêu đề phiên, **tên** công cụ đã gọi, email tài khoản Claude, tên người dùng Windows, tên máy, nhóm. **Không bao giờ**: câu hỏi, câu trả lời, mã nguồn, nội dung tệp, lệnh, đường dẫn đầy đủ, mật khẩu/khoá. Danh sách đầy đủ: [privacy.md](privacy.md).
@@ -22,7 +24,7 @@ Mỗi câu trả lời của Claude: số token (vào/ra/cache), mô hình, th�
 Adapter chủ ý **không có nút tạm dừng hay ẩn**; nó luôn hiển thị.
 
 ## 4. Gỡ cài đặt
-Cài đặt Windows -> **Ứng dụng** -> "TokenVault Adapter" -> Gỡ cài đặt. Adapter dừng ngay, Manager thấy thiết bị ngoại tuyến.
+Bộ cài .exe: Cài đặt Windows -> **Ứng dụng** -> "TokenVault Adapter" -> Gỡ cài đặt. Gói không cần exe: `Uninstall.cmd` (thêm `-RemoveData` để xoá cả dữ liệu). Mac: `Uninstall.command`. Adapter dừng ngay, Manager thấy thiết bị ngoại tuyến.
 
 ## 5. Hỏi đáp
 * **Có làm chậm máy không?** Không: gần 0% CPU lúc rảnh, dưới 40 MB RAM, ưu tiên thấp, chỉ theo dõi thư mục `~/.claude/projects`.
@@ -30,4 +32,5 @@ Cài đặt Windows -> **Ứng dụng** -> "TokenVault Adapter" -> Gỡ cài đ�
 * **Quản lý có thấy nội dung tôi viết không?** Không.
 * **Không có tài khoản (dùng API key)?** Hiển thị "Tài khoản không xác định (người dùng@máy)".
 * **Lần đầu cài có gửi lịch sử cũ không?** Có: nhật ký đã có được đọc nền, giới hạn tốc độ và đánh dấu là lịch sử.
+* **Mac: không thấy biểu tượng trên thanh menu?** Chương trình cố ý không thu thập khi không hiện được biểu tượng; báo người quản lý (trạng thái `no_indicator` trong `status`).
 * **Không thấy biểu tượng khay?** Bấm mũi tên "Hiện biểu tượng ẩn" trên thanh tác vụ; vẫn không thấy thì báo người quản lý.

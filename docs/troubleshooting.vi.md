@@ -40,5 +40,11 @@ Khi không gửi được, sự kiện nằm trong `outbox.db` (SQLite bền v�
 
 ## 8. Khác
 * **Bị thu hồi** (Manager đóng phiên, lý do `revoked`): gói/thiết bị đã bị thu hồi; cần bộ cài mới.
-* **Máy chặn exe lạ hoàn toàn** (Smart App Control/AppLocker): dùng gói "no-exe" - Task 25, **sẽ cập nhật sau khi hoàn thiện**.
+* **Máy chặn exe lạ hoàn toàn** (Smart App Control / Application Control: không có "Run anyway" hoặc exe không chạy): tạo gói "Windows - gói không cần exe" ở trang Tạo bộ cài, nhân viên giải nén và chạy `Install.cmd`. Nếu trang báo thiếu runtime: chạy `build\build-portable.ps1` rồi thử lại (script tạo `templates\portable-runtime`). Nếu `Install.cmd` vẫn báo lỗi (mã 10) thì chính sách chặn cả DLL/.pyd chưa ký trong thư viện Python; cần IT cho phép (chưa kiểm chứng trên máy bị chặn thật).
+* **Gói portable cài rất chậm lần đầu:** `pythonw.exe` mới chép có thể mất tới ~2 phút ở lần chạy đầu do quét thời gian thực; hãy đợi, không bấm lại.
+* **SmartScreen vẫn chặn file nhận qua trình duyệt/email:** Mark-of-the-Web. Gửi lại qua chia sẻ mạng/USB, hoặc Properties -> Unblock / `Unblock-File`. Gói portable tự gỡ dấu khi chạy `Install.cmd`.
+* **Mac: trang Tạo bộ cài báo thiếu bộ mẫu macOS:** build `adapter-mac.zip` trên một máy Mac (`build/build-mac.sh`) rồi chép vào `%APPDATA%\TokenVault\Manager\templates\adapter-mac.zip` trên máy Manager.
+* **Mac: macOS không cho mở `Install.command`:** chuột phải -> Open; macOS 15 thì System Settings -> Privacy & Security -> "Open Anyway".
+* **Mac: không có biểu tượng thanh menu / thiết bị không gửi dữ liệu:** Adapter cố ý dừng thu thập khi không hiện được biểu tượng (`status` báo `no_indicator`, thoát mã 0 nên launchd không chạy lại). Đăng nhập lại hoặc cài lại; xem `~/Library/Logs/TokenVault/adapter.log`.
+* **Mac: kiểm tra/gỡ thủ công:** `launchctl print gui/$(id -u)/vn.ics.tokenvault.adapter`; gỡ bằng `Uninstall.command`. Phần Mac chưa được kiểm chứng trên Mac thật ([e2e-checklist.md](e2e-checklist.md)).
 * Nhật ký: Manager `%APPDATA%\TokenVault\Manager\manager.log`, Adapter `%LOCALAPPDATA%\TokenVault\Adapter\adapter.log` (xoay vòng 1 MB x 3, không chứa khoá).

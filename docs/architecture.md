@@ -32,5 +32,5 @@ Discovery: UDP port 47801. Query `{v, q:"who-is-tokenvault", manager_id, nonce}`
 * **DPAPI** protects the Manager's private-key password and the Adapter's `device.key` / `enroll.secret` (fail closed). The private key is stored as encrypted PKCS#8.
 * Server limits: connection caps per IP/total, handshake and hello timeouts, `SO_EXCLUSIVEADDRUSE` binding.
 * **Privacy**: metadata only (see [privacy.md](privacy.md)); no pause/hide control - the tray icon and "What is sent?" view keep the Adapter transparent.
-* Installer payload (TVLTCFG1 footer) is not signed; trust comes from the pinned fingerprint plus the enrollment secret. For macOS the plan uses a sidecar payload file instead of appending to a Mach-O (**Task 24, to be updated**).
+* Installer payload (TVLTCFG1 footer) is not signed; trust comes from the pinned fingerprint plus the enrollment secret. The macOS and portable-Windows packages carry the same payload in a sidecar file `tokenvault-config.bin` inside the ZIP (nothing is appended to a Mach-O or exe).
 * Adapter installs per user without admin (`%LOCALAPPDATA%`, HKCU Run); only the Manager firewall step is elevated.
