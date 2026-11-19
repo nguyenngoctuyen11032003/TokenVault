@@ -1,0 +1,145 @@
+/* Shared by #/skills and #/orchestration (Task 16). Every rule is a tv-skills-* class. */
+
+.tv-skills-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tv-gap);
+  min-width: 0;
+}
+
+.tv-skills-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tv-gap);
+  min-width: 0;
+}
+
+.tv-skills-page .tv-seg > button {
+  min-width: 72px;
+}
+
+.tv-skills-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border: 1px solid var(--tv-line);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.025), transparent);
+}
+
+.tv-skills-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 14px;
+}
+
+.tv-skills-kpi + .tv-skills-kpi {
+  border-left: 1px solid var(--tv-line);
+}
+
+.tv-skills-kpi__label {
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tv-skills-kpi__value {
+  overflow: hidden;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-skills-note {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--tv-orange);
+  background: linear-gradient(90deg, rgb(255 176 32 / 0.1), rgb(255 176 32 / 0.02));
+  color: var(--tv-text);
+  font-size: var(--tv-fs-sm);
+  line-height: 1.5;
+}
+
+.tv-skills-note b {
+  color: var(--tv-orange);
+  font-weight: 600;
+}
+
+.tv-skills-chartbox {
+  width: 100%;
+  height: 260px;
+}
+
+.tv-skills-chartbox > div {
+  width: 100%;
+  height: 100%;
+}
+
+/* ranked bar list */
+.tv-skills-ranklist {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tv-skills-rank {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tv-skills-rank__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tv-skills-rank__swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+}
+
+.tv-skills-rank__name {
+  flex: 1;
+  color: var(--tv-text);
+}
+
+.tv-skills-rank__link {
+  text-decoration: none;
+}
+
+.tv-skills-rank__link:hover {
+  color: var(--tv-text-strong);
+  text-decoration: underline;
+}
+
+.tv-skills-rank__val {
+  flex: none;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-skills-rank__sub {
+  padding-left: 18px;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-xs);
+}
+
+.tv-skills-rank__bar {
+  margin-left: 18px;
+}
+
+.tv-skills-empty {
+  margin: 0;
+  padding: 28px 12px;
+  color: var(--tv-muted);
+  text-align: center;
+}
