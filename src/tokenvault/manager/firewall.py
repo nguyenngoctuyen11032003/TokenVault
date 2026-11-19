@@ -13,8 +13,8 @@ accept ingest connections). If the office network is classified "Public", set it
 Private in Windows.
 
 With ``program`` the rules only apply to that program; ``firewall --ensure`` run from
-the frozen Manager exe defaults it to that exe. Adding rules needs elevation: only the Manager installer
-runs ``TokenVault-Manager.exe firewall --ensure`` (one UAC prompt). The running
+the frozen Manager exe defaults it to that exe. Adding rules needs elevation: only the
+Manager installer runs ``TokenVault-Manager.exe firewall --ensure`` (one UAC prompt). The running
 app only *checks* (``check_rules``) and reports a missing rule in Diagnostics.
 
 ``ensure_rules`` deletes then re-adds each rule, so re-running it updates the
