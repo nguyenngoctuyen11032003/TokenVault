@@ -204,3 +204,61 @@ def test_dialog_is_accessible_and_traps_focus(open_page: Any) -> None:
     assert page.evaluate(f"document.querySelector('{DLG}').contains(document.activeElement)")
     page.locator("[data-report='cancel']").click()
     assert page.evaluate("document.activeElement.dataset.reportOpen") == "all"
+
+
+def test_selection_survives_search_and_label_counts_hidden(open_page: Any) -> None:
+    page = _open(open_page, "#/employees")
+    sel = page.locator("[data-report-open='selected']")
+    total = page.locator(ROWS).count()
+    page.locator(f"{ROWS} input[data-select]").nth(0).check()
+    page.locator(f"{ROWS} input[data-select]").nth(1).check()
+    first = page.locator(ROWS).nth(0).get_attribute("data-key")
+    page.locator("input.tv-employees-search").fill(first.split("@")[0])
+    assert page.locator(ROWS).count() < total
+    assert sel.is_enabled() and "(2" in sel.inner_text() and "ẩn" in sel.inner_text()
+    page.locator("input.tv-employees-search").fill("")
+    assert page.locator(f"{ROWS} input[data-select]:checked").count() == 2
+    assert "ẩn" not in sel.inner_text() and "(2)" in sel.inner_text()
+    sel.click()
+    page.wait_for_selector(DLG)
+    _run(page)
+    assert len(_calls(page, "export_report")[0][0]["employee_keys"]) == 2
+
+
+def test_open_buttons_hidden_when_unavailable(open_page: Any) -> None:
+    page = _open(open_page, "#/employees")
+    page.evaluate("Object.assign(window.__tvReport.options, {can_open: false, can_reveal: false})")
+    _click_export(page, "all")
+    _run(page)
+    assert page.locator("[data-report='open-file']").count() == 0
+    assert page.locator("[data-report='open-folder']").count() == 0
+    assert page.locator("[data-report='folder']").is_visible()
+    assert page.locator("[data-report='close']").is_visible()
+
+
+def test_range_fallback_note_and_employee_cap(open_page: Any) -> None:
+    page = _open(open_page, "#/employees")
+    page.evaluate("window.__tvReport.options.max_employees = 1")
+    page.evaluate("localStorage.setItem('tv.filters.v1', JSON.stringify({range: '90d'}))")
+    boxes = page.locator(f"{ROWS} input[data-select]")
+    boxes.nth(0).check()
+    boxes.nth(1).check()
+    page.locator("[data-report-open='selected']").click()
+    page.wait_for_selector(DLG)
+    assert page.locator("[data-report='cap-note']").is_visible()
+    assert page.locator(EXPORT).is_disabled()
+    page.locator("[data-report='scope'][value='all']").check()
+    assert page.locator(EXPORT).is_enabled()
+    assert page.locator("[data-report='cap-note']").is_hidden()
+
+
+def test_route_abort_waits_for_running_export(open_page: Any) -> None:
+    page = _open(open_page, "#/employees")
+    page.evaluate("window.__tvReport.delay = 800")
+    _click_export(page, "all")
+    page.locator(EXPORT).click()
+    page.evaluate("location.hash = '#/home'")
+    page.wait_for_timeout(300)
+    assert page.locator(DLG).count() == 1  # still running: not torn down
+    page.wait_for_function("document.querySelectorAll('.tv-report-dlg').length === 0")
+    assert len(_calls(page, "export_report")) == 1

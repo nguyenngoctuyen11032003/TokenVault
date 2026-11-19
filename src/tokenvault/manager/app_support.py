@@ -59,8 +59,9 @@ def pick_save_path(name: str, folder: Path) -> Path | None:
     if not webview.windows:
         return None
     folder.mkdir(parents=True, exist_ok=True)
+    save_mode = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
     res = webview.windows[0].create_file_dialog(
-        webview.SAVE_DIALOG, directory=str(folder), save_filename=name,
+        save_mode, directory=str(folder), save_filename=name,
         file_types=("PDF (*.pdf)",))
     if not res:
         return None

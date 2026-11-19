@@ -196,3 +196,15 @@ def test_busy_when_export_running(rig: Any) -> None:
         assert call_error(api.export_report, {"scope": "all"}).startswith("[busy]")
     finally:
         api._reports.lock.release()
+
+
+def test_open_path_without_opener_is_refused(tmp_path: Path) -> None:
+    m, api, out = _start(tmp_path)
+    try:
+        res = api.export_report({"scope": "all"})
+        assert call_error(api.open_path, res["path"]).startswith("[invalid_args]")
+        assert call_error(api.open_path, res["path"], True).startswith("[invalid_args]")
+        o = api.report_options()
+        assert o["can_open"] is False and o["can_reveal"] is False
+    finally:
+        m.stop()

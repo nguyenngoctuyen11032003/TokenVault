@@ -2,6 +2,7 @@
   "report": {
     "button": "Xuất PDF",
     "buttonSelected": "Xuất đã chọn ({n})",
+    "buttonSelectedHidden": "Xuất đã chọn ({n}, {hidden} đang ẩn)",
     "buttonOne": "Xuất báo cáo PDF",
     "title": "Xuất báo cáo PDF",
     "export": "Xuất báo cáo",
@@ -22,8 +23,10 @@
       "30d": "30 ngày",
       "custom": "Tùy chọn",
       "start": "Từ ngày",
-      "end": "Đến ngày"
+      "end": "Đến ngày",
+      "fallback": "Khoảng thời gian đang chọn không có sẵn ở đây; đã dùng 30 ngày gần nhất."
     },
+    "tooMany": "Tối đa {max} nhân viên mỗi báo cáo (đang chọn {n}). Hãy bỏ bớt hoặc xuất theo nhóm.",
     "perEmployee": "Thêm trang chi tiết cho từng nhân viên",
     "dest": {
       "legend": "Nơi lưu",

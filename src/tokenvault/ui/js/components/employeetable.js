@@ -157,12 +157,12 @@ export function createEmployeeTable({ t, columns, sortable = false, onOpen, init
   );
 
   function changed() {
-    const keys = data.map((r) => String(r.key)).filter((k) => selected.has(k));
+    const shown = data.filter((r) => selected.has(String(r.key))).length;
     if (headBox) {
-      headBox.checked = keys.length > 0 && keys.length === data.length;
-      headBox.indeterminate = keys.length > 0 && keys.length < data.length;
+      headBox.checked = shown > 0 && shown === data.length;
+      headBox.indeterminate = shown > 0 && shown < data.length;
     }
-    onSelect?.(keys);
+    onSelect?.([...selected], shown);
   }
 
   headBox?.addEventListener('change', () => {
@@ -233,13 +233,15 @@ export function createEmployeeTable({ t, columns, sortable = false, onOpen, init
     }
   }
 
-  function update(list) {
+  // `list` = rows to show; `universe` = every row (default `list`). Ticks of rows hidden by a
+  // page filter are kept; only rows missing from the whole dataset are dropped.
+  function update(list, universe) {
     data = Array.isArray(list) ? list : [];
-    const live = new Set(data.map((r) => String(r.key)));
+    const live = new Set((Array.isArray(universe) ? universe : data).map((r) => String(r.key)));
     for (const k of [...selected]) if (!live.has(k)) selected.delete(k);
     render();
     if (selectable) changed();
   }
 
-  return { el: table, update, count: () => data.length, selected: () => data.map((r) => String(r.key)).filter((k) => selected.has(k)) };
+  return { el: table, update, count: () => data.length, selected: () => [...selected] };
 }

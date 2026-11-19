@@ -176,6 +176,7 @@ def open_path(m: Manager, st: ReportState, path: Any, reveal: Any = False) -> di
     if target.suffix.lower() != ".pdf" or not target.is_file() or not (inside or known):
         raise ApiError("only report files created by TokenVault can be opened", "invalid_args")
     fn = m.cfg.reveal if reveal else m.cfg.open_file
-    if fn is not None:
-        fn(target)
+    if fn is None:
+        raise ApiError("this action is not available here", "invalid_args")
+    fn(target)
     return {"ok": True}

@@ -66,7 +66,8 @@ def test_http_export_writes_real_pdf_into_demo_folder(devserver: tuple[str, Path
     pdf = Path(res["path"])
     assert pdf.parent.resolve() == (data / "reports").resolve()
     assert pdf.read_bytes().startswith(b"%PDF") and res["pages"] >= 2
-    assert _post(base, "open_path", res["path"]) == {"ok": True}
+    with pytest.raises(urllib.error.HTTPError):  # devserver has no opener
+        _post(base, "open_path", res["path"])
     with pytest.raises(urllib.error.HTTPError):  # path outside the reports folder
         _post(base, "open_path", str(data / ".tokenvault-demo"))
 
@@ -87,7 +88,6 @@ def test_ui_exports_pdf_from_employees_page(devserver: tuple[str, Path], browser
         page.wait_for_selector("[data-report='result']:not([hidden])", timeout=60_000)
         name = page.locator("[data-report='file']").inner_text()
         assert name.startswith("TokenVault-BaoCao-") and name.endswith(".pdf")
-        page.locator("[data-report='open-file']").click()
         assert page.locator("[data-report='error']").is_hidden()
     finally:
         page.close()

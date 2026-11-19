@@ -45,7 +45,7 @@ export function normalizeRange(range) {
   if (RANGES.includes(range) && range !== 'custom') return { range };
   const m = CUSTOM.exec(String(range ?? ''));
   if (m) return { range: 'custom', start: m[1], end: m[2] };
-  return { range: '30d' };
+  return { range: '30d', fellBack: true };
 }
 
 function fmtBytes(n) {
@@ -85,6 +85,7 @@ export async function openReportDialog({ api, preset = {}, signal = null }) {
     const rangeRadios = RANGES.map((r) => h('input', { type: 'radio', name: `${id}-range`, value: r, checked: r === range, dataset: { report: 'range' } }));
     const startInput = h('input', { type: 'date', value: start.start ?? '', 'aria-label': t('range.start'), dataset: { report: 'start' } });
     const endInput = h('input', { type: 'date', value: start.end ?? '', 'aria-label': t('range.end'), dataset: { report: 'end' } });
+    const rangeNote = h('p', { class: 'tv-report-dlg__path', hidden: !start.fellBack, dataset: { report: 'range-note' } }, t('range.fallback'));
     const customRow = h('div', { class: 'tv-report-dlg__custom', hidden: range !== 'custom' }, startInput, h('span', null, '–'), endInput);
 
     // ---------- options ----------
@@ -96,6 +97,7 @@ export async function openReportDialog({ api, preset = {}, signal = null }) {
     ];
 
     // ---------- status ----------
+    const capNote = h('p', { class: 'tv-report-dlg__error', role: 'status', hidden: true, dataset: { report: 'cap-note' } }, t('tooMany', { max: options.max_employees, n: keys.length }));
     const errorBox = h('p', { class: 'tv-report-dlg__error', role: 'alert', hidden: true, dataset: { report: 'error' } });
     const bar = h('progress', { max: 100, value: 0, 'aria-label': t('progress.label'), dataset: { report: 'progress' } });
     const progressMsg = h('span', { 'aria-live': 'polite' }, t('progress.start'));
@@ -107,7 +109,7 @@ export async function openReportDialog({ api, preset = {}, signal = null }) {
     const group = (legend, ...kids) => h('fieldset', { class: 'tv-report-dlg__group' }, h('legend', null, legend), ...kids);
     formBody.append(
       group(t('scope.legend'), scopes.map((s, i) => choice(scopeRadios[i], s.label, s.id === 'team' ? teamSelect : null))),
-      group(t('range.legend'), h('div', { class: 'tv-report-dlg__ranges' }, RANGES.map((r, i) => choice(rangeRadios[i], t(`range.${r}`)))), customRow),
+      group(t('range.legend'), h('div', { class: 'tv-report-dlg__ranges' }, RANGES.map((r, i) => choice(rangeRadios[i], t(`range.${r}`)))), customRow, rangeNote),
       perRow,
       group(t('dest.legend'),
         choice(destRadios[0], t('dest.default')),
@@ -121,7 +123,7 @@ export async function openReportDialog({ api, preset = {}, signal = null }) {
     const form = h('form', { class: 'tv-installer-dlg tv-report-dlg', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': `${id}-title`, novalidate: true },
       h('h2', { class: 'tv-installer-dlg__title', id: `${id}-title` }, t('title')),
       preset.label ? h('p', { class: 'tv-report-dlg__for' }, preset.label) : null,
-      formBody, progressRow, errorBox, resultBox, actions);
+      formBody, progressRow, capNote, errorBox, resultBox, actions);
     const backdrop = h('div', { class: 'tv-installer-dlg-backdrop' }, form);
 
     let busy = false;
@@ -139,7 +141,11 @@ export async function openReportDialog({ api, preset = {}, signal = null }) {
       if (opener && opener.isConnected && typeof opener.focus === 'function') opener.focus();
       resolve(finished);
     }
-    const onAbort = () => close();
+    let aborted = false;
+    const onAbort = () => {
+      if (busy) aborted = true; // finish the running export first
+      else close();
+    };
 
     function onKey(event) {
       if (event.key === 'Escape') {
@@ -168,6 +174,9 @@ export async function openReportDialog({ api, preset = {}, signal = null }) {
       teamSelect.disabled = scope !== 'team';
       customRow.hidden = range !== 'custom';
       perRow.hidden = scope === 'employee' && keys.length === 1;
+      const over = scope === 'employee' && keys.length > (options.max_employees || Infinity);
+      capNote.hidden = !over;
+      if (!busy) submit.disabled = over;
     }
     form.addEventListener('change', sync);
     sync();
@@ -219,11 +228,11 @@ export async function openReportDialog({ api, preset = {}, signal = null }) {
         h('p', { class: 'tv-report-dlg__file', title: res.path, dataset: { report: 'file' } }, res.file_name),
         h('p', { class: 'tv-report-dlg__meta' }, t('doneMeta', { pages: res.pages, size: fmtBytes(res.bytes), range: res.range_label })),
         h('p', { class: 'tv-report-dlg__path', dataset: { report: 'folder' } }, res.folder),
-        h('div', { class: 'tv-installer-dlg__actions' }, closeBtn, openFolder, openFile),
+        h('div', { class: 'tv-installer-dlg__actions' }, closeBtn, options.can_reveal ? openFolder : null, options.can_open ? openFile : null),
       );
       resultBox.hidden = false;
       actions.hidden = true;
-      openFile.focus();
+      (options.can_open ? openFile : closeBtn).focus();
     }
 
     form.addEventListener('submit', async (event) => {
@@ -240,6 +249,7 @@ export async function openReportDialog({ api, preset = {}, signal = null }) {
         clearInterval(timer);
         setBusy(false);
         showResult(res);
+        if (aborted) close();
       } catch (err) {
         clearInterval(timer);
         setBusy(false);
@@ -248,6 +258,7 @@ export async function openReportDialog({ api, preset = {}, signal = null }) {
           errorBox.hidden = false;
         }
         submit.focus();
+        if (aborted) close();
       }
     });
     cancel.addEventListener('click', close);

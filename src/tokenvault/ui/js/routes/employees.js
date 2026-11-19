@@ -55,7 +55,7 @@ export default async function render(container, ctx) {
     sortable: true,
     selectable: true,
     onOpen: (key) => ctx.navigate('employee', key),
-    onSelect: (keys) => syncSelected(keys.length),
+    onSelect: (keys, shown) => syncSelected(keys.length, shown),
   });
   const exportAll = await createReportButton({
     api: ctx.api,
@@ -74,9 +74,10 @@ export default async function render(container, ctx) {
     labelParams: { n: 0 },
     preset: () => ({ scope: 'employee', employee_keys: table.selected(), range: ctx.filters.get().range }),
   });
-  function syncSelected(n) {
+  function syncSelected(n, shown = n) {
     exportSelected.disabled = n === 0;
-    exportSelected.textContent = ctx.t('report.buttonSelected', { n });
+    const hidden = n - shown;
+    exportSelected.textContent = ctx.t(hidden > 0 ? 'report.buttonSelectedHidden' : 'report.buttonSelected', { n, hidden });
   }
   const count = h('span', { class: 'tv-employees-count' });
   const rangeNote = h('p', { class: 'tv-costnote', 'data-range-note': '', hidden: true }, t('rangeClamped'));
@@ -125,7 +126,7 @@ export default async function render(container, ctx) {
     const shown = q
       ? rows.filter((r) => fold(`${r.display_name} ${r.email ?? ''} ${r.key} ${(r.teams || []).join(' ')}`).includes(q))
       : rows;
-    table.update(shown);
+    table.update(shown, rows);
     noMatch.hidden = shown.length > 0;
     count.textContent = t('count', { shown: shown.length, total: rows.length });
   }
