@@ -16,6 +16,8 @@ const P = {
     '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.2M12 18.8V21M3 12h2.2M18.8 12H21M5.6 5.6l1.6 1.6M16.8 16.8l1.6 1.6M5.6 18.4l1.6-1.6M16.8 7.2l1.6-1.6"/>',
   diagnostics: '<path d="M3 12h4l2.2-5.5 4.2 11 2.4-5.5H21"/>',
   minimize: '<path d="M6 12.5h12"/>',
+  maximize: '<rect x="6.5" y="6.5" width="11" height="11"/>',
+  restore: '<rect x="5.5" y="9" width="9.5" height="9.5"/><path d="M9 9V5.5h9.5V15H15"/>',
   close: '<path d="m7 7 10 10M17 7 7 17"/>',
   page: '<rect x="5" y="3.5" width="14" height="17" rx="1"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4"/>',
 };

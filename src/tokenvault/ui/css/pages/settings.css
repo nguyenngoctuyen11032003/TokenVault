@@ -228,6 +228,10 @@
   font-size: var(--tv-fs-sm);
 }
 
+.tv-settings-hostsempty--auto {
+  color: var(--tv-muted);
+}
+
 .tv-settings-addhost {
   display: flex;
   gap: 8px;

@@ -68,6 +68,9 @@ def mgr_data(*, firewall: bool = True, port: int = 47800, empty: bool = False) -
         "settings": {
             "transparent_window": True, "start_with_windows": True, "port": 47800,
             "manager_id": "mgr-7f3a2c", "hosts": ["192.168.1.10", "MANAGER-PC"],
+            # Task 12: hosts = raw configured list ([] = automatic), hosts_auto = detected,
+            # installer_hosts = what new installers carry (computed by the stub when absent).
+            "hosts_auto": ["192.168.1.10", "10.0.5.23"],
             "fingerprint": FINGERPRINT, "static_ip_hint": "", "tz_offset_minutes": 420,
             "version": "0.1.0",
         },

@@ -4,12 +4,21 @@
  * shape, so the OS window itself looks cut. Opaque fallback (.window--opaque, when
  * settings.transparent_window === false): a plain rectangle with the chamfered plate drawn
  * 6px inside it.
+ *
+ * Window states (js/winstate.js, Task 20): `.window--maximized` / `.window--fullscreen` on <html>
+ * and .tv-window set --tv-chamfer to 0, so the silhouette becomes a plain rectangle (no clip,
+ * no lower trims) with slimmer outer padding. Large windows are zoomed by --tv-scale
+ * (js/uiscale.js); the window divides its viewport size by the same factor.
  */
 
 html,
 body {
   overflow: hidden;
   background: transparent;
+}
+
+body {
+  zoom: var(--tv-scale, 1);
 }
 
 /* Plain browser (dev server): give the transparent corners something dark to sit on. */
@@ -38,8 +47,8 @@ html.tv-opaque body {
   display: grid;
   grid-template-rows: 60px minmax(0, 1fr);
   row-gap: 10px;
-  width: 100vw;
-  height: 100vh;
+  width: calc(100vw / var(--tv-scale, 1));
+  height: calc(100vh / var(--tv-scale, 1));
   min-width: 1100px;
   min-height: 720px;
   padding: 0 28px 26px;
@@ -83,6 +92,41 @@ html.tv-opaque body {
 
 .window--opaque.tv-window::after {
   inset: 7px;
+}
+
+/* Maximised / full screen: a plain rectangle that uses the whole viewport. */
+html.window--maximized,
+html.window--fullscreen {
+  --tv-chamfer: 0px;
+}
+
+.tv-window.window--maximized,
+.tv-window.window--fullscreen {
+  clip-path: none;
+  padding: 0 16px 14px;
+}
+
+.window--maximized.tv-window::before,
+.window--maximized.tv-window::after,
+.window--fullscreen.tv-window::before,
+.window--fullscreen.tv-window::after {
+  clip-path: none;
+}
+
+.window--maximized.tv-window::before,
+.window--fullscreen.tv-window::before {
+  inset: 0;
+}
+
+.window--maximized.tv-window::after,
+.window--fullscreen.tv-window::after {
+  inset: 0;
+  border-top: 1px solid #3a3a40;
+}
+
+.tv-window.window--maximized .tv-titlebar__brand,
+.tv-window.window--fullscreen .tv-titlebar__brand {
+  padding-left: 4px;
 }
 
 /* Red trim on the two lower chamfers. */

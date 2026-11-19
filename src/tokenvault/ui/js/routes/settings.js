@@ -138,9 +138,16 @@ export default async function render(container, ctx) {
         'aria-label': t('removeHost', { host }), title: t('removeHost', { host }),
         on: { click: () => { draftHosts = draftHosts.filter((x) => x !== host); renderHosts(); } },
       }, h('span', { class: 'tv-settings-removehost__x', 'aria-hidden': 'true' })))));
+    // Empty configured list = automatic: the Manager writes the addresses it detects.
+    const auto = Array.isArray(settings?.hosts_auto) ? settings.hosts_auto.map(String) : [];
     hostsEmpty.hidden = draftHosts.length > 0;
+    hostsEmpty.classList.toggle('tv-settings-hostsempty--auto', auto.length > 0);
+    hostsEmpty.dataset.auto = auto.length ? '1' : '0';
+    hostsEmpty.textContent = auto.length ? t('hostsAuto', { hosts: auto.join(', ') }) : t('hostsEmpty');
+    if (auto.length) hostInput.placeholder = t('hostPlaceholderAuto', { host: auto[0] });
+    else hostInput.placeholder = t('hostPlaceholder');
     const changed = dirty();
-    saveHosts.disabled = !changed || draftHosts.length === 0;
+    saveHosts.disabled = !changed;
     resetHosts.hidden = !changed;
     hostsStatus.textContent = changed ? t('hostsUnsaved') : '';
   }

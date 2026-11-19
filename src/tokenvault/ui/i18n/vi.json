@@ -10,6 +10,12 @@
     "installer": "Tạo bộ cài cho nhân viên",
     "settings": "Cài đặt",
     "minimize": "Thu nhỏ",
+    "maximize": "Phóng to",
+    "maximizeTip": "Phóng to (nhấp đúp thanh tiêu đề)",
+    "restore": "Khôi phục",
+    "restoreTip": "Khôi phục kích thước cửa sổ",
+    "fullscreenHint": "Thoát toàn màn hình (F11)",
+    "appOnly": "Chỉ có trong ứng dụng",
     "close": "Ẩn xuống khay",
     "toolbar": "Điều khiển cửa sổ"
   },

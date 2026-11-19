@@ -245,7 +245,7 @@
 }
 
 .tv-session-chartbox {
-  height: 260px;
+  height: calc(260px * var(--tv-chart-boost, 1));
 }
 
 .tv-session-chart {

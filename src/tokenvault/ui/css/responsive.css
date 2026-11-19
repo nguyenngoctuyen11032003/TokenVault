@@ -1,0 +1,43 @@
+/* Shared responsive rules (Task 20).
+ *
+ * Large windows are zoomed by --tv-scale (js/uiscale.js), so layouts mostly just gain width;
+ * these rules add what width alone does not give:
+ *   --tv-chart-boost  multiplier for fixed chart heights on TALL windows (pages use
+ *                     `height: calc(<px> * var(--tv-chart-boost, 1))`), so a maximised 1440p/4K
+ *                     screen shows larger charts instead of an empty lower half.
+ *   gauges grow in wide gauge rows (container query on .tv-gauge-row).
+ *   compact mode below 1280 px: slimmer nav column and gaps.
+ * Media queries see the REAL viewport (zoom does not change them).
+ */
+
+:root {
+  --tv-chart-boost: 1;
+}
+
+@media (min-height: 1300px) and (min-width: 2000px) {
+  :root {
+    --tv-chart-boost: 1.25;
+  }
+}
+
+@media (min-height: 1900px) and (min-width: 3000px) {
+  :root {
+    --tv-chart-boost: 1.45;
+  }
+}
+
+/* Wide gauge rows (home "today" gauges on 1440p / 4K): bigger dials. */
+@container (min-width: 1100px) {
+  tv-gauge {
+    --size: 188px;
+    --tick-depth: 15px;
+  }
+}
+
+/* Compact window (1100..1279 px): give the pages a little more room. */
+@media (max-width: 1279px) {
+  .tv-window__body {
+    grid-template-columns: 212px minmax(0, 1fr);
+    gap: 12px;
+  }
+}

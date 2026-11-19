@@ -50,7 +50,8 @@
   --tv-fs-lg: 16px;
 
   /* Geometry */
-  --tv-chamfer: 30px;      /* window corners */
+  --tv-chamfer: 30px;      /* window corners (0 when maximised / full screen) */
+  --tv-scale: 1;           /* UI zoom for large windows, set by js/uiscale.js */
   --tv-panel-cut: 18px;    /* panel corners */
   --tv-gap: 14px;
   --tv-focus: var(--tv-red-hot);

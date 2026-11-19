@@ -51,7 +51,7 @@
 
 .tv-orch-chartbox {
   width: 100%;
-  height: 270px;
+  height: calc(270px * var(--tv-chart-boost, 1));
 }
 
 .tv-orch-donut {

@@ -1,0 +1,59 @@
+/* JS resize handles (js/components/resize-handles.js, Task 20). */
+
+/* Sizes are divided by --tv-scale because body is zoomed. The near-zero alpha keeps the hit
+ * areas hit-testable on a per-pixel-transparent window without being visible. */
+
+.tv-resize {
+  --e: calc(6px / var(--tv-scale, 1));
+  --c: calc(12px / var(--tv-scale, 1));
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.tv-resize__handle {
+  position: absolute;
+  pointer-events: auto;
+  background: rgb(0 0 0 / 0.004);
+  touch-action: none;
+}
+
+.tv-resize__handle--n { top: 0; left: var(--c); right: var(--c); height: var(--e); cursor: n-resize; }
+.tv-resize__handle--s { bottom: 0; left: var(--c); right: var(--c); height: var(--e); cursor: s-resize; }
+.tv-resize__handle--e { right: 0; top: var(--c); bottom: var(--c); width: var(--e); cursor: e-resize; }
+.tv-resize__handle--w { left: 0; top: var(--c); bottom: var(--c); width: var(--e); cursor: w-resize; }
+.tv-resize__handle--nw { top: 0; left: 0; width: var(--c); height: var(--c); cursor: nw-resize; }
+.tv-resize__handle--ne { top: 0; right: 0; width: var(--c); height: var(--c); cursor: ne-resize; }
+.tv-resize__handle--sw { bottom: 0; left: 0; width: var(--c); height: var(--c); cursor: sw-resize; }
+.tv-resize__handle--se { bottom: 0; right: 0; width: var(--c); height: var(--c); cursor: se-resize; }
+
+/* Native chamfered window region (WindowState.native_region): the cut corners are outside the
+ * window, so the corner areas sit on the chamfer diagonals and the edges start after them.
+ * --tv-chamfer is in zoomed CSS px like the plate, so it is not divided by --tv-scale. */
+.tv-resize--region {
+  --k: var(--tv-chamfer);
+  --kb: calc(var(--tv-chamfer) * 0.75);
+}
+
+.tv-resize--region .tv-resize__handle--n,
+.tv-resize--region .tv-resize__handle--s {
+  left: var(--k);
+  right: var(--k);
+}
+
+.tv-resize--region .tv-resize__handle--s {
+  left: var(--kb);
+  right: var(--kb);
+}
+
+.tv-resize--region .tv-resize__handle--e,
+.tv-resize--region .tv-resize__handle--w {
+  top: var(--k);
+  bottom: var(--kb);
+}
+
+.tv-resize--region .tv-resize__handle--nw { top: calc(var(--k) / 2 - var(--c) / 2); left: calc(var(--k) / 2 - var(--c) / 2); }
+.tv-resize--region .tv-resize__handle--ne { top: calc(var(--k) / 2 - var(--c) / 2); right: calc(var(--k) / 2 - var(--c) / 2); }
+.tv-resize--region .tv-resize__handle--sw { bottom: calc(var(--kb) / 2 - var(--c) / 2); left: calc(var(--kb) / 2 - var(--c) / 2); }
+.tv-resize--region .tv-resize__handle--se { bottom: calc(var(--kb) / 2 - var(--c) / 2); right: calc(var(--kb) / 2 - var(--c) / 2); }
