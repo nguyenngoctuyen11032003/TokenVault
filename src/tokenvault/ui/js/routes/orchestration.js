@@ -4,7 +4,6 @@
 // Ranges 7d / 30d / 90d / all. All data is untrusted and rendered as text.
 
 import { disposeDetached, donutChart, loadECharts } from '../charts.js';
-import { SERIES_COLORS } from '../palette.js';
 import {
   coalesce,
   debounce,
@@ -22,8 +21,9 @@ import {
   rankList,
 } from '../components/skills-kit.js';
 
-const MAIN_COLOR = SERIES_COLORS[3]; // blue
-const SUB_COLOR = SERIES_COLORS[1]; // amber
+// The two sides use CSS tokens outside the categorical series (models / sessions use the palette).
+const MAIN_COLOR = 'var(--tv-text)'; // neutral light grey
+const SUB_COLOR = 'var(--tv-red-hot)'; // brand accent
 const num = (v) => Math.max(0, Number(v) || 0);
 
 export default async function render(container, ctx) {
@@ -165,6 +165,7 @@ export default async function render(container, ctx) {
       value: num(a.sidechain_tokens),
       display: fmtTokens(a.sidechain_tokens),
       color: undefined,
+      // Task 15 owns the `session` route (merged separately); the link is intentionally kept.
       href: `#/session/${encodeURIComponent(String(a.session_id ?? ''))}`,
     }));
     agentsEmpty.hidden = rows.length > 0;

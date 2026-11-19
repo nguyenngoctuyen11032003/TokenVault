@@ -6,7 +6,6 @@ import { colorFor } from '../palette.js';
 import { clipText, fmtInt, fmtPct, h } from './homekit.js';
 
 export const RANGES = Object.freeze(['7d', '30d', '90d', 'all']);
-export const RANGE_DAYS = Object.freeze({ '7d': 7, '30d': 30, '90d': 90, all: 0 });
 export const DEFAULT_RANGE = '30d';
 
 export function createRangeBar({ t, value = DEFAULT_RANGE, onChange, label }) {
@@ -128,8 +127,12 @@ function shiftDay(day, delta) {
   return new Date(Date.UTC(y, m - 1, d + delta)).toISOString().slice(0, 10);
 }
 
-/** Fill the gaps between YYYY-MM-DD days (and extend to the fixed window ending `today`). */
-export function fillDays(daily, range, today) {
+/**
+ * Fill the gaps BETWEEN the first and last server-provided YYYY-MM-DD day with zero counts.
+ * Pure string date arithmetic: the browser clock/timezone is never used (the server buckets
+ * days at the Manager's UTC offset), so the axis is exactly the server's days.
+ */
+export function fillDays(daily) {
   const map = new Map();
   for (const d of daily || []) {
     if (/^\d{4}-\d{2}-\d{2}$/.test(String(d?.day))) {
@@ -138,16 +141,9 @@ export function fillDays(daily, range, today) {
   }
   if (!map.size) return [];
   const days = [...map.keys()].sort();
-  let first = days[0];
-  let last = days[days.length - 1];
-  const n = RANGE_DAYS[range];
-  if (n) {
-    const start = shiftDay(today, -(n - 1));
-    if (start < first) first = start;
-    if (today > last) last = today;
-  }
+  const last = days[days.length - 1];
   const out = [];
-  for (let d = first, guard = 0; d <= last && guard < 800; d = shiftDay(d, 1), guard += 1) {
+  for (let d = days[0], guard = 0; d <= last && guard < 800; d = shiftDay(d, 1), guard += 1) {
     out.push({ day: d, count: map.get(d) || 0 });
   }
   return out;

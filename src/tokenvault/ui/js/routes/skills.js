@@ -13,7 +13,6 @@ import {
   fmtPct,
   h,
   LIVE_DEBOUNCE_MS,
-  localDay,
   shortDay,
 } from '../components/homekit.js';
 import {
@@ -176,7 +175,7 @@ export default async function render(container, ctx) {
       if (rng !== range.get()) return; // superseded; a re-run is queued
       if (!view || typeof view !== 'object') throw new Error('empty response');
       errorBox.hide();
-      const daily = fillDays(view.daily, rng, localDay(0));
+      const daily = fillDays(view.daily);
       const none = !(Number(view.total_invocations) > 0);
       empty.hidden = !none;
       body.hidden = none;

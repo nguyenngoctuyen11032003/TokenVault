@@ -7,7 +7,7 @@ Loaded by ``pytest_plugins = ["conftest_skills"]``. Shapes mirror ``SkillsView``
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -150,3 +150,35 @@ def wait_rev_after(page: Any, before: int) -> None:
 def console_problems(page: Any) -> list[str]:
     bad = [m for m in page.tv_console if m.startswith("error") or "missing key" in m]
     return [*page.tv_errors, *bad]
+
+
+@pytest.fixture
+def open_skills_tz(browser: Any, ui_server: str) -> Iterator[Callable[..., Any]]:
+    """Like open_skills_page but with a forced browser timezone (own context)."""
+    from conftest import stub_script
+
+    contexts: list[Any] = []
+
+    def _open(route: str, data: dict[str, Any], timezone_id: str) -> Any:
+        ctx = browser.new_context(viewport={"width": 1440, "height": 900}, timezone_id=timezone_id)
+        ctx.set_default_timeout(10_000)
+        contexts.append(ctx)
+        ctx.add_init_script(stub_script(None))
+        ctx.add_init_script(
+            f"window.__tvSkillsData = {json.dumps(data)};\n" + STUB_JS.read_text(encoding="utf-8")
+        )
+        page = ctx.new_page()
+        errors: list[str] = []
+        console: list[str] = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.on("console", lambda msg: console.append(f"{msg.type}: {msg.text}"))
+        page.goto(f"{ui_server}/index.html{route}")
+        page.wait_for_selector("html[data-tv-ready='1']", state="attached")
+        page.wait_for_selector("#tv-view [data-tv-rev]:not([data-tv-rev='0'])")
+        page.tv_errors = errors  # type: ignore[attr-defined]
+        page.tv_console = console  # type: ignore[attr-defined]
+        return page
+
+    yield _open
+    for c in contexts:
+        c.close()

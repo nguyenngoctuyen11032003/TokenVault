@@ -279,3 +279,86 @@ def test_screenshots(open_skills_page: Any, route: str, size: tuple[int, int]) -
     page.wait_for_timeout(700)
     page.screenshot(path=str(ARTIFACTS / f"{route}-{size[0]}x{size[1]}.png"))
     assert console_problems(page) == []
+
+
+# ------------------------------------------------------------ review round 1
+
+
+@pytest.mark.parametrize("tz", ["America/Los_Angeles", "Pacific/Kiritimati", "Asia/Ho_Chi_Minh"])
+def test_skills_day_axis_is_exactly_the_server_days(open_skills_tz: Any, tz: str) -> None:
+    # Server days that are not "today" in any browser zone; gaps in between get zeros.
+    days = ["2026-11-10", "2026-11-12", "2026-11-14"]
+    data = skills_data()
+    for rng in data["skills"]:
+        view = data["skills"][rng]
+        view["daily"] = [{"day": d, "count": 2 + i} for i, d in enumerate(days)]
+        view["total_invocations"] = 9
+    page = open_skills_tz("#/skills", data, tz)
+    page.wait_for_selector(
+        "#tv-view [data-chart='daily'] canvas, #tv-view [data-chart='daily'] svg"
+    )
+    labels = page.evaluate(
+        """() => {
+          const host = document.querySelector("#tv-view [data-chart='daily']");
+          const desc = document.getElementById(host.getAttribute('aria-describedby'));
+          return [...desc.querySelectorAll('tbody tr')].map(r => r.cells[0].textContent);
+        }"""
+    )
+    assert labels == ["10/11", "11/11", "12/11", "13/11", "14/11"]
+    assert console_problems(page) == []
+
+
+def _rgb(page: Any, colour: str) -> str:
+    return page.evaluate(
+        "c => { const d = document.createElement('i'); d.style.background = c;"
+        " document.body.append(d); const v = getComputedStyle(d).backgroundColor;"
+        " d.remove(); return v; }",
+        colour,
+    )
+
+
+def test_orchestration_side_colours_are_outside_the_categorical_palette(
+    open_skills_page: Any,
+) -> None:
+    page = open_skills_page("#/orchestration")
+    palette = page.evaluate("import('./js/palette.js').then(p => [...p.SERIES_COLORS])")
+    palette_rgb = {_rgb(page, c) for c in palette}
+    main = page.locator("[data-seg='main']").evaluate("e => getComputedStyle(e).backgroundColor")
+    sub = page.locator("[data-seg='sub']").evaluate("e => getComputedStyle(e).backgroundColor")
+    assert main not in palette_rgb and sub not in palette_rgb and main != sub
+    assert sub == _rgb(page, "var(--tv-red-hot)")
+    assert main == _rgb(page, "var(--tv-text)")
+
+
+def test_orchestration_tooltip_and_legend_render_model_names_as_text(
+    open_skills_page: Any,
+) -> None:
+    evil = "<img src=x onerror=alert(1)>"
+    data = skills_data()
+    for view in data["orchestration"].values():
+        view["main_by_model"][0]["model"] = evil
+        view["sidechain_by_model"][0]["model"] = evil
+    page = open_skills_page("#/orchestration", data=data)
+    page.evaluate("window.__xss = null; window.alert = () => { window.__xss = 1; }; undefined")
+    page.wait_for_selector(
+        "#tv-view [data-chart='models-main'] canvas, #tv-view [data-chart='models-main'] svg"
+    )
+    for side in ("main", "sub"):
+        page.evaluate(
+            """side => {
+              const el = document.querySelector(`#tv-view [data-chart='models-${side}']`);
+              echarts.getInstanceByDom(el).dispatchAction(
+                {type: 'showTip', seriesIndex: 0, dataIndex: 0});
+            }""",
+            side,
+        )
+        page.wait_for_selector("#tv-view [data-chart] div[style*='position'] >> text=onerror")
+        tip = page.evaluate(
+            "[...document.querySelectorAll('#tv-view [data-chart] div')]"
+            ".filter(d => d.textContent.includes('onerror') && d.children.length)"
+            ".map(d => d.innerHTML).join('|')"
+        )
+        assert "<img" not in tip.replace("&lt;img", "")
+    assert page.locator("#tv-view img").count() == 0
+    assert page.evaluate("window.__xss") is None
+    assert console_problems(page) == []
