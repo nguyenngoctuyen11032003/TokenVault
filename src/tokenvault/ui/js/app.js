@@ -6,8 +6,12 @@ import { applyI18n, loadI18n, t } from './i18n.js';
 import { filters } from './filters.js';
 import * as live from './live.js';
 import { createRouter } from './router.js';
+import { installScale } from './uiscale.js';
+import { installShortcuts } from './wincommands.js';
+import * as winstate from './winstate.js';
 
 live.installGlobal();
+installScale(); // before the first layout: large windows are zoomed (--tv-scale)
 
 /** Transparent chamfered window by default; opaque rectangle when settings say so. */
 async function applyWindowMode(win) {
@@ -37,6 +41,13 @@ async function boot() {
     import('./components/navmenu.js'),
   ]);
 
+  // Window state (maximised / full screen) + controls. Not awaited: the first route renders
+  // while Python answers window_state(); tv.onWindowState is installed synchronously.
+  const winReady = winstate.init(api);
+  installShortcuts();
+  const { mountResizeHandles } = await import('./components/resize-handles.js');
+  mountResizeHandles(api);
+
   const win = document.querySelector('.tv-window');
   const view = document.getElementById('tv-view');
   // Skip link is a button: an anchor to #tv-view would be read as a route by the hash router.
@@ -46,6 +57,7 @@ async function boot() {
   globalThis.tv.filters = filters;
 
   await Promise.all([applyWindowMode(win), router.start()]);
+  winReady.catch(() => {}); // never blocks the first render (init itself never throws)
   globalThis.tv.bootMs = Math.round(performance.now()); // diagnostics: time to first render
   document.documentElement.dataset.tvReady = '1';
 }

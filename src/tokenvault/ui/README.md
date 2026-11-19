@@ -11,7 +11,11 @@ css/components.css    <tv-panel>, nav, buttons, notices
 css/primitives.css    shared page primitives (.tv-table, .tv-bar, .tv-seg, ...)
 css/gauge.css         <tv-gauge>
 css/pages.css         reserved (see "Page styles" below)
-js/app.js             boot: i18n -> components -> window mode -> router
+css/responsive.css    shared size rules (compact < 1280 px, wide >= 1800 px layout widths)
+js/app.js             boot: scale -> i18n -> components -> window state -> router
+js/winstate.js        window state mirror (maximised / full screen), tv.onWindowState
+js/wincommands.js     maximise / full screen commands, F11 / Esc, toast, full-screen hint
+js/uiscale.js         --tv-scale zoom for large windows
 js/api.js             Python bridge (pywebview, http fallback)
 js/router.js          hash router, dynamic route modules
 js/nav.js             nav manifest (single list of pages)
@@ -117,12 +121,14 @@ tasks. Ship `css/pages/<name>.css`, load it with `ctx.useStylesheet`, and scope 
 - `<tv-gauge value max [min] label unit [display]>`: 270° tick gauge; `display` overrides the
   number text (e.g. `$61.4`, `UNKNOWN`). Sets `--tv-gauge-p` and `role="meter"`.
 - `<tv-titlebar>`, `<tv-navmenu>`: used once by the shell.
+- `js/components/resize-handles.js`: the 8 JS resize hit areas (see "Window states").
 
 ## Python contract
 
 - `api.js` uses `window.pywebview.api.<method>` (waits for `pywebviewready`); without pywebview it
   POSTs the JSON argument array to `/api/<method>` and expects a JSON response.
-- Window buttons call `window_min()` and `window_close()` (close = hide to tray).
+- Window buttons call `window_min()`, `window_toggle_maximize()` (or `window_set_fullscreen(false)`
+  while full screen) and `window_close()` (close = hide to tray). See "Window states" below.
 - `settings().transparent_window === false` switches the window to `.window--opaque` (rectangle,
   chamfer drawn inside). Missing setting or a failed call keeps the transparent window.
 - Live push: `window.evaluate_js("tv.onLive(<json>)")` (object or JSON string; `tv.emitLive` is
@@ -136,3 +142,46 @@ tasks. Ship `css/pages/<name>.css`, load it with `ctx.useStylesheet`, and scope 
 - Frameless drag: elements with class `pywebview-drag-region` (titlebar brand, title, spacer).
 - Serve this folder over http (pywebview's built-in server): ES modules do not load from
   `file://`, and `.js` must be served as `text/javascript`.
+
+## Window states (Task 20)
+
+The window is frameless but behaves like a normal desktop window. Contract: "Window methods" in
+`docs/superpowers/specs/manager-api-contract.md`.
+
+- **State sync** (`js/winstate.js`): at boot the UI calls `api.window_state()`; afterwards Python
+  pushes `window.evaluate_js("tv.onWindowState(<WindowState json>)")` on every change (object
+  or JSON string). `maximized` and `fullscreen` must be booleans, otherwise the push is dropped
+  (`console.warn`). Optional `native_resize: true` means Python resizes natively (WS_THICKFRAME)
+  and the UI draws no resize handles; `min_width` / `min_height` default to 1100 / 720. Any
+  WindowState returned by a window method is applied too. `getState()`, `subscribe(cb)`,
+  `tv.windowState` expose it.
+- **Classes**: `window--maximized` (maximised and not full screen) and `window--fullscreen` on
+  both `<html>` and `.tv-window`. They set `--tv-chamfer: 0px`: no clip-path, no lower red
+  trims, outer padding 16/14 px instead of 28/26 px, the plate fills the whole viewport. Restoring
+  removes the classes and the chamfer comes back. `.window--opaque` combines with both.
+- **Title bar**: minimise, maximise/restore (icon + `aria-label` "Phóng to"/"Khôi phục" follow
+  the state; while full screen it leaves full screen), close. Double-click on a drag region
+  (brand, title hood, spacer) toggles maximise, except in full screen.
+- **Shortcuts**: F11 toggles full screen (always, even while typing); Esc leaves full screen
+  only when full screen, the focus is not in a text field and no dialog / menu is open
+  (`[role=dialog]`, `[aria-modal=true]`, `dialog[open]`, `[role=menu]`, ...), and nobody called
+  `preventDefault()` first. Entering full screen shows the chip "Thoát toàn màn hình (F11)"
+  (`.tv-fullscreen-hint`) which fades after 2.5 s.
+- **No window API** (plain browser / old bridge): the buttons never throw; they show the toast
+  "Chỉ có trong ứng dụng" (`.tv-toast`). F11 falls back to the browser Fullscreen API (dev).
+- **Resize handles** (`js/components/resize-handles.js`, `.tv-resize__handle[data-dir]`): 6 px
+  edges and 12 px corners, only when the window is normal and `native_resize` is not true. A
+  drag calls `window_get_bounds()` once, then `window_set_bounds(x, y, w, h)` with bounds from
+  the pointer's SCREEN delta (`screenX/Y`), clamped to the minimum size, at most once per frame
+  and one call in flight; the final bounds are always sent on release; Esc cancels (original
+  bounds restored).
+- **Scale** (`js/uiscale.js`): `--tv-scale = clamp(1, 1 + (min(W/1600, H/900) - 1) / 2, 1.5)`
+  zooms `body` on large windows (1920x1080 -> 1.1, 2560x1440 -> 1.3, 3840x2160 -> 1.5), so a 4K
+  window lays out like 2560x1440 at 1.5x. `.tv-window` divides `100vw/100vh` by it. Media
+  queries still see the real viewport width; elements appended to `body` are zoomed too.
+  Fixed-position overlays need nothing special; sizes that must stay physical (resize
+  handles) divide by `var(--tv-scale)`.
+- **Responsive rules**: `css/responsive.css` holds the shared rules; page CSS keeps page fixes.
+  `tests/ui/test_responsive.py` checks every page at 1100x720 ... 3840x2160, normal and
+  maximised (no horizontal scroll, no overlapping panels, charts drawn, content >= 85% of the
+  width from 1920 px).

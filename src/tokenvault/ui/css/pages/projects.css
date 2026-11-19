@@ -9,7 +9,7 @@
 }
 
 .tv-proj-chartbox {
-  height: 240px;
+  height: calc(240px * var(--tv-chart-boost, 1));
 }
 
 .tv-proj-chart {

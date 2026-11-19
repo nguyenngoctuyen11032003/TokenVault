@@ -297,3 +297,39 @@ tv-panel::after {
 .tv-notice--error .tv-notice__mark {
   background: repeating-conic-gradient(from 225deg, var(--tv-red-hot) 0 2deg, transparent 2deg 9deg);
 }
+
+/* ---------- Toast + full-screen hint (js/wincommands.js) ---------- */
+
+.tv-toast,
+.tv-fullscreen-hint {
+  position: fixed;
+  left: 50%;
+  z-index: 60;
+  transform: translateX(-50%);
+  padding: 7px 22px;
+  font-size: var(--tv-fs-sm);
+  color: var(--tv-text);
+  white-space: nowrap;
+  background: linear-gradient(180deg, #26262b, #18181c);
+  border: 1px solid var(--tv-line-strong);
+  border-bottom: 2px solid var(--tv-red);
+  clip-path: polygon(10px 0, calc(100% - 10px) 0, 100% 100%, 0 100%);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+  transition: opacity 300ms var(--tv-ease);
+}
+
+.tv-toast {
+  bottom: 28px;
+}
+
+.tv-fullscreen-hint {
+  top: 12px;
+  border-bottom-color: var(--tv-red-hot);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 10px 100%);
+}
+
+.tv-toast--out,
+.tv-fullscreen-hint--out {
+  opacity: 0;
+}

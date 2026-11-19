@@ -148,7 +148,7 @@
 }
 
 .tv-ov-panel--tools .tv-ov-chartbox {
-  height: 404px;
+  height: calc(404px * var(--tv-chart-boost, 1));
 }
 
 @media (max-width: 1100px) {
@@ -162,11 +162,11 @@
 }
 
 .tv-ov-chartbox {
-  height: 236px;
+  height: calc(236px * var(--tv-chart-boost, 1));
 }
 
 .tv-ov-chartbox--tall {
-  height: 300px;
+  height: calc(300px * var(--tv-chart-boost, 1));
 }
 
 .tv-ov-chartbox--plain {

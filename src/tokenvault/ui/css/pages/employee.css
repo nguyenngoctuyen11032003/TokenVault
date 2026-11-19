@@ -245,7 +245,7 @@
 }
 
 .tv-employee-chartbox {
-  height: 230px;
+  height: calc(230px * var(--tv-chart-boost, 1));
 }
 
 .tv-employee-trend {
@@ -255,7 +255,7 @@
 
 .tv-employee-donutbox {
   position: relative;
-  height: 230px;
+  height: calc(230px * var(--tv-chart-boost, 1));
 }
 
 .tv-employee-models {
