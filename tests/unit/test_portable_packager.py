@@ -168,6 +168,17 @@ def test_diagnostics_reports_portable_runtime(
     assert _portable_runtime()["present"] is False
 
 
+def test_consent_runs_before_old_install_is_touched() -> None:
+    ps = (SCRIPTS / "install.ps1").read_text()
+    consent = ps.index("'consent'")
+    assert consent < ps.index("Stop-Process") < ps.index("Copy-Item")
+    assert ps.index("exit 3") < ps.index("Stop-Process")  # decline leaves the old agent alone
+    iss = (REPO / "packaging" / "adapter-template.iss").read_text()
+    prep = iss[iss.index("function PrepareToInstall"):]
+    assert prep.index("AskConsentFirst") < prep.index("StopAgent")
+    assert "'consent --from" in iss
+
+
 def test_scripts_are_ascii_and_reference_the_documented_commands() -> None:
     for f in SCRIPTS.iterdir():
         f.read_bytes().decode("ascii")  # PowerShell 5.1 reads BOM-less files as ANSI

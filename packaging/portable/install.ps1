@@ -52,6 +52,24 @@ if (-not $SkipSignatureCheck) {
     } else { Say 'Runtime signature: valid (Python Software Foundation).' }
 }
 
+# 2b. Consent FIRST, from the freshly extracted runtime, before the old agent is stopped or any
+# file is replaced: declining leaves an existing install running untouched.
+$consented = $false
+if (-not $Silent) {
+    $cargs = @('-m', 'tokenvault.adapter', 'consent', '--from', ('"' + (Resolve-Path -LiteralPath $Payload).Path + '"'))
+    try {
+        $c = Start-Process -FilePath $srcPy -ArgumentList ($cargs -join ' ') -WorkingDirectory $srcRuntime -PassThru -WindowStyle Hidden
+        while (-not $c.HasExited) { Start-Sleep -Milliseconds 300 }
+    } catch { Fail 10 "Windows refused to start $srcPy : $($_.Exception.Message)" }
+    switch ($c.ExitCode) {
+        0 { $consented = $true }
+        2 { Fail 2 'The package carries no valid configuration payload.' }
+        3 { Say 'Installation cancelled: you declined the consent screen. Nothing was changed and nothing was sent.'; exit 3 }
+        4 { Fail 4 'The consent screen could not be shown. Nothing was changed.' }
+        default { Fail 10 "consent exited with code $($c.ExitCode)." }
+    }
+}
+
 # 3. Stop an agent started from a previous install (its files would be locked).
 $destRuntime = Join-Path $InstallDir 'runtime'
 try {
@@ -77,8 +95,8 @@ if ($DataDir) { New-Item -ItemType Directory -Force -Path $DataDir | Out-Null; $
 if ($ClaudeDir) { $argList += @('--claude-dir', ('"' + $ClaudeDir + '"')) }
 if ($NoAutostart) { $argList += '--no-autostart' }
 if ($NoStart) { $argList += '--no-start' }
-if ($Silent) { $argList += '--silent' }
-if ($Accept) { $argList += '--accept' }
+if ($Silent -or $consented) { $argList += '--silent' }
+if ($Accept -or $consented) { $argList += '--accept' }  # consent was already given above
 Say 'Starting setup (the consent screen opens in a separate window) ...'
 try {
     $p = Start-Process -FilePath $py -ArgumentList ($argList -join ' ') -WorkingDirectory $destRuntime -PassThru -WindowStyle Hidden
