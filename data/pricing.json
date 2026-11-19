@@ -1,1 +1,17 @@
-{}
+{
+  "_comment": "USD per million tokens. These are API-equivalent estimates (list API prices), not what a Pro/Max subscription actually bills. Lookup is exact by model id (or via 'aliases'); an unlisted model shows UNKNOWN cost, never a guess. Rates for opus-4-7/opus-4-6/sonnet-4-6/haiku-4-5 copied verbatim from the auh-manager reference pricing.json; the owner should review them.",
+  "unit": "USD per 1M tokens",
+  "models": {
+    "claude-opus-4-7":   { "tier": "opus",   "input": 15.00, "output": 75.00, "cache_read": 1.50, "cache_create_5m": 18.75, "cache_create_1h": 30.00 },
+    "claude-opus-4-6":   { "tier": "opus",   "input": 15.00, "output": 75.00, "cache_read": 1.50, "cache_create_5m": 18.75, "cache_create_1h": 30.00 },
+    "claude-sonnet-4-6": { "tier": "sonnet", "input":  3.00, "output": 15.00, "cache_read": 0.30, "cache_create_5m":  3.75, "cache_create_1h":  6.00 },
+    "claude-haiku-4-5":  { "tier": "haiku",  "input":  1.00, "output":  5.00, "cache_read": 0.10, "cache_create_5m":  1.25, "cache_create_1h":  2.00 },
+    "claude-opus-4-5":   { "tier": "opus",   "input":  5.00, "output": 25.00, "cache_read": 0.50, "cache_create_5m":  6.25, "cache_create_1h": 10.00 },
+    "claude-sonnet-4-5": { "tier": "sonnet", "input":  3.00, "output": 15.00, "cache_read": 0.30, "cache_create_5m":  3.75, "cache_create_1h":  6.00 }
+  },
+  "aliases": {
+    "claude-haiku-4-5-20251001": "claude-haiku-4-5",
+    "claude-sonnet-4-5-20250929": "claude-sonnet-4-5",
+    "claude-opus-4-5-20251101": "claude-opus-4-5"
+  }
+}
