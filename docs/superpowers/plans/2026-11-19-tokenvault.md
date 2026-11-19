@@ -350,3 +350,18 @@
 
 - [ ] **Step 1:** Write failing UI tests (stub API window methods): buttons present and aria-labelled; maximise button calls `window_toggle_maximize` and its icon/label flips on `tv.onWindowState`; double-click title bar toggles; F11 toggles fullscreen and Esc leaves; resize handle drag calls `window_set_bounds` with clamped sizes; classes applied; no horizontal scroll and no overlapping panels at 1100x720, 1440x900, 1920x1080, 2560x1440, 3840x2160 on every page.
 - [ ] **Step 2:** Run, expect FAIL. **Step 3:** Implement. **Step 4:** Run, expect PASS; take screenshots at the five sizes for home/employee/overview/skills/installer/diagnostics and review them. **Step 5:** Commit.
+
+---
+
+### Task 21: PDF report generator (owner request, added after approval)
+
+**Files:**
+- Create: `src/tokenvault/manager/reports/__init__.py`, `spec.py`, `data.py`, `fonts.py`, `palette.py`, `charts.py`, `pdf_builder.py`, `strings_vi.py`; tests `tests/unit/test_report_*.py`
+- Modify: `pyproject.toml` (add `reportlab` runtime dependency; `pypdf`, `pypdfium2` dev dependencies only)
+
+**Interfaces:**
+- Produces: `ReportSpec(scope: "all"|"employee"|"team", employee_keys: list[str], team: str|None, range: "today"|"7d"|"30d"|"custom", start: str|None, end: str|None, per_employee_pages: bool, include_charts: bool, include_sessions: bool, include_session_titles: bool, top_n: int, language: "vi")`, `build_report(aggregates, spec, out_path, *, now, manager_name) -> ReportResult(path, pages, bytes, scope_label, range_label)`. Vector charts (reportlab graphics), print-friendly light theme, Vietnamese text (Unicode TTF embedded), cost always labelled "ước tính theo giá API" with UNKNOWN/partial markers.
+
+### Task 22: Report export API and UI (after Tasks 12 and 20)
+
+**Files:** `manager/api.py` additions (`export_report`, `report_options`, `open_path`), UI `js/components/report-dialog.js` + buttons on Employees / Employee / Home / Overview, devserver support, tests.
