@@ -322,7 +322,16 @@ def diagnostics(m: Manager) -> dict[str, Any]:
         "ingest_running": ing is not None,
         "discovery_port": m.discovery.bound_port if m.discovery else 0,
         "tz_offset_minutes": m.tz_offset_minutes,
+        "portable_runtime": _portable_runtime(),
     }
+
+
+def _portable_runtime() -> dict[str, Any]:
+    """Is the runtime for the "windows-portable" installer target available here?"""
+    from tokenvault.manager.portable_packager import default_runtime_dir, runtime_ready
+
+    d = default_runtime_dir()
+    return {"present": runtime_ready(d), "path": str(d)}
 
 
 def _probe_tls(port: int) -> tuple[bool, str]:

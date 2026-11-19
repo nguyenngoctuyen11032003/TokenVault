@@ -108,6 +108,16 @@ if (Test-Path $template) {
   Write-Warning 'No adapter template: "Create installer" in the Manager will not work.'
 }
 
+# 3b. Portable runtime for the "windows-portable" installer target: the Manager looks for
+# <exe dir>\portable-runtime (runtime\ + scripts\). Prepared once by build\build-portable.ps1
+# (needs internet); without it that installer target reports a clear "runtime missing" error.
+$portableSrc = Join-Path $Root 'templates\portable-runtime'
+if (Test-Path (Join-Path $portableSrc 'runtime\python.exe')) {
+  Copy-Item $portableSrc (Join-Path $mgrDir 'portable-runtime') -Recurse -Force
+} else {
+  Write-Warning 'templates\portable-runtime is missing (run build\build-portable.ps1 first): this build will NOT offer the windows-portable installer target.'
+}
+
 # 5. WebView2 bootstrapper ---------------------------------------------------------------
 $redist = Join-Path $Pkg 'redist'
 $boot = Join-Path $redist 'MicrosoftEdgeWebview2Setup.exe'

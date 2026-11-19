@@ -72,6 +72,15 @@ try {
     Say "Copying to $destRuntime ..."
     Copy-Item -LiteralPath $srcRuntime -Destination $destRuntime -Recurse -Force
 } catch { Fail 1 "cannot copy to ${InstallDir}: $($_.Exception.Message)" }
+# adapter package scripts: the installed Manager needs them to build "windows-portable" packages
+$srcScripts = Join-Path $here 'scripts'
+$destScripts = Join-Path $InstallDir 'scripts'
+if (Test-Path -LiteralPath $srcScripts) {
+    try {
+        if (Test-Path -LiteralPath $destScripts) { Remove-Item -LiteralPath $destScripts -Recurse -Force }
+        Copy-Item -LiteralPath $srcScripts -Destination $destScripts -Recurse -Force
+    } catch { Write-Host "WARNING: could not copy the adapter package scripts: $($_.Exception.Message)" -ForegroundColor Yellow }
+}
 $pyw = Join-Path $destRuntime 'pythonw.exe'
 $py = Join-Path $destRuntime 'python.exe'
 

@@ -28,7 +28,7 @@ which is `"device:<id>"` for devices without a Claude account), `start`/`end` ar
 - `reveal_in_explorer(path) -> {ok}`
 - `settings() -> {transparent_window: bool, start_with_windows: bool, port: int, manager_id: str, hosts: [str] (RAW configured list; empty = automatic), hosts_auto: [str] (detected), installer_hosts: [str] (what goes into new installers), window_shape: str, fingerprint: str, static_ip_hint: str, tz_offset_minutes: int, version: str}`
 - `save_settings(patch) -> settings` (allowed keys: transparent_window, start_with_windows, hosts, window_shape)
-- `diagnostics() -> {port, port_requested, fingerprint, connected: [device_id], connected_count, last_event_at|null, rejected_count, firewall_rule_present: bool, cert_expires_at, db_path, queue: {events, devices}, warnings: [str]}`
+- `diagnostics() -> {port, port_requested, fingerprint, connected: [device_id], connected_count, last_event_at|null, rejected_count, firewall_rule_present: bool, cert_expires_at, db_path, queue: {events, devices}, warnings: [str], portable_runtime: {present: bool, path: str}}`
 - `connectivity_test() -> {ok, checks: [{name, ok, detail}]}` (bind, firewall rule, LAN IPs, certificate)
 - `regenerate_certificate() -> {fingerprint, warning}` (explicit; invalidates all installed adapters)
 
