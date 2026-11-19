@@ -1,0 +1,9 @@
+{
+  "evil": {
+    "ok": "evil-ok",
+    "__proto__": { "pollutedInner": "yes" },
+    "constructor": { "prototype": { "pollutedCtor": "yes" } }
+  },
+  "nav": { "home": "HACKED" },
+  "__proto__": { "pollutedTop": "yes" }
+}

@@ -1,0 +1,214 @@
+/* Shared page primitives for route modules: grid, list, table, bars, dots, segmented switch,
+ * chart area, KPI blocks, number colours. Pages reuse these instead of redefining them. */
+
+.tv-grid {
+  display: grid;
+  gap: var(--tv-gap);
+  min-width: 0;
+}
+
+.tv-muted {
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-num,
+.tv-num--hot,
+.tv-num--orange {
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-num {
+  text-align: right;
+}
+
+.tv-num--hot {
+  color: var(--tv-red-hot);
+}
+
+.tv-num--orange {
+  color: var(--tv-orange);
+}
+
+/* Selectable list (team list etc.) */
+.tv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tv-list__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 6px;
+  border: 0;
+  border-bottom: 1px solid var(--tv-line);
+  background: transparent;
+  color: var(--tv-muted);
+  text-align: left;
+  cursor: pointer;
+}
+
+.tv-list__item:hover {
+  color: var(--tv-text);
+}
+
+.tv-list__item[aria-pressed="true"],
+.tv-list__item[aria-current] {
+  color: var(--tv-red-hot);
+}
+
+.tv-list__ring {
+  width: 18px;
+  height: 18px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.tv-list__item[aria-pressed="true"] .tv-list__ring {
+  box-shadow: inset 0 0 0 3px var(--tv-panel), inset 0 0 0 9px currentColor;
+}
+
+.tv-list__count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Data table */
+.tv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.tv-table th,
+.tv-table td {
+  padding: 9px 8px;
+  border-bottom: 1px solid var(--tv-line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tv-table th {
+  color: var(--tv-muted);
+  font-weight: 500;
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-table th.tv-num,
+.tv-table td.tv-num {
+  text-align: right;
+}
+
+.tv-table tbody tr:hover {
+  background: rgb(255 255 255 / 0.03);
+}
+
+/* Share bar */
+.tv-bar {
+  display: block;
+  height: 6px;
+  background: #2a2a2f;
+}
+
+.tv-bar > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--tv-red-deep), var(--tv-red-hot));
+}
+
+/* Status dot */
+.tv-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #55555c;
+  vertical-align: middle;
+}
+
+.tv-dot--on {
+  background: var(--tv-green);
+  box-shadow: 0 0 6px var(--tv-green);
+}
+
+/* Segmented switch (range today / 7d / 30d) */
+.tv-seg {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.tv-seg > button {
+  min-width: 78px;
+  padding: 6px 14px;
+  border: 0;
+  background: #232327;
+  color: var(--tv-muted);
+  cursor: pointer;
+  clip-path: polygon(8px 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+}
+
+.tv-seg > button[aria-pressed="true"] {
+  background: linear-gradient(180deg, #45454c, #34343a);
+  color: var(--tv-text-strong);
+  box-shadow: inset 0 -2px 0 var(--tv-red-hot);
+}
+
+.tv-seg > button:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--tv-text-strong);
+}
+
+/* Chart canvas: dark red grid (ECharts draws on top) */
+.tv-chart-area {
+  position: relative;
+  min-width: 0;
+  min-height: 120px;
+  border: 1px solid #1f1f23;
+  background:
+    linear-gradient(var(--tv-chart-grid) 1px, transparent 1px) 0 0 / 100% 24px,
+    linear-gradient(90deg, var(--tv-chart-grid) 1px, transparent 1px) 0 0 / 28px 100%,
+    var(--tv-chart-bg);
+}
+
+/* KPI block next to a chart */
+.tv-split {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.tv-split > :first-child {
+  flex: 1;
+}
+
+.tv-kpi__value {
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.tv-kpi__sub {
+  font-size: 18px;
+  color: var(--tv-muted);
+}
+
+.tv-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 8px;
+  font-size: 13px;
+}

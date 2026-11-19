@@ -1,0 +1,48 @@
+{
+  "app": {
+    "documentTitle": "TokenVault Manager",
+    "brand": "ICS",
+    "titleBold": "TOKEN",
+    "titleLight": "VAULT",
+    "skipToContent": "Bỏ qua đến nội dung chính"
+  },
+  "titlebar": {
+    "installer": "Tạo bộ cài cho nhân viên",
+    "settings": "Cài đặt",
+    "minimize": "Thu nhỏ",
+    "close": "Ẩn xuống khay",
+    "toolbar": "Điều khiển cửa sổ"
+  },
+  "live": {
+    "online": "{online} / {total} máy online",
+    "waiting": "Đang chờ dữ liệu",
+    "label": "Trạng thái máy nhân viên"
+  },
+  "nav": {
+    "label": "Điều hướng chính",
+    "home": "Tổng quan",
+    "employees": "Nhân viên",
+    "projects": "Dự án",
+    "sessions": "Phiên làm việc",
+    "skills": "Kỹ năng",
+    "orchestration": "Điều phối",
+    "installer": "Tạo bộ cài",
+    "settings": "Cài đặt",
+    "diagnostics": "Chẩn đoán"
+  },
+  "route": {
+    "loading": "Đang tải…",
+    "notBuiltTitle": "Đang xây dựng",
+    "notBuiltBody": "Trang “{page}” chưa được xây dựng trong phiên bản này.",
+    "notBuiltHint": "Các trang khác vẫn hoạt động bình thường. Hãy chọn một mục ở thanh bên trái.",
+    "errorTitle": "Lỗi tải trang",
+    "errorBody": "Không thể hiển thị trang “{page}”. Chi tiết: {detail}",
+    "backHome": "Về trang tổng quan"
+  },
+  "gauge": {
+    "unknown": "—"
+  },
+  "common": {
+    "unknown": "UNKNOWN"
+  }
+}
