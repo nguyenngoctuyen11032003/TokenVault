@@ -172,13 +172,29 @@ class Watcher:
 
     def _schedule(self, path: Path) -> None:
         """Handle a real OS event: mark the path hot and queue it."""
+        self._mark_hot(path)
+        self._enqueue(path)
+
+    def _mark_hot(self, path: Path, baseline: bool = False) -> None:
+        """Start (or refresh) stat polling of a file. Never touches directories.
+
+        With ``baseline`` the current (size, mtime_ns) is recorded now, so a write
+        that lands before the first poll is not mistaken for the baseline.
+        """
         now = time.monotonic()
         with self._cond:
             seen = self._hot[path][1] if path in self._hot else None
+        if baseline and seen is None:
+            try:
+                st = _stat(path)
+                seen = (st.st_size, st.st_mtime_ns)
+            except OSError:
+                pass
+        with self._cond:
             if not self._hot:
                 self._next_poll = now + HOT_POLL_S
             self._hot[path] = (now, seen)
-        self._enqueue(path)
+            self._cond.notify_all()
 
     def _enqueue(self, path: Path) -> None:
         now = time.monotonic()
@@ -275,6 +291,9 @@ class Watcher:
                 if not r.more:
                     break
         if found:
+            self._mark_hot(
+                path, baseline=True
+            )  # actively growing: keep polling it until it goes quiet
             try:
                 self._on_new()
             except Exception:
@@ -308,10 +327,14 @@ class Watcher:
                         files.append((m, p))
             files.sort(key=lambda x: x[0], reverse=True)
             interval = 1.0 / max(1, rate)
-            for _, p in files:
+            for m, p in files:
                 if self._stopping.is_set():
                     return
                 started = time.monotonic()
+                if time.time() - m < HOT_TTL_S:
+                    self._mark_hot(
+                        p, baseline=True
+                    )  # being written right now: poll it, not just events
                 self._collect(p)
                 if self._stopping.wait(max(0.0, interval - (time.monotonic() - started))):
                     return
