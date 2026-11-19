@@ -15,12 +15,13 @@ from tokenvault.manager import firewall, netinfo
 from tokenvault.manager.api_models import (
     NO_TEAM,
     ApiError,
+    TemplateMissingError,
     clean_label,
     clean_team,
     iso_utc,
     require_text,
 )
-from tokenvault.manager.lifecycle import Manager
+from tokenvault.manager.lifecycle import CertRestartError, Manager
 from tokenvault.manager.packager import Packager, PackagerError
 from tokenvault.manager.settings_store import SettingsError
 
@@ -147,15 +148,15 @@ def create_installer(m: Manager, team: Any, label: Any = None) -> dict[str, Any]
     t = clean_team(team, allow_empty=False)
     lbl = clean_label(label)
     if not template_ok(m):
-        raise ApiError(f"adapter template missing: {m.cfg.template}", "template_missing")
+        raise TemplateMissingError(m.cfg.template)
     with m.installer_lock:
         packager = Packager(m.cfg.template, m.enrollment, m.cert, m.paths.installers,
                             m.endpoint, m.manager_id)
         try:
             built = packager.build_for_team(t, lbl)
         except PackagerError as e:
-            if "template" in str(e).lower():
-                raise ApiError(f"adapter template missing: {e}", "template_missing") from e
+            if not template_ok(m):  # removed/emptied between the check and the build
+                raise TemplateMissingError(m.cfg.template) from e
             raise ApiError(str(e)) from e
     m.notify_change()
     return {"path": str(built.path), "file_name": built.file_name, "team": built.team,
@@ -183,8 +184,9 @@ def settings(m: Manager) -> dict[str, Any]:
         "start_with_windows": s["start_with_windows"],
         "port": m.bound_port(),
         "manager_id": m.manager_id,
-        "hosts": m.hosts(),
-        "hosts_auto": not s["hosts"],
+        "hosts": list(s["hosts"]),  # RAW configured list; [] = automatic
+        "hosts_auto": m.cfg.hosts_provider(),  # what "automatic" detects right now
+        "installer_hosts": m.hosts(),  # what new installers carry
         "fingerprint": m.cert.fingerprint_sha256,
         "static_ip_hint": s["static_ip_hint"],
         "tz_offset_minutes": m.tz_offset_minutes,
@@ -195,6 +197,10 @@ def settings(m: Manager) -> dict[str, Any]:
 
 def save_settings(m: Manager, patch: Any) -> dict[str, Any]:
     before = m.settings.get()
+    if isinstance(patch, dict) and isinstance(patch.get("hosts"), list) and not before["hosts"]:
+        echoed = [str(h).strip().lower() for h in patch["hosts"]]
+        if echoed == [h.lower() for h in m.cfg.hosts_provider()]:
+            patch = {**patch, "hosts": []}  # UI echoed the automatic list: stay automatic
     try:
         after = m.settings.save_patch(patch)
     except SettingsError as e:
@@ -237,6 +243,10 @@ def _warnings(m: Manager) -> list[str]:
         w.append(f"LAN discovery is off (UDP {DISCOVERY_PORT} unavailable).")
     if m.tz_error:
         w.append("Another program changed the database time zone; restart the Manager.")
+    if m.cert_restart_error:
+        w.append("The certificate was regenerated (new fingerprint "
+                 f"{m.cert.fingerprint_sha256[:16]}...) but the ingest server did not restart: "
+                 f"{m.cert_restart_error}. Restart the Manager.")
     if m.pricing_error:
         w.append(f"Price list unusable ({m.pricing_error}): costs show UNKNOWN.")
     return w
@@ -316,6 +326,9 @@ def connectivity_test(m: Manager) -> dict[str, Any]:
 def regenerate_certificate(m: Manager) -> dict[str, Any]:
     try:
         new = m.regenerate_certificate()
+    except CertRestartError as e:
+        m.notify_change()
+        raise ApiError(str(e), "cert_error") from e
     except (OSError, RuntimeError, ValueError) as e:
         raise ApiError(f"certificate regeneration failed: {e}", "cert_error") from e
     m.notify_change()

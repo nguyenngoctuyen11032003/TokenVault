@@ -2,9 +2,14 @@
 
 Two rules, named without spaces (no quoting pitfalls with netsh):
 
-* ``TokenVault-Manager-Ingest-TCP``: TCP ``<port>-<port+20>`` (the ingest port and
-  every fallback port the ingest server may pick when the preferred one is busy).
-* ``TokenVault-Manager-Discovery-UDP``: UDP 47801 (LAN discovery answers).
+* ``TokenVault-Manager-Ingest-TCP-47800-47820``: TCP ``<base>-<base+20>`` (the
+  ingest port and every fallback port the ingest server may pick when it is busy).
+* ``TokenVault-Manager-Discovery-UDP-47801``: UDP 47801 (LAN discovery answers).
+
+Both use ``remoteip=localsubnet`` (only PCs on the Manager's own subnets; adapters
+on another routed subnet need the rule widened by an admin) and ``profile=any``
+(office networks are often classified "Public" by Windows; the subnet restriction
+is what limits exposure).
 
 With ``program`` (the frozen Manager exe, passed by the installer) the rules only
 apply to that program. Adding rules needs elevation: only the Manager installer
@@ -29,10 +34,19 @@ from dataclasses import asdict, dataclass
 
 from tokenvault.common.discovery_wire import DISCOVERY_PORT
 
-TCP_RULE = "TokenVault-Manager-Ingest-TCP"
-UDP_RULE = "TokenVault-Manager-Discovery-UDP"
 PORT_FALLBACKS = 20  # same as ingest_server.PORT_FALLBACKS
 DEFAULT_PORT = 47800
+
+
+def tcp_range(port: int) -> str:
+    return f"{port}-{min(port + PORT_FALLBACKS, 65535)}"
+
+
+def tcp_rule(base: int = DEFAULT_PORT) -> str:
+    return f"TokenVault-Manager-Ingest-TCP-{tcp_range(base)}"
+
+
+UDP_RULE = f"TokenVault-Manager-Discovery-UDP-{DISCOVERY_PORT}"
 
 Runner = Callable[[Sequence[str]], tuple[int, str]]
 _NETSH = ["netsh", "advfirewall", "firewall"]
@@ -63,12 +77,11 @@ def _check_port(port: int) -> None:
         raise ValueError(f"invalid port {port!r}")
 
 
-def tcp_range(port: int) -> str:
-    return f"{port}-{min(port + PORT_FALLBACKS, 65535)}"
+TCP_RULE = tcp_rule(DEFAULT_PORT)
 
 
-def _rules(port: int) -> list[tuple[str, str, str]]:
-    return [(TCP_RULE, "TCP", tcp_range(port)), (UDP_RULE, "UDP", str(DISCOVERY_PORT))]
+def _rules(base: int) -> list[tuple[str, str, str]]:
+    return [(tcp_rule(base), "TCP", tcp_range(base)), (UDP_RULE, "UDP", str(DISCOVERY_PORT))]
 
 
 def ensure_rules(
@@ -82,7 +95,8 @@ def ensure_rules(
         try:
             run([*_NETSH, "delete", "rule", f"name={name}"])  # absent is fine
             args = [*_NETSH, "add", "rule", f"name={name}", "dir=in", "action=allow",
-                    "enable=yes", "profile=any", f"protocol={proto}", f"localport={ports}"]
+                    "enable=yes", "profile=any", "remoteip=localsubnet",
+                    f"protocol={proto}", f"localport={ports}"]
             if program:
                 args.append(f"program={program}")
             rc, out = run(args)
@@ -123,13 +137,16 @@ def _rule_ok(rc: int, text: str, name: str, port: int) -> bool:
     return _covers(after_name, port)
 
 
-def check_rules(port: int = DEFAULT_PORT, *, runner: Runner | None = None) -> FirewallStatus:
-    """Read-only check that both rules exist, are enabled and cover the ports."""
+def check_rules(port: int = DEFAULT_PORT, *, base_port: int = DEFAULT_PORT,
+                runner: Runner | None = None) -> FirewallStatus:
+    """Read-only: both rules (TCP range from ``base_port``) exist, are enabled and cover
+    ``port`` (the bound ingest port, possibly a fallback) and UDP 47801."""
     run = runner or run_netsh
     ok: dict[str, bool] = {}
     details = []
-    for name, _proto, _ports in _rules(port):
-        want = port if name == TCP_RULE else DISCOVERY_PORT
+    tcp_name = tcp_rule(base_port)
+    for name, _proto, _ports in _rules(base_port):
+        want = port if name == tcp_name else DISCOVERY_PORT
         try:
             rc, out = run([*_NETSH, "show", "rule", f"name={name}", "verbose"])
             ok[name] = _rule_ok(rc, out, name, want)
@@ -138,8 +155,8 @@ def check_rules(port: int = DEFAULT_PORT, *, runner: Runner | None = None) -> Fi
             ok[name] = False
             details.append(f"{name}: check failed ({type(e).__name__}: {e})")
     return FirewallStatus(
-        present=ok[TCP_RULE] and ok[UDP_RULE],
-        tcp=ok[TCP_RULE],
+        present=ok[tcp_name] and ok[UDP_RULE],
+        tcp=ok[tcp_name],
         udp=ok[UDP_RULE],
         detail="; ".join(details),
     )

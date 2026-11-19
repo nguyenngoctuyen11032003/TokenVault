@@ -243,3 +243,35 @@ def test_no_api_when_not_configured(root: Path) -> None:
 def test_binds_loopback_only(server: UiServer) -> None:
     assert server.host == "127.0.0.1"
     assert server.url == f"http://127.0.0.1:{server.port}"
+
+
+def test_csp_header_on_every_response(server: UiServer) -> None:
+    for method, path in (("GET", "/"), ("GET", "/js/app.js"), ("GET", "/nope.js")):
+        csp = req(server, method, path)[1]["content-security-policy"]
+        assert "default-src 'self'" in csp and "frame-ancestors 'none'" in csp
+        assert "object-src 'none'" in csp and "script-src 'self'" in csp
+
+
+def test_rejected_post_body_is_never_read(root: Path) -> None:
+    seen: list[str] = []
+
+    def api(method: str, args: list[Any]) -> Any:
+        seen.append(method)
+        return None
+
+    s = UiServer(root, api_call=api, require_token=True)
+    s.start()
+    try:
+        # headers say 5 MiB but only a few bytes follow: a server that reads first would
+        # block; the token check must answer at once.
+        with socket.create_connection(("127.0.0.1", s.port), timeout=5) as c:
+            c.sendall(f"POST /api/teams HTTP/1.1\r\nHost: 127.0.0.1:{s.port}\r\n"
+                      f"Content-Type: application/json\r\nContent-Length: 5000000\r\n\r\n[]"
+                      .encode())
+            data = c.recv(4096)
+        assert data.split(b" ")[1] == b"403"
+        st = req(s, "POST", "/api/teams", body=b"[]", token=False)[0]
+        assert st == 403 and seen == []
+        assert req(s, "POST", "/api/teams", body=b"[]")[0] == 200 and seen == ["teams"]
+    finally:
+        s.stop()

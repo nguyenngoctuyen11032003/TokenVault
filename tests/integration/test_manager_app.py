@@ -25,6 +25,7 @@ from tokenvault.manager import app as app_mod
 from tokenvault.manager import firewall
 from tokenvault.manager.api import Api
 from tokenvault.manager.firewall import FirewallStatus
+from tokenvault.manager.instance import SingleInstance
 from tokenvault.manager.lifecycle import Manager, ManagerConfig, StartupError
 from tokenvault.manager.paths import pricing_path
 from tokenvault.manager.transparency_probe import patch_is_colour
@@ -193,8 +194,8 @@ def test_manager_id_generated_once(tmp_path: Path) -> None:
 
 
 def test_single_instance_lock(tmp_path: Path) -> None:
-    a = app_mod.SingleInstance(tmp_path / "manager.lock")
-    b = app_mod.SingleInstance(tmp_path / "manager.lock")
+    a = SingleInstance(tmp_path / "manager.lock")
+    b = SingleInstance(tmp_path / "manager.lock")
     assert a.acquire() is True
     assert b.acquire() is False
     a.release()
@@ -285,3 +286,33 @@ def test_devserver_serves_demo_data(devserver: str) -> None:
         _post(f"{devserver}/api/create_installer", ["a/b", None])
     assert ei.value.code == 500
     assert json.loads(ei.value.read())["error"].startswith("[invalid_team]")
+
+
+
+def test_selftest_require_template_fails_when_missing(tmp_path: Path) -> None:
+    missing = tmp_path / "nope.exe"
+    p = subprocess.run([PY, "-m", "tokenvault.manager.app", "--selftest", "--require-template",
+                        "--template", str(missing)], env=_env(), capture_output=True,
+                       text=True, timeout=60, cwd=REPO)
+    assert p.returncode == 1, p.stdout
+    step = next(s for s in json.loads(p.stdout)["steps"] if s["step"] == "real_template")
+    assert step["ok"] is False and "exists=False" in step["detail"]
+    present = tmp_path / "tpl.exe"
+    present.write_bytes(b"MZ" + bytes(100))
+    p = subprocess.run([PY, "-m", "tokenvault.manager.app", "--selftest", "--require-template",
+                        "--template", str(present)], env=_env(), capture_output=True,
+                       text=True, timeout=60, cwd=REPO)
+    assert p.returncode == 0, p.stdout
+    assert "exists=True" in p.stdout
+
+
+def test_devserver_refuses_a_real_data_dir(tmp_path: Path) -> None:
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "manager.db").write_bytes(b"SQLite format 3 real data")
+    p = subprocess.run([PY, "-m", "tokenvault.manager.app", "--devserver", "--port", "0",
+                        "--data-dir", str(real)], env=_env(), capture_output=True, text=True,
+                       timeout=60, cwd=REPO)
+    assert p.returncode == 2
+    assert "refusing" in json.loads(p.stdout.splitlines()[0])["error"]
+    assert (real / "manager.db").read_bytes() == b"SQLite format 3 real data"

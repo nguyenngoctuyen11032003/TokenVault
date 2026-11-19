@@ -36,6 +36,13 @@ class ApiError(Exception):
         super().__init__(f"[{code}] {message}" if code else message)
 
 
+class TemplateMissingError(ApiError):
+    """The adapter template file is missing or empty (``[template_missing]``)."""
+
+    def __init__(self, path: object) -> None:
+        super().__init__(f"adapter template missing: {path}", "template_missing")
+
+
 def parse_filter(obj: Any) -> Filter:
     """``{team, email, project, model, start, end}`` (all optional) -> :class:`Filter`."""
     if obj is None:

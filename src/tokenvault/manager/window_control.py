@@ -40,6 +40,21 @@ class Native(Protocol):
     def monitor(self) -> tuple[Rect, Rect]: ...  # (bounds, work area) of the window's monitor
     def monitors(self) -> list[tuple[Rect, Rect]]: ...
     def normalize_state(self) -> None: ...  # leave a native maximised/minimised state
+    def is_minimized(self) -> bool: ...
+    def is_zoomed(self) -> bool: ...  # natively maximised (Win+Up)
+    def set_region(self, points: list[tuple[int, int]] | None) -> bool: ...
+
+
+CHAMFER_CSS = 30  # --tv-chamfer in ui/css/theme.css; window.css cuts 1x on top, 0.75x below
+
+
+def chamfer_polygon(w: int, h: int, scale: float,
+                    chamfer: float = CHAMFER_CSS) -> list[tuple[int, int]]:
+    """The UI's ``.tv-window`` clip-path polygon in window-relative PHYSICAL px."""
+    lim = max(min(w, h) // 4, 0)
+    c = min(round(chamfer * scale), lim)
+    b = min(round(chamfer * 0.75 * scale), lim)
+    return [(c, 0), (w - c, 0), (w, c), (w, h - b), (w - b, h), (b, h), (0, h - b), (0, c)]
 
 
 def _close(a: Rect, b: Rect) -> bool:
@@ -109,6 +124,14 @@ class WindowGeometry:
         self.fullscreen = False
         self._fs_was_max = False
         self._normal: Rect | None = None  # logical
+        self.region_enabled = False  # native chamfered region (transparency fallback)
+        self.region_active = False
+        self._region_size: tuple[int, int] | None = None
+        try:  # remember the starting normal bounds (no window yet -> on first sync)
+            if not native.is_minimized() and not native.is_zoomed():
+                self._normal = self._log(native.bounds())
+        except Exception:  # noqa: BLE001 - native window not created yet
+            self._normal = None
 
     # ----------------------------------------------------------- helpers
     def _log(self, r: Rect) -> Rect:
@@ -130,6 +153,33 @@ class WindowGeometry:
     def _apply(self, r_log: Rect) -> None:
         self._n.normalize_state()
         self._n.set_bounds(self._phys(r_log))
+        self._update_region()
+
+    def _update_region(self) -> bool:
+        """Chamfered region while normal; none while maximised/full screen."""
+        want = self.region_enabled and not self.maximized and not self.fullscreen
+        if want:
+            _x, _y, w, h = self._n.bounds()
+            if self.region_active and self._region_size == (w, h):
+                return True
+            ok = self._n.set_region(chamfer_polygon(w, h, self._n.scale() or 1.0))
+            self.region_active = ok
+            self._region_size = (w, h) if ok else None
+            return ok
+        if self.region_active:
+            self._n.set_region(None)
+            self.region_active = False
+            self._region_size = None
+        return True
+
+    def enable_region(self, on: bool = True) -> bool:
+        """Turn the native chamfered region on/off; False if the OS refused it."""
+        with self._lock:
+            self.region_enabled = on
+            ok = self._update_region()
+            if not ok:
+                self.region_enabled = False
+            return ok
 
     def _changed(self) -> None:
         if self._on_change is not None:
@@ -158,7 +208,7 @@ class WindowGeometry:
             return {
                 "maximized": self.maximized, "fullscreen": self.fullscreen, **b,
                 "min_width": self.min_size[0], "min_height": self.min_size[1],
-                "native_resize": False,
+                "native_resize": False, "native_region": self.region_active,
                 "screen": {"x": mb[0], "y": mb[1], "width": mb[2], "height": mb[3],
                            "work_x": mw[0], "work_y": mw[1], "work_width": mw[2],
                            "work_height": mw[3]},
@@ -178,7 +228,8 @@ class WindowGeometry:
     def maximize(self) -> dict[str, Any]:
         with self._lock:
             if not self.maximized:
-                if not self.fullscreen:
+                native_max = self._n.is_zoomed() or self._n.is_minimized()
+                if not self.fullscreen and not native_max:
                     self._normal = self._log(self._n.bounds())
                 self.fullscreen = self._fs_was_max = False
                 self.maximized = True
@@ -230,6 +281,8 @@ class WindowGeometry:
     def on_native_change(self) -> None:
         """The OS moved/resized the window (drag, snap, DPI change): resync and push."""
         with self._lock:
+            if self._n.is_minimized() or self._n.is_zoomed():
+                return  # iconic rect (-32000) / native maximise: never recorded
             cur = self._n.bounds()
             if self.fullscreen and not _close(cur, self._n.monitor()[0]):
                 self.fullscreen = self._fs_was_max = False
@@ -237,6 +290,7 @@ class WindowGeometry:
                 self.maximized = False
             if not self.maximized and not self.fullscreen:
                 self._normal = self._log(cur)
+            self._update_region()
             self._changed()
 
 
@@ -295,3 +349,12 @@ class VirtualNative:
 
     def normalize_state(self) -> None:
         return None
+
+    def is_minimized(self) -> bool:
+        return False
+
+    def is_zoomed(self) -> bool:
+        return False
+
+    def set_region(self, points: list[tuple[int, int]] | None) -> bool:
+        return True

@@ -50,7 +50,7 @@ def _check(cond: bool, what: str) -> None:
         raise AssertionError(what)
 
 
-def run(template: Path | None = None) -> int:
+def run(template: Path | None = None, *, require_template: bool = False) -> int:
     t0 = time.monotonic()
     steps: list[dict[str, Any]] = []
     root = Path(tempfile.mkdtemp(prefix="tokenvault-selftest-"))
@@ -163,9 +163,10 @@ def run(template: Path | None = None) -> int:
 
         step("live_push", live)
         real = template or template_path()
-        steps.append({"step": "real_template", "ok": True, "detail": f"{real} exists="
-                      f"{real.is_file()}"})
-        ok = True
+        exists = real.is_file() and real.stat().st_size > 0
+        steps.append({"step": "real_template", "ok": exists or not require_template,
+                      "detail": f"{real} exists={exists}", "required": require_template})
+        ok = exists or not require_template
     except Exception:  # noqa: BLE001 - already recorded in steps
         ok = False
     finally:

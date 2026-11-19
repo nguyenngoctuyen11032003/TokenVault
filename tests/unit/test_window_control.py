@@ -13,6 +13,7 @@ from tokenvault.manager.window_control import (
     Rect,
     WindowGeometry,
     centred,
+    chamfer_polygon,
     fit_rect,
     initial_geometry,
 )
@@ -28,6 +29,10 @@ class FakeNative:
         self.s = scale
         self.sets: list[Rect] = []
         self.normalized = 0
+        self.minimized = False
+        self.zoomed = False
+        self.regions: list[list[tuple[int, int]] | None] = []
+        self.region_ok = True
 
     def scale(self) -> float:
         return self.s
@@ -48,6 +53,17 @@ class FakeNative:
 
     def normalize_state(self) -> None:
         self.normalized += 1
+        self.minimized = self.zoomed = False
+
+    def is_minimized(self) -> bool:
+        return self.minimized
+
+    def is_zoomed(self) -> bool:
+        return self.zoomed
+
+    def set_region(self, points: list[tuple[int, int]] | None) -> bool:
+        self.regions.append(points)
+        return self.region_ok
 
 
 def make(**kw: Any) -> tuple[WindowGeometry, FakeNative, list[str], list[dict[str, Any]]]:
@@ -134,6 +150,7 @@ def test_native_drag_out_of_maximized_clears_flag() -> None:
 def test_restore_without_saved_normal_centres() -> None:
     g, n, _, _ = make(bounds=(0, 0, 1920, 1032))
     g.maximized = True
+    g._normal = None  # started maximised: no normal bounds known yet
     st = g.restore()
     assert (st["width"], st["height"]) == (1440, 826)
 
@@ -181,3 +198,90 @@ def test_debouncer_keeps_last_value() -> None:
     d.push(9)
     d.flush()
     assert got == [4, 9]
+
+
+# ------------------------------------------------- fix round 1: minimise / native max
+def test_minimise_of_maximized_window_keeps_state() -> None:
+    g, n, _, saved = make()
+    g.maximize()
+    n.minimized = True
+    n.b = (-32000, -32000, 160, 28)  # what GetWindowRect reports while iconic
+    g.on_native_change()
+    assert g.maximized is True and g.snapshot()["x"] == 80  # minimised rect never recorded
+    assert all(s["x"] != -25600 for s in saved)
+    n.minimized = False
+    n.b = (0, 0, 1920, 1032)  # restored from the taskbar to our work-area rect
+    g.on_native_change()
+    assert g.state()["maximized"] is True
+    st = g.restore()
+    assert st["maximized"] is False and n.b == (100, 125, 1800, 900)
+
+
+def test_minimise_of_normal_window_keeps_normal_bounds() -> None:
+    g, n, _, _ = make()
+    n.minimized = True
+    n.b = (-32000, -32000, 160, 28)
+    g.on_native_change()
+    n.minimized = False
+    n.b = (100, 125, 1800, 900)
+    g.on_native_change()
+    assert g.snapshot() == {"x": 80, "y": 100, "width": 1440, "height": 720, "maximized": False}
+
+
+def test_native_maximize_does_not_save_maximized_rect_as_normal() -> None:
+    g, n, _, _ = make()
+    n.zoomed = True  # Win+Up: Windows maximised it natively (covers the taskbar)
+    n.b = (-8, -8, 1936, 1096)
+    g.on_native_change()  # resize event arrives first: ignored while zoomed
+    g.maximize()  # our "maximized" handler: convert to a work-area maximise
+    assert n.b == (0, 0, 1920, 1032) and g.maximized
+    assert g.restore()["maximized"] is False and n.b == (100, 125, 1800, 900)
+
+
+# ------------------------------------------------------------- native region
+@pytest.mark.parametrize(
+    ("w", "h", "scale", "c", "b"),
+    [(1440, 900, 1.0, 30, 22), (1800, 1125, 1.25, 38, 28), (2880, 1800, 2.0, 60, 45),
+     (1100, 720, 1.5, 45, 34)],
+)
+def test_chamfer_polygon_matches_css(w: int, h: int, scale: float, c: int, b: int) -> None:
+    pts = chamfer_polygon(w, h, scale)
+    assert pts == [(c, 0), (w - c, 0), (w, c), (w, h - b), (w - b, h), (b, h), (0, h - b),
+                   (0, c)]
+
+
+def test_chamfer_polygon_tiny_window_is_clamped() -> None:
+    pts = chamfer_polygon(40, 40, 2.0)
+    assert all(0 <= x <= 40 and 0 <= y <= 40 for x, y in pts)
+    assert pts[0][0] <= 10
+
+
+def test_region_follows_size_and_is_removed_when_maximized() -> None:
+    g, n, _, _ = make()
+    assert g.enable_region() is True
+    assert n.regions[-1] == chamfer_polygon(1800, 900, 1.25)
+    assert g.state()["native_region"] is True
+    g.set_bounds(80, 100, 1200, 760)
+    assert n.regions[-1] == chamfer_polygon(1500, 950, 1.25)
+    g.maximize()
+    assert n.regions[-1] is None and g.state()["native_region"] is False
+    g.set_fullscreen(True)
+    assert n.regions[-1] is None
+    g.set_fullscreen(False)  # back to maximised: still none
+    assert n.regions[-1] is None
+    g.restore()
+    assert n.regions[-1] == chamfer_polygon(1500, 950, 1.25)
+    count = len(n.regions)
+    n.b = (300, 300, 1500, 950)  # moved, same size: no new region
+    g.on_native_change()
+    assert len(n.regions) == count
+    n.b = (300, 300, 1600, 950)  # OS resize: recomputed
+    g.on_native_change()
+    assert n.regions[-1] == chamfer_polygon(1600, 950, 1.25)
+
+
+def test_region_failure_reports_false() -> None:
+    g, n, _, _ = make()
+    n.region_ok = False
+    assert g.enable_region() is False
+    assert g.state()["native_region"] is False

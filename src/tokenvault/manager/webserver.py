@@ -18,6 +18,11 @@ Access control (other local programs / web pages must not probe it):
   (or an ``X-TV-Token`` header). The dev server runs without the token (fake
   data, but still loopback + Host + fetch-metadata checks).
 
+POST checks (Host, fetch metadata, Origin, token, method name, Content-Length <=
+1 MiB) all run on the headers BEFORE any body byte is read; a rejected body is only
+drained (bounded, never parsed) so Windows does not reset the reply. Every response
+carries a strict ``Content-Security-Policy`` (see ``CSP``).
+
 Static rules: GET/HEAD only, no directory listing, only known asset extensions,
 no dot-files, ``Cache-Control: no-store``. The raw path is refused if it contains
 backslashes, ``%5c``, NUL, ``//``, a drive colon or any ``.``/``..`` segment
@@ -27,6 +32,7 @@ the UI root.
 
 from __future__ import annotations
 
+import contextlib
 import hmac
 import json
 import logging
@@ -58,6 +64,9 @@ MIME = {
     ".txt": "text/plain; charset=utf-8",
 }
 MAX_BODY = 1 << 20
+CSP = ("default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+       "script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; "
+       "frame-ancestors 'none'")
 _METHOD = re.compile(r"[a-z][a-z0-9_]{0,63}\Z")
 ApiCall = Callable[[str, list[Any]], Any]
 
@@ -87,6 +96,7 @@ class _Handler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
+        self.send_header("Content-Security-Policy", CSP)
         for k, v in (extra or {}).items():
             self.send_header(k, v)
         self.end_headers()
@@ -188,45 +198,32 @@ class _Handler(BaseHTTPRequestHandler):
         self._static(head=True)
 
     # ---------------------------------------------------------------- api
-    def _read_body(self) -> bytes | None:
-        """Read the whole body first (an unread body makes Windows reset the reply)."""
+    def _content_length(self) -> int | None:
         try:
-            length = int(self.headers.get("Content-Length") or 0)
+            n = int(self.headers.get("Content-Length") or 0)
         except ValueError:
             return None
-        if length < 0 or length > 8 * MAX_BODY:
-            return None
-        data = b""
-        while len(data) < length and (chunk := self.rfile.read(min(length - len(data), 65536))):
-            data += chunk
-        return data
+        return n if n >= 0 else None
+
+    def _discard(self, length: int | None) -> None:
+        """After a REJECTION reply: swallow (never parse) up to 1 MiB of the unread body
+        so Windows does not reset the connection before the client reads the reply."""
+        left = min(length or 0, MAX_BODY)
+        with contextlib.suppress(OSError):
+            self.connection.settimeout(1.0)
+            while left > 0 and (chunk := self.rfile.read(min(left, 65536))):
+                left -= len(chunk)
 
     def do_POST(self) -> None:
         self.close_connection = True  # one call per connection
-        body = self._read_body()
-        if not self._guard():
+        length = self._content_length()
+        if not self._post_allowed(length):
+            self._discard(length)
             return
-        owner = self.server.owner
-        raw = self.path.partition("?")[0]
-        if owner.api_call is None or not raw.startswith("/api/"):
-            self._fail(405)
-            return
-        origin = self.headers.get("Origin")
-        port = self.server.server_address[1]
-        if origin is not None and origin not in (f"http://127.0.0.1:{port}",
-                                                 f"http://localhost:{port}"):
-            self._fail(403)
-            return
-        if not self._token_ok():
-            self._fail(403)
-            return
-        method = raw[len("/api/"):]
-        if not _METHOD.fullmatch(method):
-            self._json(404, {"error": "unknown method"})
-            return
-        if body is None or len(body) > MAX_BODY:
-            self._json(413 if body is not None else 400, {"error": "bad request body"})
-            return
+        assert length is not None
+        body = b""
+        while len(body) < length and (chunk := self.rfile.read(min(length - len(body), 65536))):
+            body += chunk
         try:
             args = json.loads(body or b"[]")
         except (ValueError, UnicodeDecodeError):
@@ -235,6 +232,9 @@ class _Handler(BaseHTTPRequestHandler):
         if not isinstance(args, list):
             self._json(400, {"error": "body must be a JSON array"})
             return
+        method = self.path.partition("?")[0][len("/api/"):]
+        owner = self.server.owner
+        assert owner.api_call is not None
         try:
             result = owner.api_call(method, args)
         except LookupError:
@@ -244,6 +244,32 @@ class _Handler(BaseHTTPRequestHandler):
             self._json(500, {"error": str(e)})
             return
         self._json(200, result)
+
+    def _post_allowed(self, length: int | None) -> bool:
+        """Every check that needs only the request line and headers (body unread)."""
+        if not self._guard():
+            return False
+        owner = self.server.owner
+        raw = self.path.partition("?")[0]
+        if owner.api_call is None or not raw.startswith("/api/"):
+            self._fail(405)
+            return False
+        origin = self.headers.get("Origin")
+        port = self.server.server_address[1]
+        if origin is not None and origin not in (f"http://127.0.0.1:{port}",
+                                                 f"http://localhost:{port}"):
+            self._fail(403)
+            return False
+        if not self._token_ok():
+            self._fail(403)
+            return False
+        if not _METHOD.fullmatch(raw[len("/api/"):]):
+            self._json(404, {"error": "unknown method"})
+            return False
+        if length is None or length > MAX_BODY:
+            self._json(413 if length is not None else 400, {"error": "bad request body"})
+            return False
+        return True
 
     def _not_allowed(self) -> None:
         self._fail(405)

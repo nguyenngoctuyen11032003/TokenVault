@@ -24,7 +24,7 @@ from typing import Any
 from tokenvault.manager.api import Api, dispatch
 from tokenvault.manager.demo_data import seed_now
 from tokenvault.manager.lifecycle import Manager, ManagerConfig
-from tokenvault.manager.paths import pricing_path, ui_dir
+from tokenvault.manager.paths import DemoDirError, prepare_demo_dir, pricing_path, ui_dir
 from tokenvault.manager.webserver import UiServer
 
 log = logging.getLogger(__name__)
@@ -39,8 +39,7 @@ def fake_template(path: Path) -> Path:
 
 def build(data_dir: Path | None = None, template: Path | None = None,
           port: int = DEFAULT_PORT) -> tuple[Manager, UiServer]:
-    root = Path(data_dir) if data_dir else Path(tempfile.mkdtemp(prefix="tokenvault-dev-"))
-    root.mkdir(parents=True, exist_ok=True)
+    root = prepare_demo_dir(data_dir if data_dir else tempfile.mkdtemp(prefix="tokenvault-dev-"))
     cfg = ManagerConfig(
         data_dir=root,
         template=template or fake_template(root / "adapter-setup-template.exe"),
@@ -81,7 +80,7 @@ def run(port: int = DEFAULT_PORT, data_dir: Path | None = None,
                         format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     try:
         m, ui = build(data_dir, template, port)
-    except OSError as e:
+    except (OSError, DemoDirError) as e:
         print(json.dumps({"error": f"cannot start the dev server: {e}"}), flush=True)
         return 2
     print(json.dumps({"devserver": f"{ui.url}/", "data_dir": str(m.paths.root)}), flush=True)

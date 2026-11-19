@@ -101,3 +101,32 @@ class Win32Native:
         h = wintypes.HWND(self.hwnd())
         if u.IsZoomed(h) or u.IsIconic(h):
             u.ShowWindow(h, SW_RESTORE)
+
+    def is_minimized(self) -> bool:
+        return bool(_user32().IsIconic(wintypes.HWND(self.hwnd())))
+
+    def is_zoomed(self) -> bool:
+        return bool(_user32().IsZoomed(wintypes.HWND(self.hwnd())))
+
+    def set_region(self, points: list[tuple[int, int]] | None) -> bool:
+        """SetWindowRgn(polygon) or remove it (None). The OS owns a region once
+        SetWindowRgn succeeds; it is deleted here only when that call fails."""
+        u = _user32()
+        u.SetWindowRgn.argtypes = [wintypes.HWND, wintypes.HRGN, wintypes.BOOL]
+        u.SetWindowRgn.restype = ctypes.c_int
+        h = wintypes.HWND(self.hwnd())
+        if points is None:
+            return bool(u.SetWindowRgn(h, None, True))
+        gdi = ctypes.WinDLL("gdi32", use_last_error=True)
+        gdi.CreatePolygonRgn.argtypes = [ctypes.POINTER(wintypes.POINT), ctypes.c_int,
+                                         ctypes.c_int]
+        gdi.CreatePolygonRgn.restype = wintypes.HRGN
+        gdi.DeleteObject.argtypes = [wintypes.HGDIOBJ]
+        arr = (wintypes.POINT * len(points))(*[wintypes.POINT(x, y) for x, y in points])
+        rgn = gdi.CreatePolygonRgn(arr, len(points), 2)  # WINDING
+        if not rgn:
+            return False
+        if not u.SetWindowRgn(h, rgn, True):
+            gdi.DeleteObject(rgn)
+            return False
+        return True

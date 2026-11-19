@@ -106,7 +106,16 @@ class _StoreProxy:
             raise
 
     def upsert_device(self, *args: Any, **kw: Any) -> None:
-        self._store.upsert_device(*args, **kw)
+        try:
+            self._store.upsert_device(*args, **kw)
+        except TzOffsetChangedError:
+            self._owner.tz_error = True
+            log.error("store time-zone offset changed by another process; device not updated")
+            raise
+
+
+class CertRestartError(RuntimeError):
+    """The certificate WAS replaced but the ingest server did not come back."""
 
 
 class Manager:
@@ -128,6 +137,7 @@ class Manager:
         self.tz_offset_minutes = 0
         self.tz_error = False
         self.pricing_error: str | None = None
+        self.cert_restart_error: str | None = None
         self.manager_id = ""
         self.on_change: Callable[[], None] | None = None
         self.presence_source: Callable[[], set[str]] | None = None
@@ -145,7 +155,9 @@ class Manager:
         self.settings = SettingsStore(self.paths.settings)
         s = self.settings.get()
         if not s["manager_id"]:
-            s = self.settings.update_internal(manager_id=new_manager_id())
+            mid = new_manager_id()
+            self.save_internal(manager_id=mid)
+            s = {**s, "manager_id": mid}
         self.manager_id = s["manager_id"]
         try:
             self.cert = tls.ensure_certificate(self.paths.certs)
@@ -209,7 +221,21 @@ class Manager:
         self.ingest_error = None
         if self.port_requested and bound != self.port_requested:
             log.warning("port %d in use: listening on %d", self.port_requested, bound)
-        self.settings.update_internal(port=bound)
+        self.save_internal(port=bound)
+
+    def save_internal(self, **values: Any) -> bool:
+        """Best effort: antivirus/backup tools may hold settings.json for a moment."""
+        for attempt in range(3):
+            try:
+                self.settings.update_internal(**values)
+                return True
+            except Exception as e:  # noqa: BLE001
+                if attempt == 2:
+                    log.warning("could not save %s to settings.json: %s (continuing)",
+                                sorted(values), e)
+                    return False
+                time.sleep(0.2)
+        return False
 
     def _discovery_endpoint(self) -> tuple[int, str]:
         return self.bound_port(), self.cert.fingerprint_sha256
@@ -314,7 +340,8 @@ class Manager:
     # -------------------------------------------------------- certificate
     def regenerate_certificate(self) -> tls.CertInfo:
         """New certificate; the ingest server restarts on the SAME port with it."""
-        with self.lock:
+        # installer_lock: no installer may embed the old fingerprint mid-regeneration
+        with self.installer_lock, self.lock:
             new = tls.regenerate_certificate(self.paths.certs)
             self.cert = new
             old = self.ingest
@@ -326,11 +353,14 @@ class Manager:
                     bound = old.start(port)
                 except RuntimeError as e:
                     self.ingest = None
-                    self.ingest_error = str(e)
-                    raise
+                    self.ingest_error = f"after the certificate was regenerated: {e}"
+                    self.cert_restart_error = str(e)
+                    raise CertRestartError(
+                        "certificate regenerated but the server did not restart: "
+                        f"{e}") from e
                 if bound != port:
                     log.warning("after certificate change the port moved %d -> %d", port, bound)
-                    self.settings.update_internal(port=bound)
+                    self.save_internal(port=bound)
             elif self.cfg.ingest:
                 self._start_ingest()
             log.warning("certificate regenerated: new fingerprint %s",

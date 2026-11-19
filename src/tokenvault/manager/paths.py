@@ -115,3 +115,28 @@ def ui_dir() -> Path:
     if meipass:
         return Path(meipass) / "tokenvault" / "ui"
     return _PKG_DIR.parent / "ui"
+
+
+DEMO_MARKER = ".tokenvault-demo"
+
+
+class DemoDirError(ValueError):
+    """A demo/dev command was pointed at a real Manager data folder."""
+
+
+def prepare_demo_dir(path: Path | str) -> Path:
+    """Refuse the real data dir or a folder holding non-demo databases; mark it as demo."""
+    p = Path(path).resolve()
+    if p == default_data_dir().resolve():
+        raise DemoDirError(f"{p} is the real Manager data folder; use another folder")
+    if not (p / DEMO_MARKER).exists():
+        for name in ("manager.db", "enrollment.db"):
+            f = p / name
+            if f.exists() and f.stat().st_size > 0:
+                raise DemoDirError(
+                    f"{p} contains a real {name} (no {DEMO_MARKER} marker); refusing to "
+                    "write demo data into it"
+                )
+    p.mkdir(parents=True, exist_ok=True)
+    (p / DEMO_MARKER).write_text("TokenVault demo data - safe to delete\n", encoding="utf-8")
+    return p

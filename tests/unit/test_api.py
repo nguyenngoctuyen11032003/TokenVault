@@ -1,69 +1,27 @@
-"""Manager Api (contract: docs/superpowers/specs/manager-api-contract.md) and live push."""
+"""Manager Api contract: read methods, JSON shape, errors, installers, teams."""
 
 from __future__ import annotations
 
 import inspect
 import json
 import logging
-import socket
-import threading
-import time
-from collections.abc import Iterator
 from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import api_helpers as h
 import pytest
+from api_helpers import call_error, make_cfg
 
 from tokenvault.common.config_payload import read_payload
 from tokenvault.common.models import UsageEvent
-from tokenvault.manager import api_manage
-from tokenvault.manager.api import EXPOSED, Api, dispatch
-from tokenvault.manager.demo_data import UNPRICED_MODEL, seed_now
-from tokenvault.manager.firewall import FirewallStatus
-from tokenvault.manager.lifecycle import Manager, ManagerConfig
-from tokenvault.manager.live import LivePusher, live_script
-from tokenvault.manager.paths import pricing_path
+from tokenvault.manager.api import EXPOSED, Api
+from tokenvault.manager.demo_data import UNPRICED_MODEL
+from tokenvault.manager.lifecycle import Manager
 
-PREFIX = "window.tv && window.tv.onLive && window.tv.onLive("
-FW_OK = FirewallStatus(True, True, True, "ok")
-FW_MISSING = FirewallStatus(False, False, True, "TCP rule missing")
-
-
-def make_cfg(root: Path, **kw: Any) -> ManagerConfig:
-    tpl = root / "adapter-setup-template.exe"
-    if not tpl.exists():
-        tpl.write_bytes(b"MZ" + b"\0" * 4096)
-    base: dict[str, Any] = dict(
-        data_dir=root / "data", template=tpl, pricing=pricing_path(), ingest=True,
-        ingest_host="127.0.0.1", ingest_port=0, discovery=False, tz_offset_minutes=420,
-        firewall_check=lambda port: FW_OK, presence_interval=0.2,
-        hosts_provider=lambda: ["192.168.1.20", "pc-quanly"], reveal=None, autostart=None,
-    )
-    base.update(kw)
-    return ManagerConfig(**base)
-
-
-@pytest.fixture
-def manager(tmp_path: Path) -> Iterator[Manager]:
-    m = Manager(make_cfg(tmp_path))
-    m.start()
-    yield m
-    m.stop()
-
-
-@pytest.fixture
-def demo(manager: Manager) -> Manager:
-    seed_now(manager.store, manager.enrollment, manager.tz_offset_minutes)
-    return manager
-
-
-def call_error(fn: Any, *args: Any) -> str:
-    with pytest.raises(Exception) as ei:  # noqa: PT011 - pywebview forwards plain Exceptions
-        fn(*args)
-    assert type(ei.value) is Exception
-    return str(ei.value)
+manager = h.manager  # fixtures shared with the other test_api* module
+demo = h.demo
 
 
 # ------------------------------------------------------------------- contract
@@ -230,239 +188,3 @@ def test_revoke_package(demo: Manager) -> None:
     assert call_error(api.revoke_package, "nope").startswith("[not_found]")
 
 
-def test_settings_roundtrip_and_autostart(tmp_path: Path) -> None:
-    calls: list[bool] = []
-    m = Manager(make_cfg(tmp_path, autostart=calls.append))
-    m.start()
-    try:
-        api = Api(m)
-        s = api.settings()
-        assert set(s) >= {"transparent_window", "start_with_windows", "port", "manager_id",
-                          "hosts", "fingerprint", "static_ip_hint", "tz_offset_minutes",
-                          "version"}
-        assert s["hosts"] == ["192.168.1.20", "pc-quanly"] and s["port"] == m.bound_port()
-        assert s["tz_offset_minutes"] == 420 and len(s["fingerprint"]) == 64
-        out = api.save_settings({"start_with_windows": True, "transparent_window": False})
-        assert out["start_with_windows"] is True and calls == [True]
-        assert call_error(api.save_settings, {"port": 1}).startswith("[invalid_settings]")
-        assert call_error(api.save_settings, {"hosts": ["a b"]}).startswith("[invalid_settings]")
-        assert api.save_settings({"hosts": ["10.1.1.1"]})["hosts"] == ["10.1.1.1"]
-        assert api.save_settings({"hosts": []})["hosts"] == ["192.168.1.20", "pc-quanly"]
-    finally:
-        m.stop()
-
-
-def test_reveal_only_installer_files(tmp_path: Path) -> None:
-    shown: list[Path] = []
-    m = Manager(make_cfg(tmp_path, reveal=shown.append))
-    m.start()
-    try:
-        api = Api(m)
-        res = api.create_installer("Dev", None)
-        assert api.reveal_in_explorer(res["path"]) == {"ok": True}
-        assert shown == [Path(res["path"]).resolve()]
-        outside = tmp_path / "x.txt"
-        outside.write_text("x")
-        assert call_error(api.reveal_in_explorer, str(outside)).startswith("[invalid_args]")
-        assert call_error(api.reveal_in_explorer, str(tmp_path / "missing.exe"))
-    finally:
-        m.stop()
-
-
-def test_window_methods(manager: Manager) -> None:
-    log: list[str] = []
-
-    class Win:
-        def minimize(self) -> None:
-            log.append("min")
-
-        def hide(self) -> None:
-            log.append("hide")
-
-        def ready(self) -> None:
-            log.append("ready")
-
-    api = Api(manager, Win())
-    assert api.window_min() == api.window_close() == api.window_ready() == {"ok": True}
-    assert log == ["min", "hide", "ready"]
-    assert Api(manager).window_close() == {"ok": True}  # no window: no-op
-
-
-def test_dispatch_only_contract_methods(manager: Manager) -> None:
-    api = Api(manager)
-    assert dispatch(api, "teams", []) == []
-    for bad in ("_m", "_set_window", "__init__", "nope"):
-        with pytest.raises(LookupError):
-            dispatch(api, bad, [])
-
-
-# --------------------------------------------------------------- diagnostics
-def test_diagnostics_reports_port_in_use_fallback(tmp_path: Path) -> None:
-    blocker = socket.socket()
-    if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
-        blocker.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-    blocker.bind(("127.0.0.1", 0))
-    blocker.listen()
-    taken = blocker.getsockname()[1]
-    m = Manager(make_cfg(tmp_path, ingest_port=None, firewall_check=lambda p: FW_MISSING))
-    (tmp_path / "data").mkdir(parents=True)
-    (tmp_path / "data" / "settings.json").write_text(json.dumps({"port": taken}))
-    try:
-        m.start()
-        d = Api(m).diagnostics()
-        assert d["port_requested"] == taken and d["port"] != taken and d["port"] > taken
-        assert any(f"Port {taken} was in use" in w for w in d["warnings"])
-        assert d["firewall_rule_present"] is False
-        assert any("Firewall" in w for w in d["warnings"])
-        assert Api(m).settings()["port"] == d["port"]
-        bound = d["port"]
-    finally:
-        m.stop()
-        blocker.close()
-    # Restart: asks for the persisted (bound) port and gets it; no fallback warning.
-    m2 = Manager(make_cfg(tmp_path, ingest_port=None))
-    m2.start()
-    try:
-        d2 = Api(m2).diagnostics()
-        assert d2["port_requested"] == bound and d2["port"] == bound
-        assert not any("was in use" in w for w in d2["warnings"])
-    finally:
-        m2.stop()
-
-
-def test_diagnostics_shape(demo: Manager) -> None:
-    d = Api(demo).diagnostics()
-    for key in ("port", "port_requested", "fingerprint", "connected", "connected_count",
-                "last_event_at", "rejected_count", "firewall_rule_present", "cert_expires_at",
-                "db_path", "queue", "warnings"):
-        assert key in d
-    assert d["queue"]["events"] > 1000 and d["queue"]["devices"] == 14
-    assert d["cert_expires_at"].endswith("Z") and d["db_path"].endswith("manager.db")
-    assert d["warnings"] == []
-
-
-def test_connectivity_test_checks(demo: Manager) -> None:
-    r = Api(demo).connectivity_test()
-    names = [c["name"] for c in r["checks"]]
-    assert names == ["bind", "firewall_rule", "lan_ips", "certificate"]
-    bind = r["checks"][0]
-    assert bind["ok"] is True, bind
-    assert r["checks"][3]["ok"] is True
-
-
-# ----------------------------------------------------------------- live push
-class FakeClock:
-    def __init__(self) -> None:
-        self.t = 1000.0
-
-    def __call__(self) -> float:
-        return self.t
-
-
-def test_live_push_is_throttled() -> None:
-    clock = FakeClock()
-    sent: list[tuple[float, str]] = []
-    counter = {"n": 0}
-
-    def payload() -> dict[str, Any]:
-        return {"online": counter["n"], "total": 14, "last_event_at": None,
-                "devices": {"online": counter["n"], "total": 14}}
-
-    p = LivePusher(lambda js: sent.append((clock.t, js)), payload, max_per_s=2, clock=clock)
-    # 10 s of events every 10 ms, pumped every 10 ms -> at most 2 pushes per second.
-    for _ in range(1000):
-        counter["n"] += 1
-        p.notify()
-        p.pump()
-        clock.t += 0.01
-    assert 19 <= len(sent) <= 21
-    gaps = [b[0] - a[0] for a, b in zip(sent, sent[1:], strict=False)]
-    assert min(gaps) >= 0.5 - 1e-9
-    # Trailing flush: the last event is delivered after the quiet period.
-    last_n = counter["n"]
-    for _ in range(100):
-        p.pump()
-        clock.t += 0.01
-    assert json.loads(sent[-1][1][len(PREFIX):-1])["online"] == last_n
-    n = len(sent)
-    for _ in range(100):  # nothing pending -> nothing pushed
-        p.pump()
-        clock.t += 0.01
-    assert len(sent) == n
-
-
-def test_live_push_never_after_close() -> None:
-    sent: list[str] = []
-    p = LivePusher(sent.append, lambda: {"online": 1}, max_per_s=2, clock=FakeClock())
-    p.close()
-    p.notify()
-    assert p.pump() is None and sent == []
-
-
-def test_live_script_escapes_payload() -> None:
-    evil = {"x": "</script><script>alert(1)</script> '\")//", "n": 1}
-    js = live_script(evil)
-    assert js.startswith(PREFIX) and js.endswith(")")
-    literal = js[len(PREFIX):-1]
-    assert json.loads(literal) == evil and literal.isascii() and " " not in literal
-
-
-def test_live_pusher_thread_coalesces_and_flushes_last() -> None:
-    sent: list[str] = []
-    counter = {"n": 0}
-    p = LivePusher(sent.append, lambda: {"n": counter["n"]}, max_per_s=10)
-    p.start()
-    try:
-        t_end = time.monotonic() + 0.6
-        while time.monotonic() < t_end:
-            counter["n"] += 1
-            p.notify()
-            time.sleep(0.005)
-        time.sleep(0.4)
-        assert 3 <= len(sent) <= 9
-        assert json.loads(sent[-1][len(PREFIX):-1])["n"] == counter["n"]
-    finally:
-        p.stop()
-
-
-def test_live_pusher_survives_eval_errors() -> None:
-    def bad_eval(js: str) -> None:
-        raise RuntimeError("window gone")
-
-    p = LivePusher(bad_eval, lambda: {}, clock=FakeClock())
-    p.notify()
-    p.pump()  # no exception
-    assert p.pushed == 0
-
-
-def test_live_payload_shape(demo: Manager) -> None:
-    pl = api_manage.live_payload(demo)
-    assert pl["total"] == 14 and pl["devices"] == {"online": pl["online"], "total": 14}
-    assert "last_event_at" in pl
-
-
-def test_ingest_event_triggers_change_listener(manager: Manager) -> None:
-    hit = threading.Event()
-    manager.on_change = hit.set
-    manager._on_event("dev", 3)
-    assert hit.is_set()
-
-
-def test_window_geometry_methods_headless(manager: Manager) -> None:
-    api = Api(manager)  # no real window: plausible virtual WindowState (dev server)
-    st = api.window_state()
-    assert set(st) >= {"maximized", "fullscreen", "x", "y", "width", "height", "min_width",
-                       "min_height", "screen"}
-    assert set(st["screen"]) == {"x", "y", "width", "height", "work_x", "work_y",
-                                 "work_width", "work_height"}
-    assert api.window_toggle_maximize()["maximized"] is True
-    assert api.window_get_bounds()["height"] == st["screen"]["work_height"]
-    assert api.window_restore()["maximized"] is False
-    assert api.window_set_fullscreen(True)["fullscreen"] is True
-    assert api.window_toggle_fullscreen()["fullscreen"] is False
-    assert api.window_maximize()["maximized"] is True
-    b = api.window_set_bounds(10, 20, 500.4, 300)
-    assert (b["maximized"], b["width"], b["height"]) == (False, 1100, 720)
-    assert call_error(api.window_set_bounds, "a", 0, 1, 1).startswith("[invalid_args]")
-    assert call_error(api.window_set_fullscreen, 1).startswith("[invalid_args]")
-    json.dumps(api.window_state(), allow_nan=False)

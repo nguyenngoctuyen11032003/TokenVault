@@ -46,7 +46,8 @@ def test_ensure_builds_delete_then_add_for_both_rules() -> None:
     ]
     assert run.calls[1] == [
         "netsh", "advfirewall", "firewall", "add", "rule", f"name={TCP_RULE}",
-        "dir=in", "action=allow", "enable=yes", "profile=any", "protocol=TCP",
+        "dir=in", "action=allow", "enable=yes", "profile=any", "remoteip=localsubnet",
+        "protocol=TCP",
         "localport=47800-47820",
         r"program=C:\Program Files\TokenVault\TokenVault-Manager.exe",
     ]
@@ -157,3 +158,20 @@ def test_cli_check_and_ensure_print_json(
 def test_cli_requires_an_action(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         firewall.main([])
+
+
+def test_rule_names_carry_their_port_range() -> None:
+    assert TCP_RULE == "TokenVault-Manager-Ingest-TCP-47800-47820"
+    assert UDP_RULE == "TokenVault-Manager-Discovery-UDP-47801"
+    run = FakeRunner()
+    ensure_rules(47900, runner=run)
+    assert run.calls[1][5] == "name=TokenVault-Manager-Ingest-TCP-47900-47920"
+    assert all("remoteip=localsubnet" in c for c in run.calls if c[3] == "add")
+
+
+def test_check_fallback_port_inside_base_range() -> None:
+    run = FakeRunner({
+        f"show:{TCP_RULE}": (0, rule_output(TCP_RULE, "TCP", "47800-47820")),
+        f"show:{UDP_RULE}": (0, rule_output(UDP_RULE, "UDP", "47801")),
+    })
+    assert check_rules(47805, runner=run).present is True

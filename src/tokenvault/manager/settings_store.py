@@ -6,7 +6,8 @@
   LAST BOUND ingest port, requested again on the next start), ``manager_id``,
   ``static_ip_hint``, ``transparent_pending`` (a transparent window was created
   but never finished loading: the next start falls back to opaque), ``window``
-  (``{x, y, width, height, maximized}`` normal geometry in logical px, or null).
+  (``{x, y, width, height, maximized}`` normal geometry in logical px, or null),
+  ``window_shape`` (``"region"`` once WebView2 transparency was found broken).
 * ``hosts``: empty list = automatic (primary LAN IPv4s + host name); otherwise
   the addresses put into new installers. Same rules as the installer payload:
   at most 8, each a valid IP or host name, no case-insensitive duplicates.
@@ -44,6 +45,7 @@ DEFAULTS: dict[str, Any] = {
     "static_ip_hint": "",
     "transparent_pending": False,
     "window": None,
+    "window_shape": None,
 }
 USER_KEYS = frozenset({"transparent_window", "start_with_windows", "hosts"})
 INTERNAL_KEYS = frozenset(DEFAULTS) - USER_KEYS
@@ -100,6 +102,10 @@ def _validate(key: str, value: Any) -> Any:
         ) or value["width"] < 100 or value["height"] < 100:
             raise SettingsError("window geometry out of range")
         return dict(value)
+    if key == "window_shape":
+        if value not in (None, "region"):
+            raise SettingsError("window_shape must be null or 'region'")
+        return value
     if key == "static_ip_hint":
         if not isinstance(value, str) or len(value) > 500:
             raise SettingsError("static_ip_hint must be text (<= 500 chars)")
