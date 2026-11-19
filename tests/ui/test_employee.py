@@ -209,3 +209,54 @@ def test_screenshot_employee(
     lst.wait_for_timeout(300)
     lst.screenshot(path=str(artifacts_dir / f"employees-{width}x{height}.png"))
     assert console_problems(page) == [] and console_problems(lst) == []
+
+
+TEAMS_REJECT = (
+    "window.pywebview.api.teams = () => Promise.reject(new Error('teams() not exposed'));"
+)
+
+
+def test_employees_page_works_when_teams_api_rejects(open_page: Any) -> None:
+    page = open_page("#/employees", extra_script=TEAMS_REJECT)
+    assert page.locator(LIST_ROWS).count() == 12
+    options = page.locator("#tv-view .tv-employees select[data-filter='team'] option")
+    assert [options.nth(i).get_attribute("value") for i in range(options.count())] == [
+        "", "Dev", "QA", "BA / PM"
+    ]
+    assert page.locator("#tv-view .tv-employees [data-load-error]").is_hidden()
+    assert page.tv_errors == []
+
+
+def _fill(page: Any) -> float:
+    return float(page.evaluate(
+        "getComputedStyle(document.querySelector(\"tv-gauge[data-kpi='range-tokens']"
+        " .tv-gauge__dial\")).getPropertyValue('--tv-gauge-p')"
+    ))
+
+
+def test_gauge_scale_uses_busiest_day_reference(open_page: Any) -> None:
+    an = open_page("#/employee/an.tran%40ics.vn")
+    minh = open_page("#/employee/minh.le%40ics.vn")
+    a, m = _fill(an), _fill(minh)
+    assert 0 < a < 1 and 0 < m < 1
+    assert abs(a - m) > 0.05
+    note = an.locator("#tv-view .tv-employee [data-scale-note]")
+    assert note.is_visible() and "Thang đo" in note.inner_text()
+    # The 30-day reference is fetched once, not on every range switch.
+    refs = [c for c in _calls(an, "employee") if c[1] == "30d"]
+    before = rev(an)
+    an.locator("#tv-view .tv-rangeswitch button[data-range='7d']").click()
+    wait_rev_after(an, before)
+    assert [c for c in _calls(an, "employee") if c[1] == "30d"] == refs
+    assert "7" in note.inner_text()
+
+
+def test_heading_shows_placeholder_until_loaded(open_page: Any) -> None:
+    page = open_page("#/home")
+    page.evaluate("window.__tvHomeDelay = 1500; location.hash = '#/employee/an.tran%40ics.vn'")
+    page.wait_for_selector("#tv-view[data-route='employee'] tv-panel.tv-employee-head")
+    tab = page.locator(HEAD)
+    assert tab.inner_text() == "Đang tải thông tin nhân viên…"
+    assert "an.tran" not in tab.inner_text()
+    _wait_detail(page)
+    assert "an.tran@ics.vn" in tab.inner_text()

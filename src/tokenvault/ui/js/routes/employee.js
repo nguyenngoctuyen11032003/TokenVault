@@ -11,14 +11,17 @@ import { colorFor } from '../palette.js';
 import {
   clipText,
   coalesce,
+  debounce,
   fmtCostPartial,
   fmtInt,
   fmtPct,
   fmtTokens,
   h,
+  LIVE_DEBOUNCE_MS,
   localHour,
   niceCeil,
   normalizeRange,
+  RANGE_DAYS,
   shortDay,
   shortHour,
   shortTime,
@@ -51,6 +54,7 @@ export default async function render(container, ctx) {
   const gauge = h('tv-gauge', { 'data-kpi': 'range-tokens', label: t('gauge.label') });
   const costValue = h('b', { class: 'tv-employee-kpi__value tv-num--orange' });
   const costInfo = h('p', { class: 'tv-employee-costinfo', hidden: true });
+  const scaleNote = h('p', { class: 'tv-employee-scale', 'data-scale-note': '', hidden: true });
   const alias = clipText('p', 'tv-employee-alias', '');
   const kpiSessions = h('b', { class: 'tv-employee-kpi__value' });
   const kpiEvents = h('b', { class: 'tv-employee-kpi__value' });
@@ -74,12 +78,12 @@ export default async function render(container, ctx) {
 
   const head = h(
     'tv-panel',
-    { class: 'tv-employee-head', heading: key },
+    { class: 'tv-employee-head', heading: t('headingLoading') },
     h('div', { slot: 'actions' }, range.el),
     h(
       'div',
       { class: 'tv-employee-hero' },
-      h('div', { class: 'tv-employee-gauge' }, gauge),
+      h('div', { class: 'tv-employee-gauge' }, gauge, scaleNote),
       h(
         'div',
         { class: 'tv-employee-main' },
@@ -145,12 +149,16 @@ export default async function render(container, ctx) {
     ),
   );
   root.hidden = false;
-  head.hidden = true;
   root.querySelector('.tv-employee-charts').hidden = true;
   root.querySelector('.tv-employee-sessionspanel').hidden = true;
   container.append(root);
 
   // ---------- updates ----------
+
+  let reference = null; // {maxDay} from the employee's 30-day daily series; null = not loaded
+  const referenceFrom = (view) => ({
+    maxDay: Math.max(0, ...(view?.daily || []).map((d) => Number(d.total_tokens) || 0)),
+  });
 
   function setHeading(view) {
     const name = String(view.email || view.display_name || view.key || key);
@@ -166,11 +174,21 @@ export default async function render(container, ctx) {
     alias.hidden = !alias.textContent;
   }
 
+  // Gauge scale: the employee's busiest day in the last 30 days x the number of days in the
+  // range (today = 1). So the arc shows "how close to a peak-pace range", not a fixed 87%.
+  function gaugeMax(tokens, rng) {
+    const days = RANGE_DAYS[rng];
+    const peak = reference?.maxDay || 0;
+    scaleNote.textContent = peak ? t(days === 1 ? 'scaleToday' : 'scaleRange', { days }) : '';
+    scaleNote.hidden = !peak;
+    return niceCeil(Math.max(tokens, peak * days));
+  }
+
   function updateKpis(view, rng) {
     const totals = view.totals || {};
     const tokens = Number(totals.total_tokens) || 0;
     gauge.setAttribute('unit', t(`gauge.unit.${rng}`));
-    gauge.setAttribute('max', String(niceCeil(tokens * 1.15)));
+    gauge.setAttribute('max', String(gaugeMax(tokens, rng)));
     gauge.setAttribute('value', String(tokens));
     gauge.setAttribute('display', fmtTokens(tokens));
     gauge.title = `${fmtInt(tokens)} ${t('tokensUnit')}`;
@@ -324,10 +342,17 @@ export default async function render(container, ctx) {
   async function draw() {
     const rng = normalizeRange(ctx.filters.get().range);
     try {
-      const view = await ctx.api.employee(key, rng);
+      // The 30-day reference (gauge scale) is fetched once; for the 30d range the view is it.
+      const needRef = reference === null && rng !== '30d';
+      const [ref, view] = await Promise.all([
+        needRef ? ctx.api.employee(key, '30d').catch(() => undefined) : Promise.resolve(null),
+        ctx.api.employee(key, rng),
+      ]);
       if (ctx.signal.aborted) return;
       if (rng !== normalizeRange(ctx.filters.get().range)) return; // superseded; re-run queued
       if (!view || typeof view !== 'object') throw new Error('empty response');
+      if (rng === '30d') reference = referenceFrom(view);
+      else if (needRef) reference = referenceFrom(ref);
       errorBox.hidden = true;
       head.hidden = false;
       root.querySelector('.tv-employee-charts').hidden = false;
@@ -354,7 +379,7 @@ export default async function render(container, ctx) {
   ctx.filters.subscribe((_state, changed) => {
     if (changed.includes('range')) refresh();
   });
-  ctx.onLive(() => refresh());
+  ctx.onLive(debounce(() => refresh(), LIVE_DEBOUNCE_MS, ctx.signal));
   await refresh();
 }
 

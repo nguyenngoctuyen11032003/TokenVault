@@ -263,3 +263,14 @@ def test_charts_skip_animation_when_reduced_motion(open_page: Any) -> None:
     page.evaluate("tv.onLive({online: 1, total: 2})")
     wait_rev_after(page, before)
     assert page.evaluate(f"{anim}.animation") is False
+
+
+def test_burst_of_live_events_triggers_one_refetch(open_page: Any) -> None:
+    page = open_page("#/home")
+    before_calls = len(_calls(page, "overview"))
+    before = rev(page)
+    page.evaluate("for (let i = 0; i < 10; i++) tv.emitLive({online: i, total: 14})")
+    wait_rev_after(page, before)
+    page.wait_for_timeout(600)  # anything still queued would have run by now
+    assert len(_calls(page, "overview")) - before_calls <= 2
+    assert rev(page) == before + 1

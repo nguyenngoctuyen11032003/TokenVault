@@ -53,6 +53,14 @@
   letter-spacing: 0.1em;
 }
 
+.tv-employee-scale {
+  max-width: 180px;
+  margin: 8px auto 0;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-xs);
+  text-align: center;
+}
+
 .tv-employee-kpis {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -245,13 +245,14 @@ def open_page(open_shell: Any) -> OpenPage:
         width: int = 1440,
         height: int = 900,
         settle: bool = True,
+        extra_script: str = "",
     ) -> Any:
+        script = stub_init_script(data if data is not None else home_data())
         page = open_shell(
-            route, width=width, height=height,
-            init_script=stub_init_script(data if data is not None else home_data()),
+            route, width=width, height=height, init_script=f"{script};{extra_script}",
         )
-        page.wait_for_selector("#tv-view[data-route-state]")
         if settle:
+            page.wait_for_selector("#tv-view[data-route-state]")
             page.wait_for_selector("#tv-view [data-tv-rev]:not([data-tv-rev='0'])")
         return page
 

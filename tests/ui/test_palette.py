@@ -73,3 +73,48 @@ def test_every_series_colour_legible_on_panel(open_shell: Any, ui_dir: Path) -> 
                            f"p.ensureLegible('#4da3ff', {panel!r})]")
     assert _ratio(fixed[0], panel) >= 4.5
     assert fixed[1].lower() == "#4da3ff"
+
+
+NO_STORAGE = """
+Object.defineProperty(window, 'localStorage', {
+  configurable: true,
+  get() { throw new DOMException('storage disabled', 'SecurityError'); },
+});
+"""
+
+KEYS = ["TokenVault", "erp-api", "mobile-app", "claude-opus-4-7", "an.tran@ics.vn",
+        "device:PC Kế toán@HN 01", "Bash", "docs-site", "infra-terraform", "hr-portal"]
+
+
+def _fnv_slot(key: str) -> int:
+    h = 0x811C9DC5
+    data = key.encode("utf-16-le")
+    for i in range(0, len(data), 2):
+        h ^= data[i] | (data[i + 1] << 8)
+        h = (h * 0x01000193) & 0xFFFFFFFF
+    return h % 8
+
+
+def test_without_storage_colours_are_identical_across_fresh_loads(open_shell: Any) -> None:
+    first = open_shell("#/settings", init_script=NO_STORAGE)
+    probe = "(() => { try { localStorage; return 'ok'; } catch { return 'no'; } })()"
+    assert first.evaluate(probe) == "no"
+    a = _palette(first, f"{KEYS!r}.map(k => p.colorFor(k))")
+    # A brand-new page (fresh launch, no storage), keys asked in the opposite order.
+    second = open_shell("#/settings", init_script=NO_STORAGE)
+    b = _palette(second, f"{KEYS[::-1]!r}.map(k => p.colorFor(k))")[::-1]
+    assert a == b
+    series = _palette(first, "[...p.SERIES_COLORS]")
+    assert a == [series[_fnv_slot(k)] for k in KEYS]  # home slot = FNV-1a(UTF-16) mod 8
+    assert first.tv_errors == [] and second.tv_errors == []
+
+
+def test_corrupt_storage_json_does_not_throw(open_shell: Any) -> None:
+    corrupt = "try { localStorage.setItem('tv.palette.v1', '{not json'); } catch {}"
+    page = open_shell("#/settings", init_script=corrupt)
+    colours = _palette(page, "['a', 'b', 'c'].map(k => p.colorFor(k))")
+    assert all(re.fullmatch(r"#[0-9a-f]{6}", c) for c in colours)
+    assert len(set(colours)) == 3
+    stored = page.evaluate("JSON.parse(localStorage.getItem('tv.palette.v1'))")
+    assert [e[0] for e in stored] == ["a", "b", "c"]  # overwritten with valid JSON
+    assert page.tv_errors == []

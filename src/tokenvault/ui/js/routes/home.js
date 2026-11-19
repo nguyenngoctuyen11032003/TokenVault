@@ -13,11 +13,14 @@ import {
   apiFilter,
   clipText,
   coalesce,
+  debounce,
+  deriveTeams,
   fmtCost,
   fmtCostPartial,
   fmtInt,
   fmtTokens,
   h,
+  LIVE_DEBOUNCE_MS,
   localHour,
   niceCeil,
   shortHour,
@@ -26,19 +29,6 @@ import { createTeamList } from '../components/teamlist.js';
 
 const TOP_PROJECTS = 5;
 
-/** Fallback when api.teams() is unavailable: devices per team from the employee rows. */
-function deriveTeams(people) {
-  const map = new Map();
-  for (const row of people) {
-    for (const name of row.teams || []) {
-      const team = map.get(name) || { name, devices: 0, online: 0 };
-      team.devices += (row.devices || []).length;
-      team.online += row.online ? 1 : 0;
-      map.set(name, team);
-    }
-  }
-  return [...map.values()];
-}
 
 export default async function render(container, ctx) {
   const t = (key, params) => ctx.t(`home.${key}`, params);
@@ -348,7 +338,7 @@ export default async function render(container, ctx) {
   ctx.filters.subscribe((_state, changed) => {
     if (changed.includes('team')) refresh();
   });
-  ctx.onLive(() => refresh());
+  ctx.onLive(debounce(() => refresh(), LIVE_DEBOUNCE_MS, ctx.signal));
   await refresh();
 }
 

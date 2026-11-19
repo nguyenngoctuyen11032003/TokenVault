@@ -4,7 +4,16 @@
 // Live events re-fetch and update the rows in place.
 
 import { createEmployeeTable } from '../components/employeetable.js';
-import { apiFilter, coalesce, fold, h, normalizeRange } from '../components/homekit.js';
+import {
+  apiFilter,
+  coalesce,
+  debounce,
+  deriveTeams,
+  fold,
+  h,
+  LIVE_DEBOUNCE_MS,
+  normalizeRange,
+} from '../components/homekit.js';
 import { createRangeSwitch } from '../components/rangeswitch.js';
 
 export default async function render(container, ctx) {
@@ -93,12 +102,16 @@ export default async function render(container, ctx) {
     const state = ctx.filters.get();
     try {
       const [teams, list] = await Promise.all([
-        ctx.api.teams(),
+        // teams() is optional: without it the team filter is derived from the employee rows.
+        ctx.api.teams().catch((err) => {
+          console.warn('[employees] teams() failed, deriving teams from employees', err);
+          return null;
+        }),
         ctx.api.employees(apiFilter({ team: state.team ?? null }, normalizeRange(state.range))),
       ]);
       if (ctx.signal.aborted) return;
       rows = Array.isArray(list) ? list : [];
-      fillTeams(teams);
+      fillTeams(Array.isArray(teams) ? teams : deriveTeams(rows));
       range.set(normalizeRange(ctx.filters.get().range));
       errorBox.hidden = true;
       applySearch();
@@ -119,6 +132,6 @@ export default async function render(container, ctx) {
   ctx.filters.subscribe((_state, changed) => {
     if (changed.includes('team') || changed.includes('range')) refresh();
   });
-  ctx.onLive(() => refresh());
+  ctx.onLive(debounce(() => refresh(), LIVE_DEBOUNCE_MS, ctx.signal));
   await refresh();
 }

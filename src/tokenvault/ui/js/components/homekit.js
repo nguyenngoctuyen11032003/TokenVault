@@ -101,7 +101,7 @@ export function localHour(now = new Date()) {
 }
 
 export const RANGES = Object.freeze(['today', '7d', '30d']);
-const RANGE_DAYS = { today: 1, '7d': 7, '30d': 30 };
+export const RANGE_DAYS = Object.freeze({ today: 1, '7d': 7, '30d': 30 });
 
 export function normalizeRange(range) {
   return RANGES.includes(range) ? range : 'today';
@@ -165,4 +165,39 @@ export function coalesce(task) {
     });
     return running;
   };
+}
+
+
+/**
+ * Trailing debounce: a burst of calls within `ms` runs `fn` once, `ms` after the last call.
+ * Pending runs are dropped when `signal` aborts (pass the route's ctx.signal).
+ */
+export function debounce(fn, ms, signal) {
+  let timer = 0;
+  signal?.addEventListener('abort', () => clearTimeout(timer), { once: true });
+  return () => {
+    clearTimeout(timer);
+    if (signal?.aborted) return;
+    timer = setTimeout(fn, ms);
+  };
+}
+
+/** Live events are debounced by this much before the page re-fetches. */
+export const LIVE_DEBOUNCE_MS = 250;
+
+/**
+ * Fallback when api.teams() is unavailable: [{name, devices, online}] from EmployeeRow
+ * teams / devices / online. `online` counts online employees (rows have no per-device state).
+ */
+export function deriveTeams(people) {
+  const map = new Map();
+  for (const row of Array.isArray(people) ? people : []) {
+    for (const name of row?.teams || []) {
+      const team = map.get(name) || { name, devices: 0, online: 0 };
+      team.devices += (row.devices || []).length;
+      team.online += row.online ? 1 : 0;
+      map.set(name, team);
+    }
+  }
+  return [...map.values()];
 }

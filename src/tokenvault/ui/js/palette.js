@@ -5,12 +5,19 @@
 //   contrastRatio(a, b)   -> WCAG 2.x contrast ratio of two #rrggbb colours
 //   ensureLegible(c, bg)  -> c, or c lightened until it reaches 4.5:1 on bg
 //
-// Assignment: a key's first colour choice is its hash slot; if that colour is already used by
-// more keys than another one, the key takes the least-used colour (probing from its slot). So
-// the first 8 distinct keys always get 8 distinct colours, and later keys spread evenly.
-// Assignments are remembered for the session and persisted (localStorage, best effort), so a
-// project / model / employee / tool keeps its colour on every page and chart. Never rely on
-// colour alone: charts and tables always show the name next to the swatch.
+// Assignment (what is guaranteed, honestly):
+// - Every key has a home slot: FNV-1a hash of the key mod 8. Same key -> same home slot on any
+//   machine, any launch.
+// - With working localStorage (pywebview needs private_mode=False + a storage_path, Task 12):
+//   a new key takes its home slot unless that colour is already used by more keys than another
+//   one; then it takes the least-used colour, probing from its home slot. The choice is
+//   persisted, so the first 8 distinct keys get 8 distinct colours and every key keeps its
+//   colour across launches. Persisted choices win over the hash.
+// - Without storage (private mode, blocked, or the API throws): every key uses its home slot.
+//   Colours are then stable across launches by hash alone, but two keys may share a colour
+//   (no distinctness guarantee).
+// - Corrupt stored JSON is ignored (never throws) and overwritten by the next assignment.
+// Never rely on colour alone: charts and tables always show the name next to the swatch.
 
 export const SERIES_COLORS = Object.freeze([
   '#ff4d5e', // red (lighter than the accent so a series never reads as the "primary" line)
@@ -26,12 +33,26 @@ export const SERIES_COLORS = Object.freeze([
 const STORAGE_KEY = 'tv.palette.v1';
 const MAX_KEYS = 2000;
 
-let assigned = null; // Map key -> index
+let assigned = null; // Map key -> index (memo for this page load)
+let persistent = false; // localStorage usable: assignments are remembered across launches
 const counts = new Array(SERIES_COLORS.length).fill(0);
+
+function storageWorks() {
+  try {
+    const probe = `${STORAGE_KEY}.probe`;
+    localStorage.setItem(probe, '1');
+    localStorage.removeItem(probe);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function load() {
   if (assigned) return assigned;
   assigned = new Map();
+  persistent = storageWorks();
+  if (!persistent) return assigned;
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
     if (Array.isArray(raw)) {
@@ -45,7 +66,7 @@ function load() {
       }
     }
   } catch {
-    /* corrupt or unavailable storage: start fresh */
+    /* corrupt JSON: start fresh (overwritten on the next save) */
   }
   return assigned;
 }
@@ -55,7 +76,7 @@ function save() {
     const entries = [...assigned].slice(-MAX_KEYS);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
   } catch {
-    /* storage unavailable: keep in memory only */
+    persistent = false; // quota or revoked: fall back to hash slots from now on
   }
 }
 
@@ -76,19 +97,21 @@ export function colorFor(key) {
   const known = map.get(text);
   if (known !== undefined) return SERIES_COLORS[known];
   const n = SERIES_COLORS.length;
-  const start = hash(text) % n;
-  const least = Math.min(...counts);
-  let index = start;
-  for (let step = 0; step < n; step += 1) {
-    const candidate = (start + step) % n;
-    if (counts[candidate] === least) {
-      index = candidate;
-      break;
+  const home = hash(text) % n;
+  let index = home;
+  if (persistent) {
+    const least = Math.min(...counts);
+    for (let step = 0; step < n; step += 1) {
+      const candidate = (home + step) % n;
+      if (counts[candidate] === least) {
+        index = candidate;
+        break;
+      }
     }
+    counts[index] += 1;
   }
   map.set(text, index);
-  counts[index] += 1;
-  save();
+  if (persistent) save();
   return SERIES_COLORS[index];
 }
 
