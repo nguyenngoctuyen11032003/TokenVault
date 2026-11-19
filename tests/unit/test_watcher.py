@@ -501,3 +501,45 @@ def test_vanished_hot_file_is_dropped(root: Path) -> None:
     f.unlink()
     w._poll_hot()
     assert w._hot == {}
+
+
+def test_observer_uses_short_os_event_timeout(root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression (Task 23 E2E): watchdog's default observer timeout (1 s) makes the Windows
+    emitter hold every change notification until 1 s of quiet, so each append reached the
+    Manager only after ~1.6 s (and a steadily written file got no events at all)."""
+    import tokenvault.adapter.watcher as wmod
+
+    seen: list[float] = []
+    real = wmod.Observer
+
+    def spy(*args: object, **kw: float) -> object:
+        seen.append(kw.get("timeout", 1.0))
+        return real(*args, **kw)
+
+    monkeypatch.setattr(wmod, "Observer", spy)
+    w = Watcher(root, FakeCollector(), on_new=lambda: None)
+    w.start()
+    try:
+        assert wait_for(lambda: bool(seen))
+    finally:
+        w.stop()
+    assert seen[0] <= 0.25
+
+
+def test_append_is_collected_well_under_a_second(root: Path) -> None:
+    f = root / "a.jsonl"
+    f.write_text("{}\n")
+    c = FakeCollector()
+    w = Watcher(root, c, on_new=lambda: None, debounce_s=0.05)
+    w.start()
+    try:
+        time.sleep(0.5)
+        n = len(c.calls)
+        t0 = time.monotonic()
+        append(f)
+        assert wait_for(lambda: len(c.calls) > n, 5)
+        took = time.monotonic() - t0
+    finally:
+        w.stop()
+    # hot polling alone (1 s) would also pass a looser bound; OS events must be faster
+    assert took < 0.8, took
