@@ -1,0 +1,37 @@
+{
+  "employees": {
+    "title": "Nhân viên",
+    "search": "Tìm theo tên hoặc email",
+    "teamFilter": "Nhóm",
+    "allTeams": "Tất cả nhóm",
+    "range": {
+      "today": "Hôm nay",
+      "7d": "7 ngày",
+      "30d": "30 ngày"
+    },
+    "rangeLabel": "Khoảng thời gian",
+    "count": "{shown} / {total} nhân viên",
+    "noMatch": "Không có nhân viên phù hợp.",
+    "costNote": "Chi phí ước tính theo giá API, không phải hoá đơn thực tế.",
+    "costPartialHint": "Một phần token thuộc model chưa có giá, chi phí thực tế cao hơn.",
+    "unknownCost": "UNKNOWN",
+    "status": {
+      "online": "đang online",
+      "offline": "offline"
+    },
+    "table": {
+      "account": "Tài khoản Claude",
+      "team": "Nhóm",
+      "devices": "Máy",
+      "tokens": "Token",
+      "share": "Tỉ trọng",
+      "sessions": "Phiên",
+      "cost": "Chi phí",
+      "lastSeen": "Hoạt động cuối",
+      "costHint": "Chi phí ước tính theo giá API",
+      "shareOf": "{pct} tổng token"
+    },
+    "loadError": "Không tải được danh sách nhân viên: {detail}",
+    "retry": "Thử lại"
+  }
+}
