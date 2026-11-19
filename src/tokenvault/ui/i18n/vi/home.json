@@ -58,6 +58,7 @@
       "action": "Tạo bộ cài cho nhân viên"
     },
     "loadError": "Không tải được dữ liệu: {detail}",
-    "retry": "Thử lại"
+    "retry": "Thử lại",
+    "overviewLink": "Xem tổng quan chi tiết"
   }
 }

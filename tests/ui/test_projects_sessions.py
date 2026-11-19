@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -24,7 +25,7 @@ from conftest_overview import (  # noqa: E402
 )
 
 pytestmark = pytest.mark.ui
-pytest_plugins = ["conftest_overview"]
+pytest_plugins = ["conftest_overview", "conftest_home"]
 
 PROJ_ROWS = "#tv-view .tv-projects table.tv-projtable tbody tr[data-project]"
 SESS_ROWS = "#tv-view .tv-sessions table.tv-sesstable tbody tr[data-session]"
@@ -34,7 +35,7 @@ TURN_ROWS = "#tv-view .tv-session table.tv-turntable tbody tr[data-turn]"
 def test_projects_table_and_chart(open_ov: Any) -> None:
     page = open_ov("#/projects")
     rows = page.locator(PROJ_ROWS)
-    assert rows.count() == 6
+    assert rows.count() == 7  # 6 named + the "" (no project) row
     tokens = [
         int(r.get_attribute("data-tokens") or 0) for r in rows.all()
     ]
@@ -61,7 +62,7 @@ def test_project_click_sets_filter_and_opens_sessions(open_ov: Any) -> None:
     assert projects and set(projects) == {"erp-api"}
     # Back on projects, the chosen project is highlighted; the list still shows all projects.
     go(page, "#/projects")
-    assert page.locator(PROJ_ROWS).count() == 6
+    assert page.locator(PROJ_ROWS).count() == 7
     assert page.locator(f"{PROJ_ROWS}[aria-selected='true']").get_attribute("data-project") == (
         "erp-api"
     )
@@ -186,3 +187,113 @@ def test_live_refetch_keeps_sessions_scroll(open_ov: Any) -> None:
     page.evaluate("tv.onLive({online: 1, total: 2})")
     wait_rev_after(page, before)
     assert view.evaluate("v => v.scrollTop") == scroll
+
+
+def test_no_project_row_filters_on_the_servers_empty_project(open_ov: Any) -> None:
+    page = open_ov("#/projects", filters={"range": "all"})
+    row = page.locator(f"{PROJ_ROWS}[data-project='']")
+    assert row.count() == 1
+    assert "(không rõ dự án)" in row.inner_text()
+    row.locator("[data-col='project'] a").click()
+    page.wait_for_selector("#tv-view[data-route='sessions'][data-route-state]")
+    wait_page(page)
+    state = page.evaluate("import('./js/filters.js').then(m => m.filters.get())")
+    assert state["project"] == "(no project)"
+    assert calls(page, "sessions")[-1][0]["project"] == ""
+    projects = page.locator(f"{SESS_ROWS} [data-col='project']").all_inner_texts()
+    assert projects and set(projects) == {"(không rõ dự án)"}
+    select = page.locator("#tv-view .tv-ovfilter select[data-filter='project']")
+    assert select.input_value() == "(no project)"
+    go(page, "#/projects")
+    assert page.locator(f"{PROJ_ROWS}[aria-selected='true']").get_attribute("data-project") == ""
+
+
+def test_turn_times_are_shown_in_browser_local_time(open_tz: Any) -> None:
+    data = overview_data()
+    page = open_tz("#/session/" + quote(ORDER_ID, safe=""), timezone_id="Asia/Tokyo", data=data)
+    turns = sorted(data["turns"][ORDER_ID], key=lambda x: x["timestamp"])
+    first = turns[0]["timestamp"]
+    assert first.endswith("Z")
+    utc = datetime.fromisoformat(first.replace("Z", "+00:00"))
+    local = utc.astimezone(timezone(timedelta(hours=9)))
+    cell = page.locator(f"{TURN_ROWS} [data-col='time']").first.inner_text()
+    assert cell == local.strftime("%H:%M:%S")
+    # Header span = the session row's server-local started_at/last_at (as on the list pages).
+    row = next(s for s in data["sessions"] if s["session_id"] == ORDER_ID)
+    started = row["started_at"]
+    expected = f"{started[8:10]}/{started[5:7]} {started[11:16]}"
+    assert expected in page.locator("#tv-view .tv-session-head").inner_text()
+    assert console_problems(page) == []
+
+
+def test_session_header_uses_api_session_and_refreshes_on_live(open_ov: Any) -> None:
+    page = open_ov("#/session/" + quote(ORDER_ID, safe=""))
+    assert calls(page, "session")[-1] == [ORDER_ID]
+    assert calls(page, "sessions") == []
+    head = page.locator("#tv-view .tv-session-head")
+    assert "Phiên kiểm tra thứ tự lượt" in head.inner_text()
+    page.evaluate(
+        "id => { const s = window.__tvOvData.sessions.find(x => x.session_id === id);"
+        " s.title = 'Tiêu đề mới sau khi cập nhật'; }",
+        ORDER_ID,
+    )
+    before = rev(page)
+    page.evaluate("tv.onLive({online: 1, total: 2})")
+    wait_rev_after(page, before)
+    assert "Tiêu đề mới sau khi cập nhật" in head.inner_text()
+
+
+def test_session_header_falls_back_to_bounded_sessions_scan(open_ov: Any) -> None:
+    data = overview_data()
+    data["noSessionMethod"] = True
+    page = open_ov("#/session/" + quote(ORDER_ID, safe=""), data=data)
+    assert calls(page, "session") == []
+    scans = calls(page, "sessions")
+    assert len(scans) == 1
+    flt = scans[0][0]
+    assert flt["start"] and flt["end"]  # bounded window, never all time
+    assert "Phiên kiểm tra thứ tự lượt" in page.locator("#tv-view .tv-session-head").inner_text()
+    assert console_problems(page) == []
+
+
+def test_project_route_sets_filter_and_redirects(open_ov: Any) -> None:
+    page = open_ov("#/home", settle=False)
+    page.wait_for_selector("#tv-view[data-route-state]")
+    page.evaluate("location.hash = '#/project/erp-api'")
+    page.wait_for_selector("#tv-view[data-route='sessions'][data-route-state]")
+    wait_page(page)
+    assert page.evaluate("import('./js/filters.js').then(m => m.filters.get().project)") == (
+        "erp-api"
+    )
+    page.evaluate("location.hash = '#/project/' + encodeURIComponent('no-such-project')")
+    page.wait_for_selector("#tv-view[data-route='projects'][data-route-state]")
+    page.evaluate("location.hash = '#/project/'")
+    page.wait_for_selector("#tv-view[data-route='projects'][data-route-state]")
+    assert page.evaluate("location.hash") == "#/projects"
+
+
+def test_home_links_to_overview_and_project_chips(open_ov: Any) -> None:
+    page = open_ov("#/home", settle=False, filters={"range": "today"})
+    page.wait_for_selector("#tv-view .tv-home[data-tv-rev]:not([data-tv-rev='0'])")
+    link = page.locator("#tv-view .tv-home a[href='#/overview']")
+    assert link.count() == 1 and link.is_visible()
+    chips = page.locator("#tv-view .tv-home-projects [data-project]")
+    assert chips.count() >= 1
+    for chip in chips.all():
+        name = chip.get_attribute("data-project")
+        href = chip.get_attribute("href")
+        assert href == ("#/projects" if not name else "#/project/" + quote(name, safe=""))
+    link.click()
+    page.wait_for_selector("#tv-view[data-route='overview'][data-route-state]")
+    wait_page(page)
+
+
+def test_employee_page_clamps_long_overview_range_to_30d(open_page: Any) -> None:
+    page = open_page(
+        "#/employee/an.tran%40ics.vn",
+        extra_script="localStorage.setItem('tv.filters.v1', JSON.stringify({range: '90d'}));",
+    )
+    assert calls(page, "employee")[-1] == ["an.tran@ics.vn", "30d"]
+    assert page.locator("#tv-view [data-range-note]").is_visible()
+    pressed = page.locator("#tv-view .tv-rangeswitch button[aria-pressed='true']")
+    assert pressed.get_attribute("data-range") == "30d"

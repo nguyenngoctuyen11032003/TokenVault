@@ -14,6 +14,7 @@ import {
   drawTools,
   drawTrend,
 } from '../components/overview-charts.js';
+import { cachedCall } from '../components/overview-fetch.js';
 import { createFilterBar } from '../components/overview-filterbar.js';
 import {
   CLEAR_PATCH,
@@ -39,6 +40,7 @@ import {
   shortTime,
 } from '../components/homekit.js';
 
+const FILTER_SHARE_MS = 1500; // a filter change may reuse an answer this young
 const TOTALS = ['tokens', 'input', 'output', 'cache_read', 'cache_write', 'sessions', 'events', 'cost'];
 
 export default async function render(container, ctx) {
@@ -60,6 +62,8 @@ export default async function render(container, ctx) {
   let rev = 0;
   let granularity = null; // null = automatic ('month' for ranges longer than 90 days)
   let last = null; // last Overview payload (granularity switch redraws without refetch)
+  let paintSeq = 0; // bumped for every payload about to be painted
+  let fresh = false; // next draw must not reuse a cached answer (live event)
 
   // ---------- layout ----------
   const totals = {};
@@ -242,12 +246,16 @@ export default async function render(container, ctx) {
 
   function setGranularity(g) {
     granularity = g;
-    if (last) drawCharts(last).then(bump);
+    if (!last) return;
+    drawCharts(last, paintSeq).then((painted) => {
+      if (painted) bump();
+    });
   }
 
-  async function drawCharts(ov) {
+  // Paints only if no newer payload started painting meanwhile (seq) and the route is alive.
+  async function drawCharts(ov, seq) {
     const echarts = await charts;
-    if (!echarts || ctx.signal.aborted) return;
+    if (!echarts || ctx.signal.aborted || seq !== paintSeq) return false;
     const opts = { t, signal: ctx.signal };
     const mode = trendMode();
     if (mode === 'hour') granSeg.hidden = true;
@@ -264,6 +272,7 @@ export default async function render(container, ctx) {
     show('projects', drawProjects(hosts.projects, ov, opts));
     show('models', drawModels(hosts.models, ov, opts));
     show('tools', drawTools(hosts.tools, ov, opts));
+    return true;
   }
 
   function show(name, drawn) {
@@ -279,9 +288,14 @@ export default async function render(container, ctx) {
 
   async function draw() {
     const state = ctx.filters.get();
+    // Live refreshes are always fresh; filter changes may join the filter bar's call.
+    const maxAge = fresh ? 0 : FILTER_SHARE_MS;
+    fresh = false;
     try {
-      const ov = await ctx.api.overview(ovFilter(state));
+      const ov = await cachedCall(ctx.api, 'overview', [ovFilter(state)], { maxAge });
       if (ctx.signal.aborted) return;
+      paintSeq += 1;
+      const seq = paintSeq;
       if (!ov || typeof ov !== 'object') throw new Error(t('badResponse'));
       error.hide();
       last = ov;
@@ -295,7 +309,7 @@ export default async function render(container, ctx) {
       grid.hidden = isEmpty;
       if (!isEmpty) {
         updateRecent(ov);
-        await drawCharts(ov);
+        await drawCharts(ov, seq);
       }
     } catch (err) {
       if (ctx.signal.aborted) return;
@@ -310,7 +324,16 @@ export default async function render(container, ctx) {
     granularity = null;
     refresh();
   });
-  ctx.onLive(debounce(() => refresh(), LIVE_DEBOUNCE_MS, ctx.signal));
+  ctx.onLive(
+    debounce(
+      () => {
+        fresh = true;
+        refresh();
+      },
+      LIVE_DEBOUNCE_MS,
+      ctx.signal,
+    ),
+  );
   await refresh();
 }
 

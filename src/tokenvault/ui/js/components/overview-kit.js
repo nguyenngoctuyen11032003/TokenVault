@@ -5,24 +5,35 @@
 // Everything renders untrusted data as text (h() never parses HTML).
 
 import { colorFor } from '../palette.js';
-import { clipText, fmtCostPartial, h, localDay } from './homekit.js';
+import {
+  customRange,
+  daySpan,
+  PRESET_DAYS,
+  parseLocalDay,
+  RANGE_PRESETS,
+  rangeBounds as clockBounds,
+} from '../overview-clock.js';
+import { clipText, fmtCostPartial, h } from './homekit.js';
 
 /** Range presets of the overview filter bar. Home/employee pages understand the first three. */
-export const OV_RANGES = Object.freeze(['today', '7d', '30d', '90d', 'all']);
-const PRESET_DAYS = Object.freeze({ today: 1, '7d': 7, '30d': 30, '90d': 90 });
-const CUSTOM_RE = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/;
-const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+export const OV_RANGES = RANGE_PRESETS;
+export { customRange };
 
-/** "2026-01-01..2026-02-01" (custom range stored in filters.range) or null. */
-export function customRange(range) {
-  const m = CUSTOM_RE.exec(String(range ?? ''));
-  if (!m) return null;
-  const [start, end] = m[1] <= m[2] ? [m[1], m[2]] : [m[2], m[1]];
-  return { start, end };
+/**
+ * Filter-store value for "sessions without a project". The server stores a missing project as
+ * the empty string (ProjectRow.project == ""), and an empty string in the store would read as
+ * "no filter", so the store keeps this sentinel and ovFilter() sends "" to the API.
+ */
+export const NO_PROJECT = '(no project)';
+
+/** Store value for a project name ("" -> NO_PROJECT). */
+export function projectKey(project) {
+  const p = String(project ?? '');
+  return p === '' ? NO_PROJECT : p;
 }
 
 export function makeCustomRange(start, end) {
-  if (!DAY_RE.test(String(start)) || !DAY_RE.test(String(end))) return null;
+  if (!parseLocalDay(start) || !parseLocalDay(end)) return null;
   return start <= end ? `${start}..${end}` : `${end}..${start}`;
 }
 
@@ -34,11 +45,7 @@ export function ovRange(range) {
 
 /** {start, end} local days for a range ('all' -> both null = no bound). */
 export function rangeBounds(range) {
-  const r = ovRange(range);
-  if (r === 'all') return { start: null, end: null };
-  const custom = customRange(r);
-  if (custom) return custom;
-  return { start: localDay(-(PRESET_DAYS[r] - 1)), end: localDay(0) };
+  return clockBounds(ovRange(range));
 }
 
 /** Number of days a range spans (Infinity for 'all'). */
@@ -46,9 +53,7 @@ export function rangeDays(range) {
   const r = ovRange(range);
   if (r === 'all') return Infinity;
   const custom = customRange(r);
-  if (!custom) return PRESET_DAYS[r];
-  const ms = new Date(`${custom.end}T00:00:00`) - new Date(`${custom.start}T00:00:00`);
-  return Math.round(ms / 86_400_000) + 1;
+  return custom ? daySpan(custom.start, custom.end) : PRESET_DAYS[r];
 }
 
 /** Manager `Filter` from the global filter state. `omit` drops keys (e.g. ['project']). */
@@ -57,7 +62,7 @@ export function ovFilter(state, omit = []) {
   const out = {
     team: s.team ?? null,
     email: s.email ?? null,
-    project: s.project ?? null,
+    project: s.project === NO_PROJECT ? '' : (s.project ?? null),
     model: s.model ?? null,
     ...rangeBounds(s.range),
   };

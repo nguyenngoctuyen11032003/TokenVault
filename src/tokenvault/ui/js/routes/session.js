@@ -2,8 +2,12 @@
 // span and totals (tokens, API-equivalent cost, turns, cache, sub-agent tokens). Body: stacked
 // bar chart of tokens per turn (downsampled for long sessions; sub-agent turns as their own
 // series) and a paginated, time-ordered turn table with sidechain turns marked.
-// The API has no "one session" method: the header uses the SessionRow seen on the list pages
-// (cache) or, failing that, api.sessions() over all time; it falls back to what the turns say.
+// Header info is the SessionRow from api.session(id), re-read on every (debounced) live refresh.
+// Only if that method is missing from the Python API (older Manager) the page scans
+// api.sessions() over the last FALLBACK_DAYS days (bounded; at most every 30 s via the call
+// cache); a row not found there falls back to what the turns say. Turn timestamps are UTC
+// instants and are shown in browser-local time; the header span uses the row's server-local
+// started_at/last_at like the list pages (turns only when there is no row).
 
 import { disposeDetached, loadECharts } from '../charts.js';
 import {
@@ -14,7 +18,15 @@ import {
   rememberSessions,
   swatchName,
 } from '../components/overview-kit.js';
-import { cacheWrite, createTurnsTable, drawTurnsChart, orderTurns } from '../components/sessions-turns.js';
+import { cachedCall, OPTIONS_TTL } from '../components/overview-fetch.js';
+import {
+  cacheWrite,
+  createTurnsTable,
+  drawTurnsChart,
+  localTime,
+  orderTurns,
+} from '../components/sessions-turns.js';
+import { addDays, today } from '../overview-clock.js';
 import {
   clipText,
   coalesce,
@@ -27,7 +39,8 @@ import {
 } from '../components/homekit.js';
 import { colorFor } from '../palette.js';
 
-const ALL_TIME = { team: null, email: null, project: null, model: null, start: null, end: null };
+const FALLBACK_DAYS = 90;
+const MISSING_METHOD = /not exposed by the Python API|HTTP 404|not a function/i;
 
 export default async function render(container, ctx) {
   const t = (key, params) => ctx.t(`session.${key}`, params);
@@ -46,8 +59,7 @@ export default async function render(container, ctx) {
   const unknown = t('unknownCost');
   const noModel = t('noModel');
   let rev = 0;
-  let info = cachedSession(id);
-  let lookedUp = !!info;
+  let info = cachedSession(id); // SessionRow or null
 
   // ---------- layout ----------
   const title = h('p', { class: 'tv-session-title' });
@@ -135,8 +147,9 @@ export default async function render(container, ctx) {
     title.title = name;
     title.classList.toggle('tv-ov-untitled', !row?.title);
     const allModels = row?.models?.length ? row.models.map((m) => modelLabel(m, noModel)) : models;
-    const started = turns[0]?.timestamp || row?.started_at;
-    const ended = turns[turns.length - 1]?.timestamp || row?.last_at;
+    const span = row
+      ? { start: shortTime(row.started_at), end: shortTime(row.last_at) }
+      : { start: localTime(turns[0]?.timestamp).short, end: localTime(turns[turns.length - 1]?.timestamp).short };
     facts.replaceChildren(
       ...(row ? fact(t('fact.project'), swatchName(row.project, row.project || t('noProject'))) : []),
       ...(row ? fact(t('fact.employee'), clipText('span', '', row.display_name || row.employee_key || '')) : []),
@@ -151,7 +164,7 @@ export default async function render(container, ctx) {
           allModels.length ? null : t('noModel'),
         ),
       ),
-      ...fact(t('fact.time'), started ? t('timeSpan', { start: shortTime(started), end: shortTime(ended) }) : '—'),
+      ...fact(t('fact.time'), span.start ? t('timeSpan', span) : '—'),
       ...(row ? [] : fact(t('fact.note'), t('noRow'))),
       ...fact(t('fact.id'), clipText('span', 'tv-session-id', id)),
     );
@@ -171,24 +184,42 @@ export default async function render(container, ctx) {
     kpis.side.title = fmtInt(sum.side);
   }
 
-  async function lookupRow() {
-    if (lookedUp) return;
+  async function scanFallback() {
+    const end = today();
+    const flt = { team: null, email: null, project: null, model: null, start: addDays(end, -(FALLBACK_DAYS - 1)), end };
+    const rows = await cachedCall(ctx.api, 'sessions', [flt], { maxAge: OPTIONS_TTL });
+    if (!Array.isArray(rows)) return null;
+    rememberSessions(rows);
+    return cachedSession(id);
+  }
+
+  async function fetchRow() {
     try {
-      const rows = await ctx.api.sessions(ALL_TIME);
-      if (Array.isArray(rows)) {
-        rememberSessions(rows);
-        info = cachedSession(id);
+      const row = await ctx.api.session(id);
+      if (row && typeof row === 'object') {
+        rememberSessions([row]);
+        return row;
       }
-      lookedUp = true;
+      return null; // unknown to the server
     } catch (err) {
-      console.warn('[session] sessions() lookup failed', err);
+      if (MISSING_METHOD.test(String(err?.message ?? err))) {
+        try {
+          return await scanFallback();
+        } catch (scanErr) {
+          console.warn('[session] sessions() fallback failed', scanErr);
+          return cachedSession(id);
+        }
+      }
+      console.warn('[session] session() failed', err);
+      return cachedSession(id);
     }
   }
 
   async function draw() {
     try {
-      const [turnsRaw] = await Promise.all([ctx.api.session_turns(id), lookupRow()]);
+      const [turnsRaw, row] = await Promise.all([ctx.api.session_turns(id), fetchRow()]);
       if (ctx.signal.aborted) return;
+      info = row;
       if (!Array.isArray(turnsRaw)) throw new Error(t('badResponse'));
       error.hide();
       head.hidden = false;

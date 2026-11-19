@@ -9,7 +9,7 @@ deterministic list of sessions (``SessionRow`` fields plus stub-only ``tools`` /
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -71,6 +71,8 @@ def _tok(total: int) -> dict[str, int]:
 def _session(i: int, today: date) -> dict[str, Any]:
     key, name, team = PEOPLE[i % len(PEOPLE)]
     project = PROJECTS[(i * 7) % 4] if i % 9 else PROJECTS[4 + (i // 9) % 2]
+    if i % 23 == 6:
+        project = ""  # the server's value for "no project"
     models = [MODELS[i % 3]] + ([MODELS[(i + 1) % 3]] if i % 4 == 0 else [])
     if i % 13 == 5:
         models = [UNPRICED]
@@ -113,14 +115,17 @@ def _session(i: int, today: date) -> dict[str, Any]:
 
 
 def _order_turns(day: date) -> list[dict[str, Any]]:
-    """Out-of-order turns (the UI must still list them by time); two are sidechain."""
+    """Out-of-order turns (the UI must still list them by time); two are sidechain.
+
+    Timestamps are raw UTC instants (``...Z``) like ``Aggregates.session_turns`` returns.
+    """
     out = []
     for n in range(12):
         minute = (n * 7) % 60
-        hour = 9 + (n * 7) // 60
+        hour = 2 + (n * 7) // 60
         out.append({
             **_tok(5_000 + n * 1_000),
-            "timestamp": f"{day.isoformat()}T{hour:02d}:{minute:02d}:{n:02d}+07:00",
+            "timestamp": f"{day.isoformat()}T{hour:02d}:{minute:02d}:{n:02d}Z",
             "device_id": "dev-00",
             "model": MODELS[n % 2],
             "reasoning_effort": None,
@@ -134,8 +139,8 @@ def _order_turns(day: date) -> list[dict[str, Any]]:
     return shuffled
 
 
-def overview_data(*, count: int = 80) -> dict[str, Any]:
-    today = date.today()
+def overview_data(*, count: int = 80, today: date | None = None) -> dict[str, Any]:
+    today = today or date.today()
     sessions = [_session(i, today) for i in range(count)]
     order = {
         **sessions[1],
@@ -264,3 +269,59 @@ def css_color(page: Any, colour: str) -> str:
             colour,
         )
     )
+
+
+_BASE_BRIDGE = """
+(() => {
+  const calls = [];
+  window.__tvCalls = calls;
+  const rec = (name, value) => (...args) => {
+    calls.push({name, args});
+    return Promise.resolve(value);
+  };
+  window.pywebview = { api: {
+    settings: rec('settings', {transparent_window: true}),
+    window_min: rec('window_min', null),
+    window_close: rec('window_close', null),
+  } };
+})();
+"""
+
+
+@pytest.fixture
+def open_tz(browser: Any, ui_server: str) -> Iterator[OpenPage]:
+    """Like ``open_ov`` but in a browser context with a forced IANA time zone."""
+    contexts: list[Any] = []
+
+    def _open(
+        route: str,
+        *,
+        timezone_id: str,
+        data: dict[str, Any] | None = None,
+        filters: dict[str, Any] | None = DEFAULT_FILTERS,
+        width: int = 1440,
+        height: int = 900,
+    ) -> Any:
+        ctx = browser.new_context(
+            viewport={"width": width, "height": height}, timezone_id=timezone_id
+        )
+        ctx.set_default_timeout(10_000)
+        contexts.append(ctx)
+        ctx.add_init_script(_BASE_BRIDGE)
+        script = stub_init_script(data if data is not None else overview_data(), filters)
+        ctx.add_init_script(script)
+        page = ctx.new_page()
+        errors: list[str] = []
+        console: list[str] = []
+        page.on("pageerror", lambda exc: errors.append(str(exc)))
+        page.on("console", lambda msg: console.append(f"{msg.type}: {msg.text}"))
+        page.goto(f"{ui_server}/index.html{route}")
+        page.wait_for_selector("html[data-tv-ready='1']", state="attached")
+        page.tv_errors = errors  # type: ignore[attr-defined]
+        page.tv_console = console  # type: ignore[attr-defined]
+        wait_page(page)
+        return page
+
+    yield _open
+    for ctx in contexts:
+        ctx.close()

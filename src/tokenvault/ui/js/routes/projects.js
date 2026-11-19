@@ -12,6 +12,7 @@ import {
   errorBanner,
   hasNarrowing,
   ovFilter,
+  projectKey,
   swatchName,
 } from '../components/overview-kit.js';
 import {
@@ -105,8 +106,10 @@ export default async function render(container, ctx) {
   );
   container.append(root);
 
+  // A missing project is "" on the server; the store keeps the NO_PROJECT sentinel instead
+  // (an empty string would mean "no filter"); ovFilter() sends "" back to the API.
   function openProject(project) {
-    ctx.filters.set({ project });
+    ctx.filters.set({ project: projectKey(project) });
     ctx.navigate('sessions');
   }
 
@@ -136,7 +139,7 @@ export default async function render(container, ctx) {
       'tr',
       {
         dataset: { project, tokens: String(Number(p.total_tokens) || 0) },
-        'aria-selected': selected === project ? 'true' : null,
+        'aria-selected': selected === projectKey(project) ? 'true' : null,
         on: {
           click: (ev) => {
             if (!ev.target.closest('a')) openProject(project);

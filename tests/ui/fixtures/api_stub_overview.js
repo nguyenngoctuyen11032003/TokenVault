@@ -43,7 +43,7 @@
     return D().sessions.filter((s) =>
       (!f.team || s.team === f.team) &&
       (!f.email || s.employee_key === f.email) &&
-      (!f.project || s.projects.includes(f.project)) &&
+      (f.project === null || f.project === undefined || s.projects.includes(f.project)) &&
       (!f.model || s.models.includes(f.model)) &&
       (!f.start || s.day >= f.start) &&
       (!f.end || s.day <= f.end));
@@ -179,7 +179,7 @@
         cache_create_5m_tokens: Math.round(total * 0.07),
         cache_create_1h_tokens: 0,
         total_tokens: Math.round(total * 0.1) + Math.round(total * 0.08) + Math.round(total * 0.7) + Math.round(total * 0.07),
-        timestamp: `${iso(ts)}T${pad(ts.getHours())}:${pad(ts.getMinutes())}:${pad(ts.getSeconds())}+07:00`,
+        timestamp: ts.toISOString(), // UTC instant, like the raw event timestamp
         device_id: s.device_id,
         model: s.models[n % s.models.length],
         reasoning_effort: null,
@@ -197,6 +197,12 @@
   api.sessions = rec('sessions', (f) =>
     filtered(f || {}).sort((a, b) => (a.started_at < b.started_at ? 1 : -1)).map(row));
   api.session_turns = rec('session_turns', (id) => turnsFor(id));
+  if (!D().noSessionMethod) {
+    api.session = rec('session', (id) => {
+      const s = D().sessions.find((x) => x.session_id === id);
+      return s ? row(s) : null;
+    });
+  }
   api.employees = rec('employees', (f) => {
     const list = filtered({ ...(f || {}), email: null });
     return D().people

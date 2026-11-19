@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -362,3 +363,77 @@ def test_no_console_errors_on_any_page_and_screenshots(open_ov: Any, artifacts_d
             page.wait_for_timeout(700)
             page.screenshot(path=str(artifacts_dir / f"{name}-{width}x{height}.png"))
         assert console_problems(page) == []
+
+
+def _sr_labels(page: Any, chart: str) -> list[str]:
+    return list(
+        page.locator(f"{OV} [data-chart='{chart}'] + .tv-chart-sr tbody tr td:first-child")
+        .all_inner_texts()
+    )
+
+
+def test_axes_use_server_strings_under_a_foreign_browser_timezone(open_tz: Any) -> None:
+    # Browser in Honolulu (UTC-10, no DST); the stub data are in +07:00 like a Manager would be.
+    hnl = datetime.now(timezone(timedelta(hours=-10))).date()
+    data = overview_data(today=hnl)
+    page = open_tz("#/overview", timezone_id="Pacific/Honolulu", data=data,
+                   filters={"range": "today"})
+    flt = calls(page, "overview")[-1][0]
+    assert flt["start"] == flt["end"] == hnl.isoformat()
+    resp = page.evaluate("f => window.pywebview.api.overview(f)", flt)
+    expected = [p["hour"][11:16] for p in resp["hourly"]]
+    assert _sr_labels(page, "daily") == expected
+    assert all(p["hour"].startswith(hnl.isoformat()) for p in resp["hourly"])
+    before = rev(page)
+    page.locator("#tv-view .tv-ovfilter [data-range='7d']").click()
+    wait_rev_after(page, before)
+    flt = calls(page, "overview")[-1][0]
+    assert flt["end"] == hnl.isoformat()
+    assert flt["start"] == (hnl - timedelta(days=6)).isoformat()
+    resp = page.evaluate("f => window.pywebview.api.overview(f)", flt)
+    assert _sr_labels(page, "daily") == [f"{p['day'][8:10]}/{p['day'][5:7]}" for p in resp["daily"]]
+    assert _sr_labels(page, "cache") == [
+        f"{p['day'][8:10]}/{p['day'][5:7]}" for p in resp["cache_daily"]
+    ]
+    assert console_problems(page) == []
+
+
+def test_filter_bar_shares_fetches_with_the_page(open_ov: Any) -> None:
+    page = open_ov("#/overview")
+    page.wait_for_timeout(300)
+    count = {m: len(calls(page, m)) for m in ("overview", "employees", "teams")}
+    # Initial load: page + bar asked the same overview question once.
+    assert count["overview"] == 1 and count["employees"] == 1 and count["teams"] == 1
+    _set_filter(page, "team", "QA")
+    page.wait_for_timeout(300)
+    assert len(calls(page, "overview")) == count["overview"] + 1
+    assert len(calls(page, "employees")) == count["employees"] + 1
+    assert len(calls(page, "teams")) == count["teams"]
+    # Live: the page refetches; the bar's options stay cached (<= every 30 s).
+    before = rev(page)
+    page.evaluate("tv.onLive({online: 1, total: 2})")
+    wait_rev_after(page, before)
+    page.wait_for_timeout(400)
+    assert len(calls(page, "overview")) == count["overview"] + 2
+    assert len(calls(page, "employees")) == count["employees"] + 1
+    assert len(calls(page, "teams")) == count["teams"]
+
+
+def test_granularity_switch_never_paints_a_stale_payload(open_ov: Any) -> None:
+    page = open_ov("#/overview", filters={"range": "all"})
+    page.evaluate("window.__tvOvDelay = 250")
+    page.evaluate("import('./js/filters.js').then(m => m.filters.set({team: 'QA'}))")
+    page.locator(f"{OV} [data-granularity='day']").click()
+    page.wait_for_function(
+        "() => (window.__tvCalls.filter(c => c.name === 'overview').pop().args[0] || {}).team"
+        " === 'QA'"
+    )
+    page.wait_for_timeout(900)
+    page.evaluate("window.__tvOvDelay = 0")
+    flt = calls(page, "overview")[-1][0]
+    resp = page.evaluate("f => window.pywebview.api.overview(f)", flt)
+    series = page.locator(f"{OV} [data-chart='daily']").get_attribute("data-series")
+    rows = page.locator(f"{OV} [data-chart='daily'] + .tv-chart-sr tbody tr td:nth-child(2)")
+    shown = [int(v.split()[0].replace(".", "")) for v in rows.all_inner_texts()]
+    points = resp["monthly"] if series == "monthly" else resp["daily"]
+    assert shown == [p["total_tokens"] for p in points]

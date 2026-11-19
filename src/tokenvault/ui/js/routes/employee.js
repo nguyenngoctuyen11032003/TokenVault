@@ -20,13 +20,18 @@ import {
   LIVE_DEBOUNCE_MS,
   localHour,
   niceCeil,
-  normalizeRange,
+  RANGES,
   RANGE_DAYS,
   shortDay,
   shortHour,
   shortTime,
 } from '../components/homekit.js';
 import { createRangeSwitch } from '../components/rangeswitch.js';
+
+// filters.range may hold a longer range set on #/overview (90d, all, custom "a..b"): this page
+// only has today/7d/30d, so such a range is clamped to 30d with a visible note (never "today").
+const isClamped = (range) => !!range && !RANGES.includes(range);
+const pageRange = (range) => (RANGES.includes(range) ? range : isClamped(range) ? '30d' : 'today');
 
 export default async function render(container, ctx) {
   const t = (key, params) => ctx.t(`employee.${key}`, params);
@@ -45,7 +50,7 @@ export default async function render(container, ctx) {
   const unknown = t('unknownCost');
   const range = createRangeSwitch({
     t,
-    value: normalizeRange(ctx.filters.get().range),
+    value: pageRange(ctx.filters.get().range),
     label: t('rangeLabel'),
     onChange: (value) => ctx.filters.set({ range: value }),
   });
@@ -55,6 +60,7 @@ export default async function render(container, ctx) {
   const costValue = h('b', { class: 'tv-employee-kpi__value tv-num--orange' });
   const costInfo = h('p', { class: 'tv-employee-costinfo', hidden: true });
   const scaleNote = h('p', { class: 'tv-employee-scale', 'data-scale-note': '', hidden: true });
+  const rangeNote = h('p', { class: 'tv-employee-costinfo', 'data-range-note': '', hidden: true }, t('rangeClamped'));
   const alias = clipText('p', 'tv-employee-alias', '');
   const kpiSessions = h('b', { class: 'tv-employee-kpi__value' });
   const kpiEvents = h('b', { class: 'tv-employee-kpi__value' });
@@ -98,6 +104,7 @@ export default async function render(container, ctx) {
         ),
         h('p', { class: 'tv-costnote', 'data-cost-note': '' }, t('costNote')),
         costInfo,
+        rangeNote,
         h('div', { class: 'tv-employee-sub' }, t('projectsTitle')),
         projects,
       ),
@@ -340,7 +347,9 @@ export default async function render(container, ctx) {
   }
 
   async function draw() {
-    const rng = normalizeRange(ctx.filters.get().range);
+    const rawRange = ctx.filters.get().range;
+    const rng = pageRange(rawRange);
+    rangeNote.hidden = !isClamped(rawRange);
     try {
       // The 30-day reference (gauge scale) is fetched once; for the 30d range the view is it.
       const needRef = reference === null && rng !== '30d';
@@ -349,7 +358,7 @@ export default async function render(container, ctx) {
         ctx.api.employee(key, rng),
       ]);
       if (ctx.signal.aborted) return;
-      if (rng !== normalizeRange(ctx.filters.get().range)) return; // superseded; re-run queued
+      if (rng !== pageRange(ctx.filters.get().range)) return; // superseded; re-run queued
       if (!view || typeof view !== 'object') throw new Error('empty response');
       if (rng === '30d') reference = referenceFrom(view);
       else if (needRef) reference = referenceFrom(ref);

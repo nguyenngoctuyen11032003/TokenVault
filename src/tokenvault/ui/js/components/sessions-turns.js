@@ -18,12 +18,15 @@ const NUMERIC = new Set(['input', 'output', 'cache_read', 'cache_write', 'total'
 const num = (v) => Number(v) || 0;
 export const cacheWrite = (x) => num(x.cache_create_5m_tokens) + num(x.cache_create_1h_tokens);
 
-/** Turns sorted by timestamp (stable for equal or missing timestamps). */
+/** Turns sorted by instant (stable for equal timestamps; unparsable ones keep their place last). */
 export function orderTurns(turns) {
   return (Array.isArray(turns) ? turns : [])
     .filter((x) => x && typeof x === 'object')
-    .map((x, i) => ({ x, i, ts: String(x.timestamp || '') }))
-    .sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : a.i - b.i))
+    .map((x, i) => {
+      const ms = Date.parse(String(x.timestamp ?? ''));
+      return { x, i, ms: Number.isFinite(ms) ? ms : Infinity };
+    })
+    .sort((a, b) => (a.ms < b.ms ? -1 : a.ms > b.ms ? 1 : a.i - b.i))
     .map((e) => e.x);
 }
 
@@ -84,10 +87,20 @@ export function drawTurnsChart(host, turns, { t, signal }) {
   return b;
 }
 
-function timeOf(ts, withDay) {
-  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}:\d{2}:\d{2})/.exec(String(ts || ''));
-  if (!m) return '';
-  return withDay ? `${m[3]}/${m[2]} ${m[4]}` : m[4];
+const pad = (n) => String(n).padStart(2, '0');
+
+/**
+ * A turn timestamp is a UTC instant (ISO-8601 with Z or an offset); show it in browser-local
+ * time. Returns {ms, day, time, short, full}; empty strings when it cannot be parsed.
+ */
+export function localTime(ts) {
+  const ms = Date.parse(String(ts ?? ''));
+  if (!Number.isFinite(ms)) return { ms: NaN, day: '', time: '', short: '', full: '' };
+  const d = new Date(ms);
+  const day = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  const dm = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+  return { ms, day, time, short: `${dm} ${time.slice(0, 5)}`, full: `${dm}/${d.getFullYear()} ${time}` };
 }
 
 /** Paginated turns table. Returns {el, setTurns(ordered), page()}. */
@@ -125,6 +138,7 @@ export function createTurnsTable({ t, unknownText, noModel, onPage }) {
     const model = modelLabel(x.model, noModel);
     const cost = costCell(x.cost, false, unknownText);
     const tools = (x.tool_names || []).map(String).join(', ');
+    const lt = localTime(x.timestamp);
     const nCell = h('td', { class: 'tv-session-n', dataset: { col: 'n' } }, String(index + 1));
     if (side) nCell.append(h('span', { class: 'tv-session-badge', title: t('sidechainHint') }, t('sidechain')));
     return h(
@@ -134,7 +148,7 @@ export function createTurnsTable({ t, unknownText, noModel, onPage }) {
         'data-sidechain': side ? '' : null,
       },
       nCell,
-      h('td', { class: 'tv-ov-time', dataset: { col: 'time' }, title: String(x.timestamp || '') }, timeOf(x.timestamp, multiDay)),
+      h('td', { class: 'tv-ov-time', dataset: { col: 'time' }, title: lt.full }, multiDay ? `${lt.short.slice(0, 5)} ${lt.time}` : lt.time),
       h(
         'td',
         { dataset: { col: 'model' } },
@@ -168,7 +182,7 @@ export function createTurnsTable({ t, unknownText, noModel, onPage }) {
     el,
     setTurns(ordered) {
       turns = ordered;
-      const days = new Set(turns.map((x) => String(x.timestamp || '').slice(0, 10)));
+      const days = new Set(turns.map((x) => localTime(x.timestamp).day));
       multiDay = days.size > 1;
       setPage(Math.min(page, pages() - 1));
     },

@@ -6,7 +6,8 @@
 
 import { barChart, dispose, donutChart, lineChart } from '../charts.js';
 import { SERIES_COLORS } from '../palette.js';
-import { fmtTokens, localHour, shortDay, shortHour } from './homekit.js';
+import { currentHour } from '../overview-clock.js';
+import { fmtTokens, shortDay, shortHour } from './homekit.js';
 import { modelLabel } from './overview-kit.js';
 
 const TOP_PROJECTS = 10;
@@ -36,7 +37,7 @@ export function drawTrend(host, overview, { mode, t, signal }) {
   let labels;
   let values;
   if (mode === 'hour') {
-    const now = localHour();
+    const now = currentHour(); // only to blank hours of today that have not happened yet
     const points = overview.hourly || [];
     labels = points.map((p) => shortHour(p.hour));
     values = points.map((p) => (String(p.hour) > now ? null : num(p.total_tokens)));
@@ -73,7 +74,7 @@ export function drawCache(host, overview, { hourly, t, signal }) {
   let writes;
   let ratio = null;
   if (hourly) {
-    const now = localHour();
+    const now = currentHour(); // only to blank hours of today that have not happened yet
     const points = overview.hourly || [];
     labels = points.map((p) => shortHour(p.hour));
     const future = (p) => String(p.hour) > now;

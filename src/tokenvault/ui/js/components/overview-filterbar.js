@@ -4,21 +4,26 @@
 // Team, employee, project, model selects + range switch (today / 7d / 30d / 90d / all) and a
 // custom from/to date pair. Every change goes to the shared ctx.filters store (persisted), so
 // the choice follows the user to the other pages and across restarts. Options come from
-// api.teams(), api.employees(filter) and api.overview(filter without project/model); a value that
+// api.teams(), api.employees(filter) and api.overview(filter without project/model) through the
+// shared call cache (overview-fetch.js: one call per filter, refreshed at most every 30 s); a value that
 // is selected but not in the lists (e.g. no data in this range) is still shown. Strings live
 // under `overview.filter.*` (this component's owner); they are loaded here so the bar works on
 // any page.
 
 import { loadI18nExtension } from '../i18n.js';
-import { coalesce, h, localDay } from './homekit.js';
+import { today } from '../overview-clock.js';
+import { coalesce, debounce, h, LIVE_DEBOUNCE_MS } from './homekit.js';
+import { cachedCall } from './overview-fetch.js';
 import {
   CLEAR_PATCH,
   customRange,
   makeCustomRange,
   modelLabel,
+  NO_PROJECT,
   OV_RANGES,
   ovFilter,
   ovRange,
+  projectKey,
 } from './overview-kit.js';
 
 const FIELDS = ['team', 'email', 'project', 'model'];
@@ -65,7 +70,7 @@ export async function createFilterBar(ctx) {
       type: 'date',
       class: 'tv-ovfilter__date',
       dataset: { filter: name },
-      max: localDay(0),
+      max: today(),
       'aria-label': t(`range.${name}`),
       on: { change: () => applyCustom() },
     });
@@ -109,7 +114,7 @@ export async function createFilterBar(ctx) {
 
   function labelFor(name, value) {
     if (name === 'model') return modelLabel(value, noModel);
-    if (name === 'project') return value || t('noProject');
+    if (name === 'project') return value === NO_PROJECT || !value ? t('noProject') : value;
     if (name === 'email') return lists.email.find((e) => e.value === value)?.label || value;
     return value;
   }
@@ -147,31 +152,31 @@ export async function createFilterBar(ctx) {
   async function loadOptions() {
     const state = ctx.filters.get();
     const bounds = ovFilter(state);
-    const [teams, people, overview] = await Promise.all([
-      ctx.api.teams().catch((err) => warn('teams', err)),
-      ctx.api
-        .employees({ ...bounds, email: null, project: null, model: null })
-        .catch((err) => warn('employees', err)),
-      ctx.api.overview(ovFilter(state, ['project', 'model'])).catch((err) => warn('overview', err)),
+    const people = { ...bounds, email: null, project: null, model: null };
+    // Shared with the page (same filter -> one call) and cached for OPTIONS_TTL.
+    const [teams, rows, overview] = await Promise.all([
+      cachedCall(ctx.api, 'teams', []).catch((err) => warn('teams', err)),
+      cachedCall(ctx.api, 'employees', [people]).catch((err) => warn('employees', err)),
+      cachedCall(ctx.api, 'overview', [ovFilter(state, ['project', 'model'])]).catch((err) => warn('overview', err)),
     ]);
     if (ctx.signal.aborted) return;
     if (Array.isArray(teams)) {
       lists.team = teams.map((x) => String(x?.name ?? '')).filter(Boolean).map((v) => ({ value: v, label: v }));
-    } else if (Array.isArray(people)) {
-      const names = new Set(people.flatMap((p) => p?.teams || []));
+    } else if (Array.isArray(rows)) {
+      const names = new Set(rows.flatMap((p) => p?.teams || []));
       lists.team = [...names].map((v) => ({ value: String(v), label: String(v) }));
     }
-    if (Array.isArray(people)) {
-      lists.email = people
+    if (Array.isArray(rows)) {
+      lists.email = rows
         .filter((p) => p && p.key)
         .map((p) => ({ value: String(p.key), label: String(p.email || p.display_name || p.key) }))
         .sort((a, b) => a.label.localeCompare(b.label));
     }
     if (overview && typeof overview === 'object') {
       lists.project = (overview.by_project || [])
-        .map((p) => String(p?.project ?? ''))
-        .filter(Boolean)
-        .map((v) => ({ value: v, label: v }));
+        .filter((p) => p && typeof p === 'object')
+        .map((p) => projectKey(p.project))
+        .map((v) => ({ value: v, label: v === NO_PROJECT ? t('noProject') : v }));
       lists.model = (overview.by_model || [])
         .map((m) => String(m?.model ?? ''))
         .filter(Boolean)
@@ -190,6 +195,8 @@ export async function createFilterBar(ctx) {
     sync(state);
     if (changed.some((k) => k === 'team' || k === 'email' || k === 'range')) reload();
   });
+  // Live data: options follow at most every OPTIONS_TTL (the cache answers in between).
+  ctx.onLive(debounce(() => reload(), LIVE_DEBOUNCE_MS, ctx.signal));
   sync();
   reload();
   return { el, clear, sync, reload };

@@ -89,6 +89,7 @@ export default async function render(container, ctx) {
     const todayPanel = h(
       'tv-panel',
       { heading: t('todayTitle'), class: 'tv-home-today' },
+      h('a', { slot: 'actions', class: 'tv-btn tv-home-overviewlink', href: '#/overview' }, t('overviewLink')),
       h('div', { class: 'tv-gauge-row' }, gauges.tokens, gauges.cost, gauges.sessions),
       h(
         'div',
@@ -267,7 +268,7 @@ export default async function render(container, ctx) {
           {
             class: 'tv-home-chip',
             role: 'listitem',
-            href: `#/project/${encodeURIComponent(String(p.project || ''))}`,
+            href: p.project ? `#/project/${encodeURIComponent(String(p.project))}` : '#/projects',
             dataset: { project: String(p.project || '') },
             title: `${name}: ${fmtInt(p.total_tokens)} ${t('tokensUnit')}`,
           },
