@@ -96,11 +96,11 @@ def test_malformed_and_oversized_datagrams_ignored_responder_survives(
     assert discover("mgr", FP, 2.0, LO, port) is not None
 
 
-def test_responder_rate_limits_flooding_source(responder: DiscoveryResponder) -> None:
+def test_responder_rate_limits_flooding_source_smoke(responder: DiscoveryResponder) -> None:
     port = _port(responder)
     q = build_query("mgr", "0" * 16)
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-        for _ in range(40):
+        for _ in range(60):
             s.sendto(q, ("127.0.0.1", port))
         s.settimeout(0.5)
         got = 0
@@ -110,7 +110,110 @@ def test_responder_rate_limits_flooding_source(responder: DiscoveryResponder) ->
                 got += 1
         except OSError:
             pass
-    assert 1 <= got <= 6  # max 5/s (+1 if a second boundary fell inside the burst)
+    assert 1 <= got <= 12  # per-source 5/s (+boundary), global burst 20
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.t = 1000.0
+
+    def __call__(self) -> float:
+        return self.t
+
+
+def _fake() -> tuple[DiscoveryResponder, FakeClock]:
+    clk = FakeClock()
+    return DiscoveryResponder("mgr", lambda: (1, FP), clock=clk), clk
+
+
+def test_per_source_limit_deterministic() -> None:
+    r, clk = _fake()
+    assert sum(r._admit("10.0.0.1", clk()) for _ in range(40)) == 5
+    clk.t += 1.01
+    assert r._admit("10.0.0.1", clk())
+
+
+def test_global_cap_bounds_rotating_sources() -> None:
+    r, clk = _fake()
+    ok = 0
+    for step in range(10):  # 10 steps of 0.1 s, 50 distinct sources each = 500 queries
+        for i in range(50):
+            ok += r._admit(f"10.{step}.0.{i}", clk())
+        clk.t += 0.1
+    assert 20 <= ok <= 20 + 50 * 0.9 + 1  # burst + rate * elapsed (0.9 s between first and last)
+
+
+def test_lru_table_bounded_and_legit_source_still_answered() -> None:
+    from tokenvault.manager.discovery import MAX_TRACKED_SOURCES
+
+    r, clk = _fake()
+    for i in range(5000):
+        r._admit(f"10.{i // 65536}.{(i // 256) % 256}.{i % 256}", clk())
+        assert len(r._hits) <= MAX_TRACKED_SOURCES
+    clk.t += 5.0  # global bucket refills
+    assert r._admit("192.168.1.50", clk())
+    assert len(r._hits) <= MAX_TRACKED_SOURCES
+
+
+def test_amplification_for_largest_manager_id_below_2_5x() -> None:
+    mid = "m" * 64
+    q = build_query(mid, "0" * 16)
+    a = build_answer(mid, 65535, FP, "0" * 16)
+    assert len(a) / len(q) < 2.5
+
+
+def test_persistent_oserror_does_not_spin_and_exits_when_closed() -> None:
+    import threading
+
+    calls = 0
+
+    class Bad:
+        def recvfrom(self, n: int) -> tuple[bytes, tuple[str, int]]:
+            nonlocal calls
+            calls += 1
+            raise OSError("boom")
+
+        def fileno(self) -> int:
+            return 5
+
+    r = DiscoveryResponder("mgr", lambda: (1, FP))
+    th = threading.Thread(target=r._serve, args=(Bad(),), daemon=True)  # type: ignore[arg-type]
+    th.start()
+    time.sleep(0.35)
+    assert calls <= 6  # ~0.1 s pause per failure
+    r._stopping.set()
+    th.join(1.0)
+    assert not th.is_alive()
+
+    class Closed(Bad):
+        def fileno(self) -> int:
+            return -1
+
+    r2 = DiscoveryResponder("mgr", lambda: (1, FP))
+    th2 = threading.Thread(target=r2._serve, args=(Closed(),), daemon=True)  # type: ignore[arg-type]
+    th2.start()
+    th2.join(1.0)
+    assert not th2.is_alive()
+
+
+def test_raising_get_endpoint_keeps_loop_alive() -> None:
+    state = {"fail": True}
+
+    def ep() -> tuple[int, str]:
+        if state["fail"]:
+            raise RuntimeError("not ready")
+        return 4242, FP
+
+    r = DiscoveryResponder("mgr", ep, bind_host="127.0.0.1", port=0)
+    port = r.start()
+    try:
+        assert discover("mgr", FP, 0.4, LO, port) is None
+        assert r.running
+        state["fail"] = False
+        found = discover("mgr", FP, 2.0, LO, port)
+        assert found is not None and found.port == 4242
+    finally:
+        r.stop()
 
 
 def test_start_with_port_in_use_degrades_without_raising() -> None:
