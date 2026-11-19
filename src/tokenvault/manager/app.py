@@ -58,6 +58,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         from tokenvault.manager import selftest
 
         logging.basicConfig(level=logging.WARNING)
+        from tokenvault.common.runtime_info import runtime_line
+
+        if sys.stderr is not None:  # stdout stays pure JSON
+            print(runtime_line(("websockets", "cryptography", "PIL", "webview", "reportlab")),
+                  file=sys.stderr, flush=True)
         return selftest.run(Path(a.template) if a.template else None,
                             require_template=a.require_template)
     from tokenvault.manager.gui import run_gui

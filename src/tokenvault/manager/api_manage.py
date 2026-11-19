@@ -160,10 +160,17 @@ def create_installer(m: Manager, team: Any, label: Any = None,
     UI thread is never blocked; builds are serialised (one at a time)."""
     t = clean_team(team, allow_empty=False)
     lbl = clean_label(label)
-    if target is None:
+    if target is None or target == "windows-exe":
         target = "windows"
+    if target == "windows-portable":  # Task 25: signed-runtime ZIP, no unsigned exe
+        from tokenvault.manager.api_portable import create_portable_installer
+
+        with m.installer_lock:
+            res = create_portable_installer(m, t, lbl)
+        m.notify_change()
+        return res
     if target not in ("windows", "mac"):
-        raise ApiError("target must be 'windows' or 'mac'", "invalid_args")
+        raise ApiError("target must be 'windows', 'windows-portable' or 'mac'", "invalid_args")
     mac = target == "mac"
 
     def current() -> Path:

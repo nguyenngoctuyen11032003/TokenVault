@@ -4,6 +4,7 @@ dist-mac/
 build-mac-work/
 build/*
 !build/build-mac.sh
+!build/build-portable.ps1
 __pycache__/
 *.pyc
 .venv/
@@ -11,3 +12,4 @@ __pycache__/
 tests/_artifacts/
 
 packaging/redist/
+templates/portable-runtime/

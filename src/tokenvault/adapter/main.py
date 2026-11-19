@@ -346,6 +346,14 @@ def cmd_about(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_selftest() -> int:
+    """``--selftest``: one line about the runtime (signed interpreter? dependencies?)."""
+    from tokenvault.common.runtime_info import runtime_line
+
+    _out(runtime_line(("websockets", "cryptography", "watchdog", "pystray", "PIL", "tkinter")))
+    return EXIT_OK
+
+
 def cmd_show(args: argparse.Namespace) -> int:
     """Window for the tray (child process). Reads config/outbox read-only."""
     files = _files(args)
@@ -393,6 +401,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args_list = list(sys.argv[1:] if argv is None else argv)
+    if args_list[:1] == ["--selftest"]:
+        return cmd_selftest()
     if not args_list or args_list[0] not in (*_SUBCOMMANDS, "-h", "--help"):
         args_list.insert(0, "run")
     if args_list[0] not in ("run", "show"):
