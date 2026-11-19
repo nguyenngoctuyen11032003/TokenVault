@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tokenvault"
+version = "0.1.0"
+description = "TokenVault Manager and Adapter"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pywebview",
+    "websockets",
+    "cryptography",
+    "watchdog",
+    "pystray",
+    "Pillow",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "mypy",
+    "pyinstaller",
+    "playwright",
+]
+
+[project.scripts]
+tokenvault-adapter = "tokenvault.adapter.main:main"
+tokenvault-manager = "tokenvault.manager.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+tokenvault = ["ui/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = "tokenvault.common.*"
+strict = true
