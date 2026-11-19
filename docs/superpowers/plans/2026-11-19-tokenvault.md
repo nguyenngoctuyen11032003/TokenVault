@@ -334,3 +334,19 @@
 - Spec coverage: §2 goals -> Tasks 8, 11, 14; §3 collected fields -> Tasks 2, 3, 4, 19; §4 UI -> Tasks 13-17; §5.1 stack -> 1, 13, 18; §5.2 transport + discovery + firewall -> 8, 9, 12; §5.3 packager -> 10; §5.4 reuse -> 5 (offsets/outbox), 7 (pricing); §6 budgets -> 6, 11 (measurement); §7 quality/tests/diagnostics -> every task + 17, 19; §9 phasing: Tasks 14 (Home/Employee/Installer) before 15 then 16.
 - Not covered by design on purpose: auto-update, remote access, macOS/Linux, multi-manager (spec non-goals).
 - Execution order matters: 1 -> 2 -> (3, 4, 7 parallel) -> 5 -> 6 -> 8 -> 9 -> 10 -> (11, 12 parallel) -> 13 -> 14 -> 15 -> 16 -> 17 -> 18 -> 19.
+
+---
+
+### Task 20: Resizable window controls and responsive layout (owner request, added after approval)
+
+**Files:**
+- Modify (authorised, all UI tasks merged): `src/tokenvault/ui/js/components/titlebar.js`, `ui/css/window.css`, `ui/css/theme.css`, `ui/js/app.js`, `ui/js/api.js`, `ui/index.html`, `ui/README.md`, page CSS where responsive fixes are needed
+- Create: `src/tokenvault/ui/js/winstate.js`, `ui/js/components/resize-handles.js`, `ui/css/responsive.css`
+- Test: `tests/ui/test_window_controls.py`, `tests/ui/test_responsive.py`
+
+**Interfaces:**
+- Consumes: Manager API window methods in `docs/superpowers/specs/manager-api-contract.md` ("Window methods") and `tv.onWindowState(json)` push.
+- Produces: titlebar minimise / maximise-restore / close buttons, double-click on the title bar toggles maximise, F11 toggles full screen (Esc leaves it), 6 px edge/corner resize handles (JS-driven via `window_get_bounds`/`window_set_bounds`, active only when not maximised/fullscreen and when native resizing is not available), root classes `.window--maximized` / `.window--fullscreen` (no chamfer clip-path, no outer margin/shadow), all pages usable and good-looking from 1100x720 to 3840x2160.
+
+- [ ] **Step 1:** Write failing UI tests (stub API window methods): buttons present and aria-labelled; maximise button calls `window_toggle_maximize` and its icon/label flips on `tv.onWindowState`; double-click title bar toggles; F11 toggles fullscreen and Esc leaves; resize handle drag calls `window_set_bounds` with clamped sizes; classes applied; no horizontal scroll and no overlapping panels at 1100x720, 1440x900, 1920x1080, 2560x1440, 3840x2160 on every page.
+- [ ] **Step 2:** Run, expect FAIL. **Step 3:** Implement. **Step 4:** Run, expect PASS; take screenshots at the five sizes for home/employee/overview/skills/installer/diagnostics and review them. **Step 5:** Commit.
