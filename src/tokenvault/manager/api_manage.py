@@ -142,11 +142,21 @@ def template_ok(m: Manager) -> bool:
         return False
 
 
-def create_installer(m: Manager, team: Any, label: Any = None) -> dict[str, Any]:
+def create_installer(m: Manager, team: Any, label: Any = None,
+                     target: Any = "windows-exe") -> dict[str, Any]:
     """Copy the template + payload. Runs on pywebview's per-call worker thread, so the
     UI thread is never blocked; builds are serialised (one at a time)."""
     t = clean_team(team, allow_empty=False)
     lbl = clean_label(label)
+    if target == "windows-portable":  # Task 25: signed-runtime ZIP, no unsigned exe
+        from tokenvault.manager.api_portable import create_portable_installer
+
+        with m.installer_lock:
+            res = create_portable_installer(m, t, lbl)
+        m.notify_change()
+        return res
+    if target not in (None, "windows-exe"):
+        raise ApiError(f"Unknown installer target: {target!r}")
     if not template_ok(m):
         raise TemplateMissingError(m.cfg.template)
     with m.installer_lock:

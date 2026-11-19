@@ -1,6 +1,7 @@
 .superpowers/
 dist/
-build/
+build/*
+!build/build-portable.ps1
 __pycache__/
 *.pyc
 .venv/
@@ -8,3 +9,4 @@ __pycache__/
 tests/_artifacts/
 
 packaging/redist/
+templates/portable-runtime/

@@ -40,6 +40,27 @@ def render_text(fields: Sequence[str], hosts: Sequence[str] = ()) -> str:
     return "\n".join(lines)
 
 
+def _messagebox_consent(text: str) -> bool | None:  # pragma: no cover - interactive
+    """Fallback without tkinter (a runtime lacking it): native Yes/No box. Yes = Accept.
+    None when no box can be shown (not Windows)."""
+    import sys
+
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+
+        mb_yesno, mb_icon_question, mb_topmost = 0x4, 0x20, 0x40000
+        shown = (text + "\n\n(Yes = " + t("consent.accept") + ", No = " + t("consent.decline")
+                 + ")")
+        r = ctypes.windll.user32.MessageBoxW(
+            None, shown, t("consent.window_title"), mb_yesno | mb_icon_question | mb_topmost)
+    except Exception as e:  # noqa: BLE001
+        log.error("cannot open the consent message box: %s", e)
+        return None
+    return bool(r == 6)  # IDYES
+
+
 def ask_consent(text: str) -> bool | None:  # pragma: no cover - interactive
     """Show the consent dialog.
 
@@ -52,8 +73,8 @@ def ask_consent(text: str) -> bool | None:  # pragma: no cover - interactive
         import tkinter as tk
         from tkinter import ttk
     except ImportError:
-        log.error("tkinter is not available; cannot show the consent screen")
-        return None
+        log.error("tkinter is not available; using the native message box")
+        return _messagebox_consent(text)
     result = {"ok": False}
     try:
         root = tk.Tk()
