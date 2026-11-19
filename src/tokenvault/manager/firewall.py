@@ -7,12 +7,13 @@ Two rules, named without spaces (no quoting pitfalls with netsh):
 * ``TokenVault-Manager-Discovery-UDP-47801``: UDP 47801 (LAN discovery answers).
 
 Both use ``remoteip=localsubnet`` (only PCs on the Manager's own subnets; adapters
-on another routed subnet need the rule widened by an admin) and ``profile=any``
-(office networks are often classified "Public" by Windows; the subnet restriction
-is what limits exposure).
+on another routed subnet need the rule widened by an admin) and
+``profile=private,domain`` (never the Public profile: a laptop in a cafe must not
+accept ingest connections). If the office network is classified "Public", set it to
+Private in Windows.
 
-With ``program`` (the frozen Manager exe, passed by the installer) the rules only
-apply to that program. Adding rules needs elevation: only the Manager installer
+With ``program`` the rules only apply to that program; ``firewall --ensure`` run from
+the frozen Manager exe defaults it to that exe. Adding rules needs elevation: only the Manager installer
 runs ``TokenVault-Manager.exe firewall --ensure`` (one UAC prompt). The running
 app only *checks* (``check_rules``) and reports a missing rule in Diagnostics.
 
@@ -95,7 +96,7 @@ def ensure_rules(
         try:
             run([*_NETSH, "delete", "rule", f"name={name}"])  # absent is fine
             args = [*_NETSH, "add", "rule", f"name={name}", "dir=in", "action=allow",
-                    "enable=yes", "profile=any", "remoteip=localsubnet",
+                    "enable=yes", "profile=private,domain", "remoteip=localsubnet",
                     f"protocol={proto}", f"localport={ports}"]
             if program:
                 args.append(f"program={program}")
@@ -177,7 +178,8 @@ def main(argv: Sequence[str]) -> int:
         print(json.dumps({"ok": False, "error": str(e)}))
         return 2
     if a.ensure:
-        res = ensure_rules(a.port, program=a.program, runner=run_netsh)
+        program = a.program or (sys.executable if getattr(sys, "frozen", False) else None)
+        res = ensure_rules(a.port, program=program, runner=run_netsh)
         print(json.dumps({**res, "port": a.port}, ensure_ascii=False))
         return 0 if res["ok"] else 1
     st = check_rules(a.port, runner=run_netsh)

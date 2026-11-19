@@ -46,7 +46,7 @@ def test_ensure_builds_delete_then_add_for_both_rules() -> None:
     ]
     assert run.calls[1] == [
         "netsh", "advfirewall", "firewall", "add", "rule", f"name={TCP_RULE}",
-        "dir=in", "action=allow", "enable=yes", "profile=any", "remoteip=localsubnet",
+        "dir=in", "action=allow", "enable=yes", "profile=private,domain", "remoteip=localsubnet",
         "protocol=TCP",
         "localport=47800-47820",
         r"program=C:\Program Files\TokenVault\TokenVault-Manager.exe",
@@ -175,3 +175,19 @@ def test_check_fallback_port_inside_base_range() -> None:
         f"show:{UDP_RULE}": (0, rule_output(UDP_RULE, "UDP", "47801")),
     })
     assert check_rules(47805, runner=run).present is True
+
+
+EXE = r"C:\TV\TokenVault-Manager.exe"
+
+
+def test_ensure_from_frozen_exe_defaults_program(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = FakeRunner({})
+    monkeypatch.setattr(firewall, "run_netsh", run)
+    monkeypatch.setattr(firewall.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(firewall.sys, "executable", EXE)
+    assert firewall.main(["--ensure"]) == 0
+    adds = [c for c in run.calls if "add" in c]
+    assert adds and all("program=" + EXE in c for c in adds)
+    assert all("profile=private,domain" in c for c in adds)
