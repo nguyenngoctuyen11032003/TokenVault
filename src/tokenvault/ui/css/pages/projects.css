@@ -1,0 +1,123 @@
+/* #/projects (Task 15). Scoped to .tv-proj* classes; shared bits live in overview.css. */
+
+.tv-projects,
+.tv-proj-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tv-gap);
+  min-width: 0;
+}
+
+.tv-proj-chartbox {
+  height: 240px;
+}
+
+.tv-proj-chart {
+  position: absolute;
+  inset: 0;
+}
+
+.tv-proj-chartpanel .tv-meta {
+  margin-bottom: 8px;
+}
+
+.tv-proj-summary {
+  color: var(--tv-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-proj-tablewrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tv-projtable {
+  table-layout: fixed;
+  min-width: 720px;
+}
+
+.tv-projtable td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-projtable__col--tokens {
+  width: 80px;
+}
+
+.tv-projtable__col--share {
+  width: 18%;
+}
+
+.tv-projtable__col--cost {
+  width: 92px;
+}
+
+.tv-projtable__col--sessions,
+.tv-projtable__col--employees {
+  width: 84px;
+}
+
+.tv-projtable__col--last {
+  width: 116px;
+}
+
+.tv-projtable tbody tr {
+  cursor: pointer;
+}
+
+.tv-projtable tbody tr:hover {
+  background: linear-gradient(90deg, rgb(255 45 63 / 0.08), rgb(255 255 255 / 0.02) 60%);
+}
+
+.tv-projtable tbody tr[aria-selected="true"] {
+  background: linear-gradient(90deg, rgb(255 45 63 / 0.16), rgb(255 45 63 / 0.03) 70%);
+  box-shadow: inset 3px 0 0 var(--tv-red-hot);
+}
+
+.tv-proj-link {
+  display: block;
+  min-width: 0;
+  color: var(--tv-text);
+  text-decoration: none;
+}
+
+.tv-proj-link:hover {
+  color: var(--tv-text-strong);
+}
+
+.tv-projtable td.tv-proj-share {
+  white-space: nowrap;
+}
+
+.tv-proj-share .tv-bar {
+  display: inline-block;
+  width: calc(100% - 46px);
+  height: 6px;
+  vertical-align: middle;
+  background: #26262b;
+}
+
+.tv-proj-share .tv-bar > i {
+  box-shadow: 0 0 6px currentColor;
+}
+
+.tv-proj-pct {
+  display: inline-block;
+  width: 38px;
+  margin-left: 6px;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  vertical-align: middle;
+}
+
+.tv-proj-time {
+  color: var(--tv-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-proj-tablepanel .tv-costnote {
+  margin-top: 12px;
+}

@@ -12,9 +12,14 @@ import {
   fold,
   h,
   LIVE_DEBOUNCE_MS,
-  normalizeRange,
+  RANGES,
 } from '../components/homekit.js';
 import { createRangeSwitch } from '../components/rangeswitch.js';
+
+// filters.range may hold a longer range set on #/overview (90d, all, custom "a..b"): this page
+// only has today/7d/30d, so such a range is clamped to 30d with a visible note (never "today").
+const isClamped = (range) => !!range && !RANGES.includes(range);
+const pageRange = (range) => (RANGES.includes(range) ? range : isClamped(range) ? '30d' : 'today');
 
 export default async function render(container, ctx) {
   const t = (key, params) => ctx.t(`employees.${key}`, params);
@@ -39,7 +44,7 @@ export default async function render(container, ctx) {
   const teamSelect = h('select', { class: 'tv-employees-team', dataset: { filter: 'team' }, 'aria-label': t('teamFilter') });
   const range = createRangeSwitch({
     t,
-    value: normalizeRange(ctx.filters.get().range),
+    value: pageRange(ctx.filters.get().range),
     label: t('rangeLabel'),
     onChange: (value) => ctx.filters.set({ range: value }),
   });
@@ -50,6 +55,7 @@ export default async function render(container, ctx) {
     onOpen: (key) => ctx.navigate('employee', key),
   });
   const count = h('span', { class: 'tv-employees-count' });
+  const rangeNote = h('p', { class: 'tv-costnote', 'data-range-note': '', hidden: true }, t('rangeClamped'));
   const noMatch = h('p', { class: 'tv-muted tv-employees-nomatch', hidden: true }, t('noMatch'));
   const errorBox = h('div', { class: 'tv-loaderror', role: 'alert', 'data-load-error': '', hidden: true }, h('span'), h('button', { type: 'button', class: 'tv-btn', on: { click: () => refresh() } }, t('retry')));
 
@@ -68,6 +74,7 @@ export default async function render(container, ctx) {
         range.el,
         count,
       ),
+      rangeNote,
       h('div', { class: 'tv-employees-tablewrap' }, table.el),
       noMatch,
       h('p', { class: 'tv-costnote', 'data-cost-note': '' }, t('costNote')),
@@ -107,12 +114,13 @@ export default async function render(container, ctx) {
           console.warn('[employees] teams() failed, deriving teams from employees', err);
           return null;
         }),
-        ctx.api.employees(apiFilter({ team: state.team ?? null }, normalizeRange(state.range))),
+        ctx.api.employees(apiFilter({ team: state.team ?? null }, pageRange(state.range))),
       ]);
       if (ctx.signal.aborted) return;
       rows = Array.isArray(list) ? list : [];
       fillTeams(Array.isArray(teams) ? teams : deriveTeams(rows));
-      range.set(normalizeRange(ctx.filters.get().range));
+      range.set(pageRange(ctx.filters.get().range));
+      rangeNote.hidden = !isClamped(ctx.filters.get().range);
       errorBox.hidden = true;
       applySearch();
     } catch (err) {

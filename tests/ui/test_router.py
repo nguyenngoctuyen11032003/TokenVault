@@ -99,7 +99,7 @@ def test_route_render_error_shows_error_panel_and_nav_still_works(open_shell: An
     assert page.evaluate("window.__boomLive ?? 0") == 0
 
     page.locator("tv-navmenu a[href='#/projects']").click()
-    assert _wait_state(page, "projects") == "missing"
+    assert _wait_state(page, "projects") in ("missing", "ready")  # built by Task 15
     assert page.locator("tv-navmenu a[aria-current='page']").get_attribute("href") == "#/projects"
 
 
