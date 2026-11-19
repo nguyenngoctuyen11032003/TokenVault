@@ -30,6 +30,7 @@ log = logging.getLogger("tokenvault.adapter.watcher")
 
 BELOW_NORMAL_PRIORITY_CLASS = 0x4000
 JOIN_TIMEOUT_S = 5.0
+MAX_WAIT_S = 1.0  # a file is collected at most this long after its first event
 
 
 class _CollectorLike(Protocol):
@@ -93,7 +94,7 @@ class Watcher:
         self._attached = False
         self._observer: Any = None
         self._cond = threading.Condition()
-        self._pending: dict[Path, float] = {}  # path -> due (monotonic)
+        self._pending: dict[Path, tuple[float, float]] = {}  # path -> (first, last) monotonic
         self._next_attach = 0.0
         self._stopping = threading.Event()
         self._started = False
@@ -107,6 +108,8 @@ class Watcher:
         with self._cond:
             if self._started:
                 return
+            if self._stopping.is_set():
+                return
             self._started = True
         self._try_attach()
         self._worker = threading.Thread(target=self._run, name="tv-watcher", daemon=True)
@@ -116,7 +119,8 @@ class Watcher:
         self._stopping.set()
         with self._cond:
             self._cond.notify_all()
-        obs, self._observer = self._observer, None
+        with self._cond:
+            obs, self._observer = self._observer, None
         if obs is not None:
             try:
                 obs.stop()
@@ -145,41 +149,59 @@ class Watcher:
             log.exception("could not watch %s", self._root)
             self._next_attach = time.monotonic() + self._retry_s
             return
-        self._observer = obs
-        self._attached = True
-        # Anything written between root creation and attach is picked up now.
-        for p in self._root.rglob("*.jsonl"):
-            self._schedule(p)
+        with self._cond:
+            if not self._stopping.is_set():
+                self._observer = obs
+                self._attached = True
+                return
+        # stop() won the race: do not leak the observer we just started.
+        obs.stop()
+        obs.join(JOIN_TIMEOUT_S)
 
     def _schedule(self, path: Path) -> None:
+        now = time.monotonic()
         with self._cond:
-            self._pending[path] = time.monotonic() + self._debounce_s
+            first, _ = self._pending.get(path, (now, now))
+            self._pending[path] = (first, now)
             self._cond.notify_all()
+
+    def _due(self, path: Path) -> float:
+        first, last = self._pending[path]
+        return min(first + MAX_WAIT_S, last + self._debounce_s)
 
     # -- worker ----------------------------------------------------------
     def _run(self) -> None:
         while not self._stopping.is_set():
-            path: Path | None = None
-            with self._cond:
-                now = time.monotonic()
-                due = [p for p, t in self._pending.items() if t <= now]
-                if due:
-                    path = min(due, key=lambda p: self._pending[p])
-                    del self._pending[path]
-                else:
-                    waits: list[float] = []
-                    if self._pending:
-                        waits.append(min(self._pending.values()) - now)
-                    if not self._attached:
-                        waits.append(self._next_attach - now)
-                    self._cond.wait(max(0.0, min(waits)) if waits else None)
+            try:
+                self._step()
+            except Exception:
+                log.exception("watcher worker iteration failed")
+                self._stopping.wait(0.5)  # avoid a hot loop on a persistent error
+
+    def _step(self) -> None:
+        path: Path | None = None
+        with self._cond:
             if self._stopping.is_set():
                 return
-            if path is None:
-                if not self._attached and time.monotonic() >= self._next_attach:
-                    self._try_attach()
-                continue
-            self._collect(path)
+            now = time.monotonic()
+            due = [p for p in self._pending if self._due(p) <= now]
+            if due:
+                path = min(due, key=self._due)
+                del self._pending[path]
+            else:
+                waits: list[float] = []
+                if self._pending:
+                    waits.append(min(self._due(p) for p in self._pending) - now)
+                if not self._attached:
+                    waits.append(self._next_attach - now)
+                self._cond.wait(max(0.0, min(waits)) if waits else None)
+        if self._stopping.is_set():
+            return
+        if path is None:
+            if not self._attached and time.monotonic() >= self._next_attach:
+                self._try_attach()
+            return
+        self._collect(path)
 
     def _collect(self, path: Path) -> None:
         """Collect one file (looping while `more`), serialised; notify if new."""
