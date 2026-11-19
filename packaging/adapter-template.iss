@@ -117,8 +117,8 @@ end;
 var
   ConsentGiven: Boolean;
 
-{ Show ONLY the consent screen (new adapter exe unpacked to {tmp}) BEFORE anything of an
-  existing install is touched. Declined / no UI: the old agent keeps running untouched. }
+(* Show ONLY the consent screen (new adapter exe unpacked to {tmp}) BEFORE anything of an
+  existing install is touched. Declined / no UI: the old agent keeps running untouched. *)
 function AskConsentFirst: String;
 var
   Rc: Integer;
