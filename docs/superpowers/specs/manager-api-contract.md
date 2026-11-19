@@ -25,8 +25,8 @@ which is `"device:<id>"` for devices without a Claude account), `start`/`end` ar
 - `packages() -> [{package_id, team, label, created_at, revoked, devices}]` · `revoke_package(package_id) -> {ok}`
 - `create_installer(team, label|null) -> {path, file_name, team, bytes}` (raises if template missing)
 - `reveal_in_explorer(path) -> {ok}`
-- `settings() -> {transparent_window: bool, start_with_windows: bool, port: int, manager_id: str, hosts: [str], fingerprint: str, static_ip_hint: str, tz_offset_minutes: int, version: str}`
-- `save_settings(patch) -> settings` (allowed keys: transparent_window, start_with_windows, hosts)
+- `settings() -> {transparent_window: bool, start_with_windows: bool, port: int, manager_id: str, hosts: [str] (RAW configured list; empty = automatic), hosts_auto: [str] (detected), installer_hosts: [str] (what goes into new installers), window_shape: str, fingerprint: str, static_ip_hint: str, tz_offset_minutes: int, version: str}`
+- `save_settings(patch) -> settings` (allowed keys: transparent_window, start_with_windows, hosts, window_shape)
 - `diagnostics() -> {port, port_requested, fingerprint, connected: [device_id], connected_count, last_event_at|null, rejected_count, firewall_rule_present: bool, cert_expires_at, db_path, queue: {events, devices}, warnings: [str]}`
 - `connectivity_test() -> {ok, checks: [{name, ok, detail}]}` (bind, firewall rule, LAN IPs, certificate)
 - `regenerate_certificate() -> {fingerprint, warning}` (explicit; invalidates all installed adapters)
@@ -39,7 +39,7 @@ pixels the page sees (`window.innerWidth`); Python converts. Minimum size 1100x7
 - `window_toggle_maximize() -> WindowState` · `window_maximize()` · `window_restore()` — maximise = the monitor's WORK AREA
   (never covers the taskbar), restore returns to the saved normal bounds
 - `window_set_fullscreen(on: bool) -> WindowState` · `window_toggle_fullscreen() -> WindowState` — full screen = the whole monitor, no taskbar
-- `window_state() -> WindowState` where `WindowState = {maximized: bool, fullscreen: bool, x, y, width, height, min_width, min_height, screen: {x, y, width, height, work_x, work_y, work_width, work_height}}`
+- `window_state() -> WindowState` where `WindowState = {native_region: bool, native_resize: bool, maximized: bool, fullscreen: bool, x, y, width, height, min_width, min_height, screen: {x, y, width, height, work_x, work_y, work_width, work_height}}`
 - `window_get_bounds() -> {x, y, width, height}` · `window_set_bounds(x, y, width, height) -> WindowState` (clamped to min size and to the visible screen area; ignored while maximised/fullscreen except it first restores)
 - `window_start_move()` is NOT needed: the title bar uses the native drag region; double-click on the title bar toggles maximise (UI).
 - Edge/corner resizing: native if achievable (WS_THICKFRAME / WM_NCHITTEST on the HWND); otherwise the UI draws 6 px invisible
