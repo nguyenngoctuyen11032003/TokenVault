@@ -33,12 +33,13 @@
 param(
   [switch]$DevTemplate,
   [string]$Python,
+  [string]$DistDir,   # output folder (default <repo>\dist); use another one while a built Manager is running
   [switch]$SkipWebView2Download
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $Pkg = Join-Path $Root 'packaging'
-$Dist = Join-Path $Root 'dist'
+$Dist = if ($DistDir) { $DistDir } else { Join-Path $Root 'dist' }
 $Work = Join-Path $Root 'build'
 Set-Location $Root
 

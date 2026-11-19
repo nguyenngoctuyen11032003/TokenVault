@@ -34,7 +34,7 @@ $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if (-not $OutDir) { $OutDir = Join-Path $repo 'templates\portable-runtime' }
 if (-not $Python) {
-    $cand = @(Join-Path $repo '.venv\Scripts\python.exe') | Where-Object { Test-Path $_ }
+    $cand = @(@(Join-Path $repo '.venv\Scripts\python.exe') | Where-Object { Test-Path $_ })
     if ($cand) { $Python = $cand[0] } else { $Python = 'python' }
 }
 $work = Join-Path ([IO.Path]::GetTempPath()) ('tv-portable-' + [guid]::NewGuid().ToString('N').Substring(0, 8))

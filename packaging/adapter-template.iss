@@ -130,7 +130,18 @@ begin
   if not Exec(ExpandConstant('{tmp}\' + ExeImage),
               'consent --from "' + ExpandConstant('{srcexe}') + '"', '', SW_SHOWNORMAL,
               ewWaitUntilTerminated, Rc) then
-    Rc := -1;
+  begin
+    { Exec failed: Rc is the Windows error code (5 = access denied, 1260 = blocked by an
+      application-control / Smart App Control policy, 193 = not a valid program). }
+    Log('consent exec failed: ' + IntToStr(Rc) + ' ' + SysErrorMessage(Rc));
+    Result := 'Windows would not start the TokenVault Adapter program (error ' + IntToStr(Rc) +
+              ': ' + SysErrorMessage(Rc) + ').' + #13#10 + #13#10 +
+              'This computer probably blocks unsigned programs (Smart App Control / ' +
+              'Application Control / antivirus). Nothing was changed.' + #13#10 + #13#10 +
+              'Ask your manager for the "no .exe" package (Windows - goi khong can exe) ' +
+              'and run Install.cmd from it.';
+    Exit;
+  end;
   if Rc = 0 then
     ConsentGiven := True
   else if Rc = EXIT_DECLINED then
@@ -164,7 +175,13 @@ begin
     and (re)starts the agent. }
   if not Exec(ExpandConstant('{app}\{#ExeName}'), Args, '', SW_SHOWNORMAL,
               ewWaitUntilTerminated, Rc) then
-    Rc := -1;
+  begin
+    SuppressibleMsgBox('Windows would not start the TokenVault Adapter (error ' + IntToStr(Rc) +
+      ': ' + SysErrorMessage(Rc) + '). This computer probably blocks unsigned programs. ' +
+      'Uninstall this entry and ask your manager for the "no .exe" package.',
+      mbError, MB_OK, IDOK);
+    Exit;
+  end;
   if Rc = EXIT_NO_PAYLOAD then
     SuppressibleMsgBox('This file has no TokenVault configuration, so it cannot be set up. ' +
       'Ask your manager for your team''s installer (made with "Create installer" in the ' +

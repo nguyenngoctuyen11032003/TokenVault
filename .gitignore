@@ -1,5 +1,5 @@
 .superpowers/
-dist/
+dist*/
 dist-mac/
 build-mac-work/
 build/*
