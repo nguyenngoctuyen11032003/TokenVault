@@ -31,6 +31,15 @@ which is `"device:<id>"` for devices without a Claude account), `start`/`end` ar
 - `connectivity_test() -> {ok, checks: [{name, ok, detail}]}` (bind, firewall rule, LAN IPs, certificate)
 - `regenerate_certificate() -> {fingerprint, warning}` (explicit; invalidates all installed adapters)
 
+## Report export methods (Task 22)
+- `report_options() -> {default_dir, can_pick_path, can_open, can_reveal, teams: [str], max_employees, page_cap, ranges}` (`default_dir` = `Documents\TokenVault Reports`)
+- `export_report(spec) -> {path, file_name, folder, pages, bytes, scope_label, range_label}` where
+  `spec = {scope: "all"|"team"|"employee", employee_keys?: [str], team?: str, range: "today"|"7d"|"30d"|"custom", start?, end?, per_employee_pages?: bool, destination?: "default"|"dialog"}`.
+  The UI never sends a path: `default` writes a generated, sanitised file name into the reports folder, `dialog` opens the native save dialog (Python side). Session titles are never exported. Runs synchronously on its own worker thread; one export at a time.
+- `report_progress() -> {running, fraction (0..1), message}` (polled by the dialog while `export_report` is pending)
+- `open_path(path, reveal=false) -> {ok}` opens (or, with `reveal`, selects in Explorer) a `.pdf` inside the reports folder or one this process exported; anything else is refused.
+- Error prefixes: `[invalid_args]`, `[invalid_report_spec]`, `[empty_scope]` (unknown team/employee), `[font_missing]`, `[report_failed]`, `[write_failed]`, `[busy]`, `[cancelled]` (save dialog dismissed), `[not_found]`.
+
 ## Window methods (owner request: a normal resizable desktop window)
 The window is frameless + chamfered (CSS) but must behave like a normal app window: resizable from every edge/corner,
 minimise, maximise/restore, full screen, remembers its size/position. All geometry is in the SAME logical (DPI-scaled)
@@ -62,4 +71,4 @@ buckets from the browser clock except for the *current* day/hour used for range 
 
 ## Error classification
 Errors the UI must react to carry a machine-readable prefix in the exception message:
-`[template_missing]`, `[cert_error]`, `[revoked]`, `[invalid_team]`. The UI tests for the prefix, never for words.
+`[template_missing]`, `[cert_error]`, `[revoked]`, `[invalid_team]`, and the report prefixes above. The UI tests for the prefix, never for words.

@@ -48,6 +48,7 @@ def build(data_dir: Path | None = None, template: Path | None = None,
         discovery=False,
         firewall_check=None,
         presence_interval=5.0,
+        reports_dir=root / "reports",  # real PDFs land in the demo folder, not Documents
     )
     m = Manager(cfg)
     m.start()

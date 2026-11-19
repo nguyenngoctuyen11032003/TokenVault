@@ -27,6 +27,7 @@ import {
   shortTime,
 } from '../components/homekit.js';
 import { createRangeSwitch } from '../components/rangeswitch.js';
+import { createReportButton } from '../components/report-dialog.js';
 
 // filters.range may hold a longer range set on #/overview (90d, all, custom "a..b"): this page
 // only has today/7d/30d, so such a range is clamped to 30d with a visible note (never "today").
@@ -54,6 +55,8 @@ export default async function render(container, ctx) {
     label: t('rangeLabel'),
     onChange: (value) => ctx.filters.set({ range: value }),
   });
+
+  const exportBtn = await createReportButton({ api: ctx.api, signal: ctx.signal, labelKey: 'buttonOne', attrs: { 'data-report-open': 'employee' }, preset: () => ({ scope: 'employee', employee_keys: [key], single: true, range: ctx.filters.get().range }) });
 
   // ---------- static layout ----------
   const gauge = h('tv-gauge', { 'data-kpi': 'range-tokens', label: t('gauge.label') });
@@ -85,7 +88,7 @@ export default async function render(container, ctx) {
   const head = h(
     'tv-panel',
     { class: 'tv-employee-head', heading: t('headingLoading') },
-    h('div', { slot: 'actions' }, range.el),
+    h('div', { slot: 'actions', class: 'tv-employee-actions' }, exportBtn, range.el),
     h(
       'div',
       { class: 'tv-employee-hero' },

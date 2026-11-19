@@ -19,7 +19,13 @@ from typing import Any
 
 from tokenvault.manager import api_manage, firewall, win_autostart
 from tokenvault.manager.api import Api, dispatch
-from tokenvault.manager.app_support import message_box, reveal_explorer, setup_logging
+from tokenvault.manager.app_support import (
+    message_box,
+    open_file,
+    pick_save_path,
+    reveal_explorer,
+    setup_logging,
+)
 from tokenvault.manager.instance import InstanceSignal, SingleInstance, event_name, second_launch
 from tokenvault.manager.lifecycle import Manager, ManagerConfig, StartupError
 from tokenvault.manager.live import LivePusher
@@ -110,6 +116,7 @@ def run_gui(a: argparse.Namespace, *, demo: bool = False, screenshot: Path | Non
         data_dir=paths.root, template=template_path(a.template), pricing=pricing_path(),
         ingest_host="127.0.0.1" if smoke else "0.0.0.0", ingest_port=0 if smoke else None,
         discovery=not smoke, firewall_check=firewall.check_rules, reveal=reveal_explorer,
+        open_file=open_file, pick_save_path=pick_save_path,
         autostart=win_autostart.set_autostart,
     )
     try:

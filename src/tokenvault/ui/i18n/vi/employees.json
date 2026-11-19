@@ -28,6 +28,8 @@
       "sessions": "Phiên",
       "cost": "Chi phí",
       "lastSeen": "Hoạt động cuối",
+      "selectAll": "Chọn tất cả nhân viên đang hiển thị",
+      "selectRow": "Chọn {name}",
       "costHint": "Chi phí ước tính theo giá API",
       "shareOf": "{pct} tổng token"
     },

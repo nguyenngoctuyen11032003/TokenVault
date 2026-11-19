@@ -25,6 +25,7 @@ import {
   niceCeil,
   shortHour,
 } from '../components/homekit.js';
+import { createReportButton } from '../components/report-dialog.js';
 import { createTeamList } from '../components/teamlist.js';
 
 const TOP_PROJECTS = 5;
@@ -38,6 +39,15 @@ export default async function render(container, ctx) {
   ]);
   if (ctx.signal.aborted) return;
 
+  const exportBtn = await createReportButton({
+    api: ctx.api,
+    signal: ctx.signal,
+    attrs: { 'data-report-open': 'all' },
+    preset: () => {
+      const team = ctx.filters.get().team;
+      return { scope: team ? 'team' : 'all', team: team ?? undefined, range: '7d' };
+    },
+  });
   const root = h('div', { class: 'tv-home', dataset: { tvRev: '0' } });
   container.append(root);
   const charts = loadECharts().catch((err) => {
@@ -89,7 +99,7 @@ export default async function render(container, ctx) {
     const todayPanel = h(
       'tv-panel',
       { heading: t('todayTitle'), class: 'tv-home-today' },
-      h('a', { slot: 'actions', class: 'tv-btn tv-home-overviewlink', href: '#/overview' }, t('overviewLink')),
+      h('div', { slot: 'actions', class: 'tv-home-actions' }, exportBtn, h('a', { class: 'tv-btn tv-home-overviewlink', href: '#/overview' }, t('overviewLink'))),
       h('div', { class: 'tv-gauge-row' }, gauges.tokens, gauges.cost, gauges.sessions),
       h(
         'div',

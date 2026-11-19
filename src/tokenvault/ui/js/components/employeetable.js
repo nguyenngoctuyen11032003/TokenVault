@@ -15,6 +15,18 @@ export function employeeHref(key) {
 }
 
 const COLUMNS = {
+  select: {
+    cell(td, row, t, ctx) {
+      td.className = 'tv-emptable__select';
+      let box = td.firstChild;
+      if (!box) {
+        box = h('input', { type: 'checkbox', class: 'tv-emptable__check', dataset: { select: '' } });
+        td.append(box);
+      }
+      box.checked = ctx.selected.has(String(row.key));
+      box.setAttribute('aria-label', t('table.selectRow', { name: String(row.display_name || row.key || '') }));
+    },
+  },
   account: {
     sort: (r) => String(r.display_name || r.key || '').toLowerCase(),
     cell(td, row, t) {
@@ -102,22 +114,27 @@ const COLUMNS = {
   },
 };
 
-export function createEmployeeTable({ t, columns, sortable = false, onOpen, initialSort }) {
-  const cols = columns.filter((id) => COLUMNS[id]);
+export function createEmployeeTable({ t, columns, sortable = false, onOpen, initialSort, selectable = false, onSelect }) {
+  const cols = (selectable ? ['select', ...columns] : columns).filter((id) => COLUMNS[id]);
+  const selected = new Set(); // row keys ticked by the user (survives live refreshes)
+  let headBox = null;
   let sort = initialSort || { col: 'tokens', dir: 'desc' };
   let data = [];
   const rows = new Map(); // key -> {tr, cells}
 
   const headCells = cols.map((id) => {
     const def = COLUMNS[id];
-    const label = t(`table.${id}`);
+    const label = id === 'select' ? '' : t(`table.${id}`);
     const th = h('th', {
       scope: 'col',
       class: def.num ? 'tv-num' : null,
       dataset: { col: id },
       title: id === 'cost' ? t('table.costHint') : null,
     });
-    if (sortable) {
+    if (id === 'select') {
+      headBox = h('input', { type: 'checkbox', class: 'tv-emptable__check', 'aria-label': t('table.selectAll'), dataset: { selectAll: '' } });
+      th.append(headBox);
+    } else if (sortable) {
       th.append(
         h(
           'button',
@@ -139,8 +156,29 @@ export function createEmployeeTable({ t, columns, sortable = false, onOpen, init
     tbody,
   );
 
+  function changed() {
+    const keys = data.map((r) => String(r.key)).filter((k) => selected.has(k));
+    if (headBox) {
+      headBox.checked = keys.length > 0 && keys.length === data.length;
+      headBox.indeterminate = keys.length > 0 && keys.length < data.length;
+    }
+    onSelect?.(keys);
+  }
+
+  headBox?.addEventListener('change', () => {
+    for (const r of data) (headBox.checked ? selected.add(String(r.key)) : selected.delete(String(r.key)));
+    render();
+    changed();
+  });
+  tbody.addEventListener('change', (event) => {
+    const tr = event.target.closest('tr[data-key]');
+    if (!tr || !event.target.matches('input[data-select]')) return;
+    (event.target.checked ? selected.add(tr.dataset.key) : selected.delete(tr.dataset.key));
+    changed();
+  });
+
   tbody.addEventListener('click', (event) => {
-    if (event.target.closest('a')) return; // the link navigates by itself
+    if (event.target.closest('a, input, .tv-emptable__select')) return; // the link navigates by itself
     const tr = event.target.closest('tr[data-key]');
     if (tr) onOpen?.(tr.dataset.key);
   });
@@ -168,7 +206,7 @@ export function createEmployeeTable({ t, columns, sortable = false, onOpen, init
       else th.removeAttribute('aria-sort');
     });
     const list = sorted();
-    const ctx = { maxShare: Math.max(0, ...list.map((r) => Number(r.share) || 0)) };
+    const ctx = { maxShare: Math.max(0, ...list.map((r) => Number(r.share) || 0)), selected };
     const keep = new Set();
     list.forEach((row, index) => {
       const key = String(row.key ?? '');
@@ -197,8 +235,11 @@ export function createEmployeeTable({ t, columns, sortable = false, onOpen, init
 
   function update(list) {
     data = Array.isArray(list) ? list : [];
+    const live = new Set(data.map((r) => String(r.key)));
+    for (const k of [...selected]) if (!live.has(k)) selected.delete(k);
     render();
+    if (selectable) changed();
   }
 
-  return { el: table, update, count: () => data.length };
+  return { el: table, update, count: () => data.length, selected: () => data.map((r) => String(r.key)).filter((k) => selected.has(k)) };
 }
