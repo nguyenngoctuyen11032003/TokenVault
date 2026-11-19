@@ -6,7 +6,7 @@
 
 **Architecture:** One repo, one `tokenvault` package with `common` (pure, no I/O), `adapter`, `manager`, `ui`. Adapter tails `~/.claude/projects/**/*.jsonl` by offset, queues events in a SQLite outbox, and sends them over a pinned-certificate WebSocket to the Manager, which upserts into SQLite, maintains rollups, and pushes live updates into a pywebview HTML/ECharts UI.
 
-**Tech Stack:** Python 3.11+, pywebview (WebView2), websockets, cryptography, watchdog, pystray + Pillow, SQLite (WAL), ECharts (SVG), pytest, ruff, mypy, PyInstaller, Inno Setup.
+**Tech Stack:** Python 3.11+, playwright (dev, UI tests), pywebview (WebView2), websockets, cryptography, watchdog, pystray + Pillow, SQLite (WAL), ECharts (SVG), pytest, ruff, mypy, PyInstaller, Inno Setup.
 
 **Spec:** `docs/superpowers/specs/2026-11-19-tokenvault-design.md` (read it first; section numbers below refer to it).
 
@@ -247,8 +247,8 @@
 ### Task 14: Home and Employee detail pages
 
 **Files:**
-- Create: `ui/js/routes/home.js`, `ui/js/routes/employee.js`, `ui/js/routes/employees.js`, `ui/js/charts.js`, `ui/js/components/{teamlist,employeetable,rangeswitch}.js`
-- Test: `tests/ui/test_home.py`, `tests/ui/test_employee.py`
+- Create: `ui/js/routes/home.js`, `ui/js/routes/employee.js`, `ui/js/routes/employees.js`, `ui/js/charts.js`, `ui/js/palette.js`, `ui/js/components/{teamlist,employeetable,rangeswitch}.js`
+- Test: `tests/ui/test_home.py`, `tests/ui/test_employee.py`, `tests/ui/test_palette.py`
 
 **Interfaces:**
 - Consumes: `Api.overview/employees/employee/teams`; `tv.onLive`.
