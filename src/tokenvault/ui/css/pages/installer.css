@@ -221,12 +221,6 @@
   letter-spacing: 0;
 }
 
-.tv-installer-result__path {
-  display: block;
-  color: var(--tv-text-strong);
-  overflow-wrap: anywhere;
-}
-
 .tv-installer-info__hosts {
   display: flex;
   flex-direction: column;
@@ -238,122 +232,6 @@
   border-top: 1px solid var(--tv-line);
   color: var(--tv-muted);
   font-size: var(--tv-fs-xs);
-}
-
-/* ---------- step 3 result ---------- */
-
-.tv-installer-doneview {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
-  gap: 24px;
-  align-items: start;
-}
-
-.tv-installer-result {
-  display: flex;
-  gap: 18px;
-  min-width: 0;
-}
-
-.tv-installer-result__mark {
-  position: relative;
-  flex: none;
-  width: 46px;
-  height: 46px;
-  border: 2px solid var(--tv-green);
-  border-radius: 50%;
-  box-shadow: 0 0 14px rgb(43 212 106 / 0.35), inset 0 0 10px rgb(43 212 106 / 0.2);
-}
-
-.tv-installer-result__mark::after {
-  content: "";
-  position: absolute;
-  left: 14px;
-  top: 9px;
-  width: 10px;
-  height: 18px;
-  border: solid var(--tv-green);
-  border-width: 0 3px 3px 0;
-  transform: rotate(45deg);
-}
-
-.tv-installer-result__main {
-  flex: 1;
-  min-width: 0;
-}
-
-.tv-installer-result__title {
-  margin-bottom: 4px;
-  color: var(--tv-green);
-  font-size: 18px;
-}
-
-.tv-installer-result__title:focus {
-  outline: none;
-}
-
-.tv-installer-result__lead {
-  color: var(--tv-muted);
-}
-
-.tv-installer-result__file {
-  margin: 8px 0 12px;
-  color: var(--tv-text-strong);
-  font-size: 20px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.tv-installer-result__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  margin: 18px 0 8px;
-}
-
-.tv-installer-again {
-  background: transparent;
-  box-shadow: inset 0 0 0 1px var(--tv-line-strong);
-  clip-path: none;
-  padding-right: 16px;
-}
-
-.tv-installer-instrbox {
-  min-width: 0;
-}
-
-.tv-installer-instrbox__head {
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.tv-installer-instrbox__title {
-  color: var(--tv-text-strong);
-  font-size: var(--tv-fs-md);
-}
-
-.tv-installer-smartscreen {
-  margin: 0 0 8px;
-  padding: 8px 12px;
-  border-left: 3px solid var(--tv-amber);
-  background: rgb(255 176 32 / 0.08);
-  color: var(--tv-text);
-  font-size: var(--tv-fs-sm);
-}
-
-.tv-installer-instructions {
-  max-height: 300px;
-  margin: 0;
-  padding: 12px 14px;
-  overflow: auto;
-  border: 1px solid var(--tv-line);
-  background: #0c0c0e;
-  color: var(--tv-text);
-  font-family: var(--tv-font);
-  font-size: 13px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
 }
 
 /* ---------- packages ---------- */
@@ -400,9 +278,5 @@
   .tv-installer-formview {
     grid-template-columns: minmax(0, 1fr) minmax(220px, 270px);
     gap: 20px;
-  }
-
-  .tv-installer-doneview {
-    grid-template-columns: minmax(0, 1fr);
   }
 }

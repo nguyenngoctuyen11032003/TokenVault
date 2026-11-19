@@ -4,6 +4,7 @@
 // Live events refresh the device list (debounced) without touching unsaved host edits.
 
 import { confirmDialog } from '../components/installer-dialog.js';
+import { describeError } from '../components/installer-errors.js';
 import {
   coalesce,
   debounce,
@@ -16,6 +17,7 @@ import {
   shortFingerprint,
   TEAM_MAX,
   toggleSwitch,
+  HOSTS_MAX,
   validateHost,
   validateTeam,
 } from '../components/installer-kit.js';
@@ -82,6 +84,7 @@ export default async function render(container, ctx) {
   // ---------- app panel ----------
   const saveError = h('div');
   async function saveToggle(key, value) {
+    if (!settings) throw new Error('settings not loaded'); // never persist the placeholder
     saveError.replaceChildren();
     try {
       const next = await ctx.api.save_settings({ [key]: value });
@@ -94,8 +97,8 @@ export default async function render(container, ctx) {
       bump();
     }
   }
-  const startSwitch = toggleSwitch({ setting: 'start_with_windows', label: t('startWithWindows'), checked: false, onChange: (v) => saveToggle('start_with_windows', v) });
-  const transparentSwitch = toggleSwitch({ setting: 'transparent_window', label: t('transparent'), checked: true, onChange: (v) => saveToggle('transparent_window', v) });
+  const startSwitch = toggleSwitch({ setting: 'start_with_windows', label: t('startWithWindows'), checked: false, disabled: true, onChange: (v) => saveToggle('start_with_windows', v) });
+  const transparentSwitch = toggleSwitch({ setting: 'transparent_window', label: t('transparent'), checked: true, disabled: true, onChange: (v) => saveToggle('transparent_window', v) });
   const appPanel = h('tv-panel', { heading: t('appTitle'), class: 'tv-settings-app' },
     saveError,
     h('div', { class: 'tv-settings-toggle' }, startSwitch, h('p', { class: 'tv-installer-field__hint' }, t('startWithWindowsHint'))),
@@ -143,11 +146,10 @@ export default async function render(container, ctx) {
   }
 
   function addHost() {
-    const check = validateHost(hostInput.value);
-    let problem = check.ok ? '' : t('hostInvalid');
-    if (check.ok && draftHosts.some((x) => x.toLowerCase() === check.value.toLowerCase())) problem = t('hostDuplicate');
-    if (problem) {
-      hostError.textContent = problem;
+    const check = validateHost(hostInput.value, draftHosts);
+    if (!check.ok) {
+      hostError.dataset.reason = check.reason;
+      hostError.textContent = t(`hostError.${check.reason}`, { max: HOSTS_MAX });
       hostError.hidden = false;
       hostInput.setAttribute('aria-invalid', 'true');
       hostInput.focus();
@@ -207,8 +209,11 @@ export default async function render(container, ctx) {
       savedHosts = hosts;
     }
     renderHosts();
-    startSwitch.set(!!settings?.start_with_windows);
-    transparentSwitch.set(settings?.transparent_window !== false);
+    // The switches stay disabled until real values arrived: never save the placeholder state.
+    if (startSwitch.dataset.busy === undefined) startSwitch.set(!!settings?.start_with_windows);
+    if (transparentSwitch.dataset.busy === undefined) transparentSwitch.set(settings?.transparent_window !== false);
+    startSwitch.disabled = false;
+    transparentSwitch.disabled = false;
   }
 
   function renderDevices(devices, teams) {
@@ -250,7 +255,13 @@ export default async function render(container, ctx) {
       await ctx.api.set_device_team(device.device_id, team);
     } catch (err) {
       console.warn('[settings] set_device_team failed', err);
-      devicesError.replaceChildren(errorBanner({ text: t('teamChangeError', { detail: errText(err) }), attr: 'data-device-error' }));
+      const { code, text } = describeError(
+        err,
+        { invalid_team: t('teamError.server'), revoked: t('deviceRevoked') },
+        (detail) => t('teamChangeError', { detail }),
+      );
+      devicesError.replaceChildren(errorBanner({ text, attr: 'data-device-error', kind: code || 'generic' }));
+      if (code === 'revoked') refresh();
       bump();
       return false;
     }
@@ -276,7 +287,9 @@ export default async function render(container, ctx) {
       await ctx.api.revoke_device(device.device_id);
     } catch (err) {
       console.warn('[settings] revoke_device failed', err);
-      devicesError.replaceChildren(errorBanner({ text: t('revokeError', { detail: errText(err) }), attr: 'data-device-error' }));
+      const { code, text } = describeError(err, { revoked: t('deviceRevoked') }, (detail) => t('revokeError', { detail }));
+      devicesError.replaceChildren(errorBanner({ text, attr: 'data-device-error', kind: code || 'generic' }));
+      if (code === 'revoked') await refresh();
       bump();
       return;
     }

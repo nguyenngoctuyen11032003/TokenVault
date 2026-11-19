@@ -20,8 +20,6 @@
     "hostPlaceholder": "Ví dụ: 192.168.1.10",
     "addHost": "Thêm",
     "removeHost": "Xoá địa chỉ {host}",
-    "hostInvalid": "Địa chỉ không hợp lệ. Dùng địa chỉ IP (192.168.1.10) hoặc tên máy (MANAGER-PC).",
-    "hostDuplicate": "Địa chỉ này đã có trong danh sách.",
     "saveHosts": "Lưu địa chỉ",
     "resetHosts": "Hoàn tác",
     "hostsSaved": "Đã lưu.",
@@ -59,7 +57,8 @@
       "tooLong": "Tên nhóm dài quá {max} ký tự.",
       "separator": "Tên nhóm không được chứa dấu / hoặc \\.",
       "control": "Tên nhóm chứa ký tự điều khiển không hợp lệ.",
-      "invalid": "Tên nhóm không được chứa các ký tự < > : \" | ? * hoặc kết thúc bằng dấu chấm."
+      "invalid": "Tên nhóm không được chứa các ký tự < > : \" | ? * hoặc kết thúc bằng dấu chấm.",
+      "server": "Manager không chấp nhận tên nhóm này. Hãy đặt tên khác."
     },
     "teamChangeError": "Không đổi được nhóm: {detail}",
     "revoke": "Thu hồi",
@@ -71,6 +70,16 @@
     "revokeError": "Không thu hồi được máy: {detail}",
     "cancel": "Huỷ",
     "loadError": "Không tải được cài đặt: {detail}",
-    "retry": "Thử lại"
+    "retry": "Thử lại",
+    "hostError": {
+      "empty": "Hãy nhập địa chỉ IP hoặc tên máy.",
+      "tooLong": "Địa chỉ dài quá 253 ký tự.",
+      "tooMany": "Tối đa {max} địa chỉ. Hãy xoá bớt địa chỉ không dùng.",
+      "duplicate": "Địa chỉ này đã có trong danh sách.",
+      "ipv4": "Địa chỉ IPv4 không hợp lệ: cần 4 số từ 0 đến 255, ví dụ 192.168.1.10.",
+      "ipv6": "Địa chỉ IPv6 không hợp lệ.",
+      "hostname": "Tên máy không hợp lệ: chỉ dùng chữ không dấu, số và dấu gạch ngang, ví dụ MANAGER-PC."
+    },
+    "deviceRevoked": "Máy này đã bị thu hồi trước đó. Danh sách đã được cập nhật."
   }
 }

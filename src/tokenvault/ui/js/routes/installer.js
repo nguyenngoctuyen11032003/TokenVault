@@ -1,12 +1,13 @@
 // #/installer — create the employee installer (the owner's key flow), 3 steps in one panel:
 //   1. team name (+ optional label), validated (it becomes part of a Windows file name);
 //   2. api.create_installer(team, label|null) with a busy state; failures show a banner + retry
-//      (a missing adapter template tells the owner to reinstall the Manager);
+//      (errors are classified by their [code] prefix, see installer-errors.js);
 //   3. result: file name, full path, "Open folder", "Copy path", copyable employee instructions
 //      (SmartScreen "More info -> Run anyway", what is / is not sent, uninstall).
 // Below: previously created packages with a confirmed "Revoke". Untrusted values -> textContent.
 
 import { confirmDialog } from '../components/installer-dialog.js';
+import { describeError } from '../components/installer-errors.js';
 import {
   clipText,
   copyButton,
@@ -28,6 +29,7 @@ export default async function render(container, ctx) {
     ctx.useStylesheet('css/pages/people.css'),
     ctx.useStylesheet('css/pages/installer-kit.css'),
     ctx.useStylesheet('css/pages/installer.css'),
+    ctx.useStylesheet('css/pages/installer-result.css'),
   ]);
   if (ctx.signal.aborted) return;
 
@@ -108,7 +110,7 @@ export default async function render(container, ctx) {
     revealError: h('p', { class: 'tv-installer-field__error', role: 'alert', hidden: true }),
   };
   let resultPath = '';
-  const copyLabels = { copiedLabel: t('copied'), failedLabel: t('copyFailed') };
+  const copyLabels = { copiedLabel: t('copied'), failedLabel: t('copyFailed'), hint: t('copyHint') };
   const doneView = h('div', { class: 'tv-installer-doneview', hidden: true },
     h('div', { class: 'tv-installer-result' },
       h('div', { class: 'tv-installer-result__mark', 'aria-hidden': 'true' }),
@@ -121,13 +123,13 @@ export default async function render(container, ctx) {
           h('dt', null, t('sizeLabel')), res.size),
         h('div', { class: 'tv-installer-result__actions' },
           h('button', { type: 'button', class: 'tv-btn tv-btn--primary', dataset: { action: 'reveal' }, on: { click: reveal } }, t('openFolder')),
-          copyButton({ label: t('copyPath'), ...copyLabels, action: 'copy-path', getText: () => resultPath }),
+          copyButton({ label: t('copyPath'), ...copyLabels, action: 'copy-path', getText: () => resultPath, target: () => res.path }),
           h('button', { type: 'button', class: 'tv-btn tv-installer-again', dataset: { action: 'again' }, on: { click: reset } }, t('again'))),
         res.revealError)),
     h('div', { class: 'tv-installer-instrbox' },
       h('div', { class: 'tv-meta tv-installer-instrbox__head' },
         h('h3', { class: 'tv-installer-instrbox__title' }, t('instructionsTitle')),
-        copyButton({ label: t('copyInstructions'), ...copyLabels, action: 'copy-instructions', getText: () => res.instructions.textContent })),
+        copyButton({ label: t('copyInstructions'), ...copyLabels, action: 'copy-instructions', getText: () => res.instructions.textContent, target: () => res.instructions })),
       h('p', { class: 'tv-installer-smartscreen' }, t('smartscreenNote')),
       res.instructions));
 
@@ -206,16 +208,24 @@ export default async function render(container, ctx) {
     } catch (err) {
       if (ctx.signal.aborted) return;
       console.warn('[installer] create_installer failed', err);
-      const detail = errText(err);
-      const template = /template/i.test(detail);
-      errorSlot.replaceChildren(errorBanner({
-        text: template ? t('templateMissing') : t('createError', { detail }),
-        retryLabel: t('retry'),
-        onRetry: () => create(last.team, last.label),
-        attr: 'data-create-error',
-        kind: template ? 'template' : 'generic',
-      }));
+      const { code, text } = describeError(
+        err,
+        { template_missing: t('templateMissing'), invalid_team: t('err.server') },
+        (detail) => t('createError', { detail }),
+      );
       setState('form');
+      if (code === 'invalid_team') {
+        showTeamError('server');
+        teamInput.focus();
+      } else {
+        errorSlot.replaceChildren(errorBanner({
+          text,
+          retryLabel: t('retry'),
+          onRetry: () => create(last.team, last.label),
+          attr: 'data-create-error',
+          kind: code === 'template_missing' ? 'template' : 'generic',
+        }));
+      }
     }
     bump();
   }
@@ -313,7 +323,14 @@ export default async function render(container, ctx) {
       await ctx.api.revoke_package(p.package_id);
     } catch (err) {
       console.warn('[installer] revoke_package failed', err);
-      pkgError.replaceChildren(errorBanner({ text: t('revokeError', { detail: errText(err) }), retryLabel: t('retry'), onRetry: () => revokePackage(p) }));
+      const { code, text } = describeError(err, { revoked: t('alreadyRevoked') }, (detail) => t('revokeError', { detail }));
+      if (code !== 'revoked') {
+        pkgError.replaceChildren(errorBanner({ text, retryLabel: t('retry'), onRetry: () => revokePackage(p) }));
+        bump();
+        return;
+      }
+      await loadPackages(); // already revoked elsewhere: show the current state + a notice
+      pkgError.replaceChildren(errorBanner({ text, attr: 'data-revoke-notice', kind: 'revoked' }));
       bump();
       return;
     }

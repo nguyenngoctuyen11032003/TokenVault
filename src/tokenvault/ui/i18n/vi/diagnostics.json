@@ -38,6 +38,8 @@
     "copyFingerprint": "Chép đầy đủ",
     "copied": "Đã chép",
     "copyFailed": "Không chép được",
+    "copyHint": "Đã chọn sẵn vân tay, hãy nhấn Ctrl+C để chép.",
+    "certError": "Chứng chỉ của Manager bị lỗi (không đọc hoặc không tạo được). Hãy khởi động lại Manager; nếu vẫn lỗi, cài lại TokenVault Manager.",
     "warningsTitle": "Cảnh báo từ Manager",
     "connectedTitle": "Máy đang kết nối",
     "connectedLabel": "Danh sách máy đang kết nối",

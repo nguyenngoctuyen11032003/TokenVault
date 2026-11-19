@@ -129,7 +129,7 @@ def test_wizard_accepts_vietnamese_and_suggests_existing_teams(open_mgr: Any) ->
 
 def test_create_installer_failure_shows_error_and_retry(open_mgr: Any) -> None:
     data = mgr_data()
-    data["failOnce"] = {"create_installer": "adapter template missing: adapter-setup-template.exe"}
+    data["failOnce"] = {"create_installer": "[template_missing] adapter-setup-template.exe"}
     data["delay"] = {"create_installer": 400}
     page = open_mgr("#/installer", data=data)
     _generate(page, "Dev")
@@ -272,4 +272,105 @@ def test_screenshot_installer(open_mgr: Any, artifacts_dir: Path, width: int, he
     page.locator("#tv-view").evaluate("v => { v.scrollTop = v.scrollHeight; }")
     page.wait_for_timeout(150)
     page.screenshot(path=str(artifacts_dir / f"installer-3-done-bottom-{width}x{height}.png"))
+    assert console_problems(page) == []
+
+
+# ---------------------------------------------------------------- error classification (fix 1)
+
+
+def _create_error(page: Any) -> Any:
+    banner = page.locator("#tv-view [data-create-error]")
+    banner.wait_for()
+    return banner
+
+
+def test_template_missing_prefix_shows_reinstall_message_without_prefix(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["failOnce"] = {
+        "create_installer": "[template_missing] adapter-setup-template.exe not found"
+    }
+    page = open_mgr("#/installer", data=data)
+    _generate(page, "Dev")
+    banner = _create_error(page)
+    assert banner.get_attribute("data-kind") == "template"
+    text = banner.inner_text()
+    assert "cài lại TokenVault Manager" in text
+    assert "[" not in text and "template_missing" not in text
+
+
+def test_plain_error_mentioning_template_is_not_template_missing(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["failOnce"] = {"create_installer": "could not read template cache: access denied"}
+    page = open_mgr("#/installer", data=data)
+    _generate(page, "Dev")
+    banner = _create_error(page)
+    assert banner.get_attribute("data-kind") == "generic"
+    assert "could not read template cache: access denied" in banner.inner_text()
+    assert "cài lại TokenVault Manager" not in banner.inner_text()
+
+
+def test_unknown_error_prefix_is_stripped(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["failOnce"] = {"create_installer": "[disk_full] no space left on device"}
+    page = open_mgr("#/installer", data=data)
+    _generate(page, "Dev")
+    banner = _create_error(page)
+    assert banner.get_attribute("data-kind") == "generic"
+    assert "no space left on device" in banner.inner_text()
+    assert "[disk_full]" not in banner.inner_text()
+
+
+def test_invalid_team_prefix_marks_the_team_field(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["failOnce"] = {"create_installer": "[invalid_team] name reserved"}
+    page = open_mgr("#/installer", data=data)
+    _generate(page, "Dev")
+    error = page.locator(f"{TEAM_ERROR}[data-reason='server']")
+    error.wait_for()
+    assert "[invalid_team]" not in error.inner_text()
+    assert page.locator("#tv-view [data-create-error]").count() == 0
+    assert _state(page) == "form"
+
+
+def test_revoked_prefix_on_revoke_package_shows_notice(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["failOnce"] = {"revoke_package": "[revoked] package pkg-2 already revoked"}
+    page = open_mgr("#/installer", data=data)
+    page.locator(f"{PACKAGES}[data-package='pkg-2'] button[data-action='revoke']").click()
+    page.locator(f"{DIALOG} button[data-dlg='confirm']").click()
+    notice = page.locator("#tv-view [data-revoke-notice]")
+    notice.wait_for()
+    assert notice.get_attribute("data-kind") == "revoked"
+    assert "[revoked]" not in notice.inner_text()
+    assert "đã được thu hồi" in notice.inner_text()
+
+
+# ---------------------------------------------------------------- copy fallback (fix 2)
+
+DENY_CLIPBOARD = """
+Object.defineProperty(navigator, 'clipboard', {
+  configurable: true,
+  value: { writeText: () => Promise.reject(new Error('NotAllowedError')),
+           readText: () => Promise.reject(new Error('NotAllowedError')) },
+});
+document.execCommand = () => false;
+"""
+
+
+def test_copy_denied_selects_text_and_shows_ctrl_c_hint(open_mgr: Any) -> None:
+    page = open_mgr("#/installer", extra_script=DENY_CLIPBOARD)
+    _generate(page, "Dev")
+    page.wait_for_selector(f"{WIZ}[data-state='done']")
+    page.click("#tv-view button[data-action='copy-instructions']")
+    hint = page.locator("#tv-view [data-copy-hint='copy-instructions']")
+    hint.wait_for()
+    assert "Ctrl+C" in hint.inner_text()
+    shown = page.locator("#tv-view [data-instructions]").evaluate("e => e.textContent")
+    selected = page.evaluate("window.getSelection().toString()")
+    assert selected.replace(chr(13) + chr(10), chr(10)) == shown
+    page.click("#tv-view button[data-action='copy-path']")
+    page.locator("#tv-view [data-copy-hint='copy-path']").wait_for()
+    assert page.evaluate("window.getSelection().toString()") == (
+        f"{OUT_DIR}\\TokenVault-Adapter-Dev.exe"
+    )
     assert console_problems(page) == []

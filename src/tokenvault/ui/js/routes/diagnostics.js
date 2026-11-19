@@ -6,6 +6,7 @@
 // (debounced); timers and listeners are removed when the route is left.
 
 import { confirmDialog } from '../components/installer-dialog.js';
+import { describeError } from '../components/installer-errors.js';
 import { fmtInt } from '../components/homekit.js';
 import {
   clipText,
@@ -14,7 +15,6 @@ import {
   debounce,
   deviceName,
   errorBanner,
-  errText,
   fmtWhen,
   h,
   LIVE_DEBOUNCE_MS,
@@ -64,6 +64,11 @@ export default async function render(container, ctx) {
     fp: h('code', { class: 'tv-installer-mono tv-diagnostics-fp', 'data-fingerprint': '' }),
     expires: stat('expires'),
   };
+  const copyFp = copyButton({
+    label: t('copyFingerprint'), copiedLabel: t('copied'), failedLabel: t('copyFailed'), hint: t('copyHint'),
+    action: 'copy-fingerprint', cls: 'tv-installer-linkbtn', getText: () => fingerprint, target: () => s.fp,
+  });
+  copyFp.disabled = true; // enabled once a fingerprint has loaded
   const updated = h('span', { class: 'tv-diagnostics-updated', slot: 'actions' });
   const item = (label, ...value) => h('div', { class: 'tv-diagnostics-stat' }, h('dt', null, label), ...value);
   const statusPanel = h('tv-panel', { heading: t('statusTitle'), class: 'tv-diagnostics-status' },
@@ -77,7 +82,7 @@ export default async function render(container, ctx) {
       item(t('stat.expires'), s.expires),
       h('div', { class: 'tv-diagnostics-stat tv-diagnostics-stat--wide' }, h('dt', null, t('stat.fingerprint')),
         h('dd', { class: 'tv-diagnostics-fprow' }, s.fp,
-          copyButton({ label: t('copyFingerprint'), copiedLabel: t('copied'), failedLabel: t('copyFailed'), action: 'copy-fingerprint', cls: 'tv-installer-linkbtn', getText: () => fingerprint }))),
+          copyFp)),
       h('div', { class: 'tv-diagnostics-stat tv-diagnostics-stat--wide' }, h('dt', null, t('stat.db')), s.db)));
 
   // ---------- connected devices + warnings ----------
@@ -91,12 +96,13 @@ export default async function render(container, ctx) {
     connectedList, connectedEmpty, warningsBox);
 
   // ---------- certificate ----------
+  const regenButton = h('button', { type: 'button', class: 'tv-btn tv-diagnostics-regen', dataset: { action: 'regenerate' }, on: { click: regenerate } }, t('regenerate'));
   const regenResult = h('div');
   const certPanel = h('tv-panel', { heading: t('certTitle'), class: 'tv-diagnostics-cert' },
     h('p', { class: 'tv-muted' }, t('certLead')),
     h('div', { class: 'tv-diagnostics-danger' },
       h('p', null, t('regenerateBody')),
-      h('button', { type: 'button', class: 'tv-btn tv-diagnostics-regen', dataset: { action: 'regenerate' }, on: { click: regenerate } }, t('regenerate'))),
+      regenButton),
     regenResult);
 
   root.append(banners, loadError,
@@ -131,6 +137,7 @@ export default async function render(container, ctx) {
     fingerprint = String(diag.fingerprint ?? '');
     s.fp.textContent = shortFingerprint(fingerprint);
     s.fp.title = fingerprint;
+    copyFp.disabled = !fingerprint;
     s.expires.textContent = fmtWhen(diag.cert_expires_at);
     const now = new Date();
     updated.textContent = t('updated', { time: `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}` });
@@ -182,7 +189,7 @@ export default async function render(container, ctx) {
       console.warn('[diagnostics] connectivity_test failed', err);
       checks.replaceChildren();
       testSummary.className = 'tv-diagnostics-summary is-fail';
-      testSummary.textContent = t('testError', { detail: errText(err) });
+      testSummary.textContent = describeError(err, { cert_error: t('certError') }, (detail) => t('testError', { detail })).text;
     } finally {
       runButton.disabled = false;
       runButton.textContent = t('runTest');
@@ -205,13 +212,24 @@ export default async function render(container, ctx) {
     } catch (err) {
       if (ctx.signal.aborted) return;
       console.warn('[diagnostics] load failed', err);
-      loadError.replaceChildren(errorBanner({ text: t('loadError', { detail: errText(err) }), retryLabel: t('retry'), onRetry: () => refresh() }));
+      const { code, text } = describeError(err, { cert_error: t('certError') }, (detail) => t('loadError', { detail }));
+      loadError.replaceChildren(errorBanner({ text, kind: code || 'generic', retryLabel: t('retry'), onRetry: () => refresh() }));
     }
     bump();
   }
   const refresh = coalesce(draw);
 
   async function regenerate() {
+    if (regenButton.disabled) return;
+    regenButton.disabled = true; // while the dialog is open and the call is in flight
+    try {
+      await regenerateFlow();
+    } finally {
+      regenButton.disabled = false;
+    }
+  }
+
+  async function regenerateFlow() {
     dialogOpen = true;
     const ok = await confirmDialog({
       title: t('regenerateTitle'),
@@ -234,7 +252,8 @@ export default async function render(container, ctx) {
     } catch (err) {
       if (ctx.signal.aborted) return;
       console.warn('[diagnostics] regenerate_certificate failed', err);
-      regenResult.replaceChildren(errorBanner({ text: t('regenerateError', { detail: errText(err) }) }));
+      const { code, text } = describeError(err, { cert_error: t('certError') }, (detail) => t('regenerateError', { detail }));
+      regenResult.replaceChildren(errorBanner({ text, attr: 'data-regen-error', kind: code || 'generic' }));
     }
     await refresh();
   }

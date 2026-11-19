@@ -29,7 +29,8 @@
       "tooLong": "Tên nhóm dài quá {max} ký tự.",
       "separator": "Tên nhóm không được chứa dấu / hoặc \\ vì nó được dùng làm tên tệp.",
       "control": "Tên nhóm chứa ký tự điều khiển không hợp lệ. Hãy gõ lại tên.",
-      "invalid": "Tên nhóm không được chứa các ký tự < > : \" | ? * hoặc kết thúc bằng dấu chấm."
+      "invalid": "Tên nhóm không được chứa các ký tự < > : \" | ? * hoặc kết thúc bằng dấu chấm.",
+      "server": "Manager không chấp nhận tên nhóm này. Hãy đặt tên khác."
     },
     "createError": "Không tạo được bộ cài: {detail}",
     "templateMissing": "Không tìm thấy tệp mẫu bộ cài nhân viên (adapter-setup-template.exe). Hãy cài lại TokenVault Manager rồi thử lại.",
@@ -44,6 +45,7 @@
     "copyPath": "Chép đường dẫn",
     "copied": "Đã chép",
     "copyFailed": "Không chép được",
+    "copyHint": "Đã chọn sẵn nội dung, hãy nhấn Ctrl+C để chép.",
     "revealError": "Không mở được thư mục: {detail}",
     "instructionsTitle": "Hướng dẫn gửi kèm cho nhân viên",
     "copyInstructions": "Chép hướng dẫn",
@@ -79,6 +81,7 @@
     "revokeConfirm": "Thu hồi bộ cài",
     "cancel": "Huỷ",
     "revokeError": "Không thu hồi được bộ cài: {detail}",
+    "alreadyRevoked": "Bộ cài này đã được thu hồi trước đó. Danh sách đã được cập nhật.",
     "loadError": "Không tải được danh sách bộ cài: {detail}"
   }
 }

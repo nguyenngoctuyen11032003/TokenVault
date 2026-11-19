@@ -348,3 +348,165 @@ def test_screenshot_settings_diagnostics(
         page.wait_for_timeout(150)
         page.screenshot(path=str(artifacts_dir / f"{name}-bottom-{size}.png"))
         assert console_problems(page) == [], name
+
+
+# ---------------------------------------------------------------- fix round 1
+
+
+HOST_CASES = [
+    ("999.1.1.1", [], "ipv4"),
+    ("256.0.0.1", [], "ipv4"),
+    ("1.2.3", [], "ipv4"),
+    ("01.2.3.4", [], "ipv4"),
+    ("a..b", [], "hostname"),
+    ("-abc", [], "hostname"),
+    ("abc-", [], "hostname"),
+    ("a" * 64, [], "hostname"),
+    ("bad host!", [], "hostname"),
+    ("host_name", [], "hostname"),
+    (".".join(["abcdefghij"] * 24), [], "tooLong"),
+    (":::", [], "ipv6"),
+    ("1::2::3", [], "ipv6"),
+    ("12345::1", [], "ipv6"),
+    ("1:2:3:4:5:6:7:8:9", [], "ipv6"),
+    ("1:2:3:4:5:6:7", [], "ipv6"),
+    ("fe80::1%eth0", [], "ipv6"),
+    ("", [], "empty"),
+    ("manager-pc", ["MANAGER-PC"], "duplicate"),
+    ("10.0.0.9", [f"10.0.0.{i}" for i in range(8)], "tooMany"),
+]
+HOST_OK = ["192.168.1.10", "0.0.0.0", "::1", "fe80::1", "2001:db8::8a2e:370:7334",
+           "::ffff:192.168.1.1", "1:2:3:4:5:6:7:8", "MANAGER-PC", "mgr.ics.local", "a" * 63]
+
+
+def test_validate_host_rejections_and_accepts(open_mgr: Any) -> None:
+    page = open_mgr("#/settings")
+    script = (
+        "([cases, ok]) => import('./js/components/installer-kit.js').then(m => ["
+        " cases.map(([v, list]) => m.validateHost(v, list).reason ?? 'ok'),"
+        " ok.map(v => m.validateHost(v, []).ok)])"
+    )
+    reasons, accepted = page.evaluate(
+        script, [[[v, lst] for v, lst, _ in HOST_CASES], HOST_OK]
+    )
+    assert reasons == [r for _, _, r in HOST_CASES]
+    assert accepted == [True] * len(HOST_OK)
+
+
+def test_host_editor_shows_reason_and_limits_list(open_mgr: Any) -> None:
+    page = open_mgr("#/settings")
+    page.fill("#tv-settings-host", "999.1.1.1")
+    page.click("#tv-view [data-action='add-host']")
+    error = page.locator("#tv-view [data-host-error]")
+    assert error.is_visible() and error.get_attribute("data-reason") == "ipv4"
+    for i in range(6):
+        page.fill("#tv-settings-host", f"10.0.0.{i}")
+        page.press("#tv-settings-host", "Enter")
+    assert page.locator("#tv-view .tv-settings-hosts [data-host]").count() == 8
+    page.fill("#tv-settings-host", "10.0.0.99")
+    page.press("#tv-settings-host", "Enter")
+    assert error.get_attribute("data-reason") == "tooMany"
+    assert "8" in error.inner_text()
+    page.fill("#tv-settings-host", "192.168.1.10")
+    page.press("#tv-settings-host", "Enter")
+    assert error.get_attribute("data-reason") == "duplicate"
+
+
+def test_toggles_do_nothing_before_settings_loaded(open_mgr: Any) -> None:
+    page = open_mgr("#/installer")
+    page.evaluate("window.__tvMgr.delay = {settings: 1500}")
+    page.evaluate("location.hash = '#/settings'")
+    toggle = page.locator("#tv-view button[role='switch'][data-setting='start_with_windows']")
+    toggle.wait_for(state="attached")
+    assert toggle.is_disabled()
+    before = toggle.get_attribute("aria-checked")
+    toggle.evaluate("b => b.click()")
+    page.locator(
+        "#tv-view button[role='switch'][data-setting='transparent_window']"
+    ).evaluate("b => b.click()")
+    assert toggle.get_attribute("aria-checked") == before
+    assert calls(page, "save_settings") == []
+    page.wait_for_function(
+        "!document.querySelector(\"#tv-view [data-setting='start_with_windows']\").disabled"
+    )
+    assert toggle.get_attribute("aria-checked") == "true"  # the loaded value
+    assert calls(page, "save_settings") == []
+
+
+def test_prefixed_errors_on_device_actions(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["failOnce"] = {"set_device_team": "[invalid_team] bad", "revoke_device": "[revoked] gone"}
+    page = open_mgr("#/settings", data=data)
+    select = page.locator(f"{DEVICES}[data-device='dev-02'] td[data-col='team'] select")
+    select.select_option("QA")
+    err = page.locator("#tv-view [data-device-error]")
+    err.wait_for()
+    assert err.get_attribute("data-kind") == "invalid_team"
+    assert "[invalid_team]" not in err.inner_text()
+    assert select.input_value() == "Dev"
+    page.locator(f"{DEVICES}[data-device='qa-01'] button[data-action='revoke-device']").click()
+    page.locator(f"{DIALOG} button[data-dlg='confirm']").click()
+    page.wait_for_selector("#tv-view [data-device-error][data-kind='revoked']")
+    assert "[revoked]" not in page.locator("#tv-view [data-device-error]").inner_text()
+
+
+def test_cert_error_prefix_on_regenerate_shows_translated_message(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["failOnce"] = {"regenerate_certificate": "[cert_error] cannot write cert.pem"}
+    page = open_mgr("#/diagnostics", data=data, refresh_ms=60_000)
+    page.click("#tv-view button[data-action='regenerate']")
+    page.locator(f"{DIALOG} input[data-dlg='check']").check()
+    page.locator(f"{DIALOG} button[data-dlg='confirm']").click()
+    err = page.locator("#tv-view [data-regen-error]")
+    err.wait_for()
+    assert err.get_attribute("data-kind") == "cert_error"
+    assert "Chứng chỉ của Manager bị lỗi" in err.inner_text()
+    assert "[cert_error]" not in err.inner_text()
+
+
+def test_cert_error_prefix_on_diagnostics_load(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["failOnce"] = {"diagnostics": "[cert_error] cert.pem unreadable"}
+    page = open_mgr("#/diagnostics", data=data, refresh_ms=60_000)
+    banner = page.locator("#tv-view [data-load-error]")
+    banner.wait_for()
+    assert banner.get_attribute("data-kind") == "cert_error"
+    assert "Chứng chỉ của Manager bị lỗi" in banner.inner_text()
+    assert "[cert_error]" not in banner.inner_text()
+
+
+def test_regenerate_button_disabled_while_dialog_open_and_in_flight(open_mgr: Any) -> None:
+    data = mgr_data()
+    data["delay"] = {"regenerate_certificate": 1200}
+    page = open_mgr("#/diagnostics", data=data, refresh_ms=60_000)
+    button = page.locator("#tv-view button[data-action='regenerate']")
+    button.click()
+    page.locator(DIALOG).wait_for()
+    assert button.is_disabled()
+    page.locator(f"{DIALOG} input[data-dlg='check']").check()
+    page.locator(f"{DIALOG} button[data-dlg='confirm']").click()
+    page.locator(DIALOG).wait_for(state="detached")
+    assert button.is_disabled()
+    button.evaluate("b => b.click()")  # a second click while in flight does nothing
+    page.locator("#tv-view [data-regen-result]").wait_for()
+    page.wait_for_function(
+        "!document.querySelector(\"#tv-view [data-action='regenerate']\").disabled"
+    )
+    assert calls(page, "regenerate_certificate") == [[]]
+    assert page.locator(DIALOG).count() == 0
+
+
+def test_copy_fingerprint_disabled_until_loaded(open_mgr: Any) -> None:
+    page = open_mgr("#/installer")
+    page.evaluate("window.__tvMgr.delay = {diagnostics: 1200}")
+    page.evaluate("location.hash = '#/diagnostics'")
+    button = page.locator("#tv-view button[data-action='copy-fingerprint']")
+    button.wait_for(state="attached")
+    assert button.is_disabled()
+    page.wait_for_function(
+        "!document.querySelector(\"#tv-view [data-action='copy-fingerprint']\").disabled"
+    )
+    empty = mgr_data()
+    empty["diagnostics"]["fingerprint"] = ""
+    page2 = open_mgr("#/diagnostics", data=empty, refresh_ms=60_000)
+    assert page2.locator("#tv-view button[data-action='copy-fingerprint']").is_disabled()
