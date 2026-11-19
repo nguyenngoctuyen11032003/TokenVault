@@ -254,10 +254,13 @@ def cmd_setup(args: argparse.Namespace) -> int:
     log.info("setup: config saved for team %r, Manager %s:%d", new.team, ",".join(new.hosts),
              new.port)
     cmd = agent_command(args)
+    started_by_os = False
     if not args.no_autostart:
-        autostart.enable(cmd[0], args=cmd[1:])
+        started_by_os = bool(autostart.enable(cmd[0], args=cmd[1:]))
         log.info("setup: autostart registered")
-    if not args.no_start:
+    if started_by_os:
+        log.info("setup: agent started by launchd")
+    elif not args.no_start:
         launch_detached(cmd)
         log.info("setup: agent started")
     _out(t("setup.done"))

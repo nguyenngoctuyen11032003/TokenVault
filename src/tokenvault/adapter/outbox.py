@@ -9,7 +9,7 @@ import threading
 import time
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
 from tokenvault.common.models import UsageEvent
@@ -87,8 +87,39 @@ def _dump(ev: UsageEvent) -> str:
     return json.dumps(event_to_dict(ev), ensure_ascii=False, separators=(",", ":"))
 
 
+def _field_defaults() -> dict[str, object]:
+    """Neutral value per UsageEvent field, used when an old row lacks the field."""
+    out: dict[str, object] = {}
+    for f in fields(UsageEvent):
+        t = str(f.type)
+        if f.name == "tool_names":
+            out[f.name] = []
+        elif t == "bool":
+            out[f.name] = False
+        elif t == "int":
+            out[f.name] = 0
+        elif "None" in t:
+            out[f.name] = None
+        else:
+            out[f.name] = ""
+    return out
+
+
+_DEFAULTS = _field_defaults()
+PRUNE_AFTER_DAYS = 30
+
+
 def _load(payload: str) -> UsageEvent:
-    return event_from_dict(json.loads(payload))
+    """Decode leniently: missing fields default, unknown ones are dropped.
+
+    Adding a field to ``UsageEvent`` therefore never bricks an existing queue.
+    """
+    d = json.loads(payload)
+    if not isinstance(d, dict):
+        raise ProtocolError("event must be an object")
+    merged = dict(_DEFAULTS)
+    merged.update({k: v for k, v in d.items() if k in _DEFAULTS})
+    return event_from_dict(merged)
 
 
 def _merge(old: UsageEvent, new: UsageEvent) -> UsageEvent | None:
@@ -113,6 +144,9 @@ class Outbox:
         self._db.execute("PRAGMA journal_mode=WAL")
         self._db.execute("PRAGMA synchronous=NORMAL")
         self._migrate()
+        # stats() must not scan the whole table on every refresh: keep a counter.
+        self._delivered = int(
+            self._db.execute("SELECT COUNT(*) FROM events WHERE delivered=1").fetchone()[0])
 
     def close(self) -> None:
         with self._lock:
@@ -153,7 +187,8 @@ class Outbox:
         with self._tx() as db:
             for ev in events:
                 key = _key(ev)
-                row = db.execute("SELECT payload FROM events WHERE message_id=?", (key,)).fetchone()
+                row = db.execute(
+                    "SELECT payload, delivered FROM events WHERE message_id=?", (key,)).fetchone()
                 if row is None:
                     db.execute(
                         "INSERT INTO events (message_id, session_id, payload, delivered, "
@@ -168,6 +203,7 @@ class Outbox:
                     log.warning("replacing unreadable outbox row %s", key)
                     merged = ev
                 if merged is not None:
+                    self._delivered -= int(row[1] == 1)
                     db.execute(
                         "UPDATE events SET session_id=?, payload=?, delivered=0, enqueued_at=?, "
                         "revision=revision+1 WHERE message_id=?",
@@ -177,18 +213,30 @@ class Outbox:
         return changed
 
     def pending(self, limit: int) -> list[PendingEvent]:
-        with self._lock:
-            rows = self._db.execute(
-                "SELECT message_id, revision, payload FROM events WHERE delivered=0 "
-                "ORDER BY enqueued_at, rowid LIMIT ?",
-                (limit,),
-            ).fetchall()
+        """Oldest undelivered events. Undecodable rows are marked delivered (poison) so
+        they can never block the head of the queue."""
         out: list[PendingEvent] = []
-        for key, rev, payload in rows:
-            try:
-                out.append(PendingEvent(key, rev, _load(payload)))
-            except (ValueError, ProtocolError):
-                log.warning("skipping unreadable outbox row %s", key)
+        bad: list[tuple[str, int]] = []
+        cursor = (-1.0, -1)
+        while len(out) < limit:
+            with self._lock:
+                rows = self._db.execute(
+                    "SELECT message_id, revision, payload, enqueued_at, rowid FROM events "
+                    "WHERE delivered=0 AND (enqueued_at, rowid) > (?, ?) "
+                    "ORDER BY enqueued_at, rowid LIMIT ?",
+                    (*cursor, limit - len(out)),
+                ).fetchall()
+            if not rows:
+                break
+            for key, rev, payload, enq, rid in rows:
+                cursor = (enq, rid)
+                try:
+                    out.append(PendingEvent(key, rev, _load(payload)))
+                except (ValueError, ProtocolError, TypeError):
+                    bad.append((key, rev))
+        if bad:
+            log.warning("dropping %d unreadable outbox row(s) (marked delivered)", len(bad))
+            self.ack(bad)
         return out
 
     def ack(self, sent: Iterable[tuple[str, int]]) -> int:
@@ -198,14 +246,36 @@ class Outbox:
                 "UPDATE events SET delivered=1 WHERE message_id=? AND revision=? AND delivered=0",
                 [(m, r) for m, r in sent],
             )
-            return max(cur.rowcount, 0)
+            n = max(cur.rowcount, 0)
+            self._delivered += n
+            return n
 
     def stats(self) -> OutboxStats:
+        # Pending count walks only the undelivered part of the (delivered, enqueued_at)
+        # index; the delivered count is a maintained counter.
         with self._lock:
-            total, delivered = self._db.execute(
-                "SELECT COUNT(*), COALESCE(SUM(delivered), 0) FROM events"
-            ).fetchone()
-        return OutboxStats(queued=total, delivered=delivered, waiting=total - delivered)
+            waiting = self._db.execute(
+                "SELECT COUNT(*) FROM events WHERE delivered=0").fetchone()[0]
+            delivered = self._delivered
+        return OutboxStats(queued=waiting + delivered, delivered=delivered, waiting=waiting)
+
+    def prune(self, max_age_days: float = PRUNE_AFTER_DAYS) -> int:
+        """Delete delivered rows older than ``max_age_days`` (and titles of sessions that
+        no longer have any row). Source offsets are untouched: they track file read
+        positions, which stay valid. Returns rows deleted."""
+        cutoff = time.time() - max_age_days * 86400
+        with self._tx() as db:
+            n = db.execute(
+                "DELETE FROM events WHERE delivered=1 AND enqueued_at < ?", (cutoff,)
+            ).rowcount
+            if n > 0:
+                db.execute("DELETE FROM session_titles WHERE session_id NOT IN "
+                           "(SELECT session_id FROM events)")
+            n = max(n, 0)
+            self._delivered -= n
+        if n:
+            log.info("pruned %d delivered outbox row(s) older than %g days", n, max_age_days)
+        return n
 
     def set_session_title(self, session_id: str, title: str) -> int:
         """Persist a session's title and set it on its undelivered rows. Returns rows changed."""

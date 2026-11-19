@@ -74,11 +74,13 @@ def _use_mac(registry: RunRegistry | None) -> bool:
 
 
 def enable(exe_path: str, registry: RunRegistry | None = None,
-           args: Sequence[str] = ("run",)) -> None:
+           args: Sequence[str] = ("run",)) -> bool:
+    """Register autostart. True only when the OS already started the agent (macOS
+    launchd bootstrap); then the caller must not launch another copy."""
     if _use_mac(registry):
-        _mac_agent().enable(str(exe_path), args)
-        return
+        return bool(_mac_agent().enable(str(exe_path), args))
     (registry or WinRunKey()).set(VALUE_NAME, command_line(str(exe_path), args))
+    return False
 
 
 def disable(registry: RunRegistry | None = None) -> None:

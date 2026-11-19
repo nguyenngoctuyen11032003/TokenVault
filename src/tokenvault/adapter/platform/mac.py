@@ -39,6 +39,14 @@ def run_command(argv: Sequence[str], stdin: bytes | None = None) -> tuple[int, b
     return p.returncode, p.stdout, p.stderr
 
 
+def run_interactive(argv: Sequence[str], stdin: bytes | None = None) -> tuple[int, bytes, bytes]:
+    """Runner for dialogs: a person decides how long it takes, so no timeout."""
+    p = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        list(argv), input=stdin, capture_output=True, timeout=None, check=False
+    )
+    return p.returncode, p.stdout, p.stderr
+
+
 def _posix(name: str) -> Any:
     """A POSIX-only ``os`` function (absent on Windows, so looked up lazily)."""
     return getattr(os, name)
@@ -97,7 +105,9 @@ class LaunchAgent:
     def path(self) -> Path:
         return plist_path(self.home)
 
-    def enable(self, exe: str, args: Sequence[str] = ("run",)) -> None:
+    def enable(self, exe: str, args: Sequence[str] = ("run",)) -> bool:
+        """Register and load the job. True = launchd bootstrapped it (RunAtLoad starts the
+        agent now, so the caller must not start a second copy)."""
         logs = log_dir(self.home)
         logs.mkdir(parents=True, exist_ok=True)
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -112,11 +122,12 @@ class LaunchAgent:
         for attempt in range(BOOTSTRAP_TRIES):
             rc, _, err = self.run(["launchctl", "bootstrap", self.domain, str(self.path)], None)
             if rc == 0:
-                return
+                return True
             self._sleep(0.25 * (2 ** attempt))
         # The plist is in place, so it still starts at next login.
         log.warning("launchctl bootstrap failed (%d): %s", rc,
                     err.decode("utf-8", "replace").strip()[:200])
+        return False
 
     def disable(self) -> None:
         self.run(["launchctl", "bootout", f"{self.domain}/{LABEL}"], None)
@@ -170,7 +181,7 @@ def ask_consent(text: str, title: str, accept: str, decline: str, view: str = ""
     dialog could not be shown (not a decline). A short text is shown first; the
     "view full" button opens the complete text in TextEdit (a private temp file) and the
     dialog is shown again. The text goes in as an argv item, never into the script."""
-    run = runner or run_command
+    run = runner or run_interactive
     open_run = opener or run_command
     two_step = short is not None and bool(view)
     shown = short if (two_step and short is not None) else text
