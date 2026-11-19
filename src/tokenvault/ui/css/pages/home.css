@@ -1,0 +1,305 @@
+/* #/home cockpit (Task 14). Scoped to .tv-home* classes. */
+
+.tv-home {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tv-gap);
+  min-width: 0;
+}
+
+.tv-home-top {
+  grid-template-columns: minmax(196px, 248px) minmax(0, 1fr);
+}
+
+.tv-home-bottom {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr);
+  align-items: stretch;
+}
+
+/* Narrow window (1100 px): the employee table needs the full width. */
+@media (max-width: 1279px) {
+  .tv-home-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Keep the live chart near the gauges; the long table follows. */
+  .tv-home-monitor {
+    order: -1;
+  }
+}
+
+/* ---------- team list ---------- */
+
+.tv-home-teams .tv-panel__body {
+  padding-top: 6px;
+}
+
+.tv-teamlist .tv-list__item {
+  padding: 12px 6px;
+  font-size: var(--tv-fs-md);
+}
+
+.tv-teamlist .tv-list__item:focus-visible {
+  outline-offset: -2px;
+}
+
+.tv-teamlist__name {
+  flex: 1;
+}
+
+.tv-teamlist__count {
+  margin-left: 0;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-teamlist .tv-list__item[aria-pressed="true"] .tv-teamlist__count {
+  color: var(--tv-text);
+}
+
+.tv-teamlist .tv-dot {
+  margin: 0 0 0 2px;
+}
+
+.tv-teamlist .tv-list__item[aria-pressed="true"] {
+  background: linear-gradient(90deg, rgb(255 45 63 / 0.12), transparent 80%);
+  box-shadow: inset 2px 0 0 var(--tv-red-hot);
+}
+
+/* ---------- today gauges ---------- */
+
+.tv-home-today .tv-gauge-row {
+  padding-top: 6px;
+}
+
+.tv-home-today__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 18px;
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--tv-line);
+}
+
+.tv-home-costinfo {
+  flex-basis: 100%;
+  order: 3;
+  margin: 0;
+  color: var(--tv-amber);
+  font-size: var(--tv-fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.tv-home-scale {
+  margin: 0;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-xs);
+}
+
+/* UNKNOWN cost: smaller, amber, never styled like a number. */
+.tv-home-today tv-gauge[data-unknown] .tv-gauge__value {
+  font-size: calc(var(--size) * 0.105);
+  letter-spacing: 0.08em;
+  color: var(--tv-amber);
+}
+
+.tv-home-rate .tv-kpi__sub .tv-num--orange.tv-home-unknown {
+  color: var(--tv-amber);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+}
+
+/* ---------- employees ---------- */
+
+.tv-home-employees .tv-panel__body {
+  display: flex;
+  flex-direction: column;
+  padding-top: 8px;
+}
+
+.tv-home-tablewrap {
+  min-width: 0;
+}
+
+.tv-home-employees .tv-emptable__col--account {
+  width: auto;
+}
+
+.tv-home-employees .tv-emptable__col--tokens {
+  width: 64px;
+}
+
+.tv-home-employees .tv-emptable__col--share {
+  width: 30%;
+}
+
+.tv-home-employees .tv-emptable__col--cost {
+  width: 82px;
+}
+
+.tv-home-employees .tv-emptable__name {
+  max-width: 260px;
+}
+
+.tv-home-noemp {
+  margin: 12px 0 0;
+}
+
+.tv-home-seeall {
+  align-self: flex-end;
+  margin-top: 12px;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+  text-decoration: none;
+}
+
+.tv-home-seeall::after {
+  content: " \203A";
+  color: var(--tv-red-hot);
+}
+
+.tv-home-seeall:hover {
+  color: var(--tv-text-strong);
+}
+
+/* ---------- monitoring ---------- */
+
+.tv-home-monitor .tv-panel__body {
+  display: flex;
+  flex-direction: column;
+}
+
+.tv-home-monitor [data-peak] {
+  color: var(--tv-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-home-split {
+  flex: 1 1 auto;
+  align-items: stretch;
+  min-height: 196px;
+  max-height: 250px;
+}
+
+.tv-home-chartbox {
+  min-height: 196px;
+}
+
+.tv-home-hourly {
+  position: absolute;
+  inset: 0;
+}
+
+.tv-home-rate {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 112px;
+  padding-left: 4px;
+}
+
+.tv-home-rate__label {
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tv-home-rate .tv-kpi__value {
+  margin-top: 4px;
+  font-size: 34px;
+  text-shadow: 0 0 18px rgb(255 45 63 / 0.45);
+}
+
+.tv-home-rate .tv-kpi__sub {
+  margin-top: 2px;
+  font-size: 15px;
+}
+
+.tv-home-rate .tv-kpi__sub .tv-num--orange {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.tv-home-projects__head {
+  margin-top: 16px;
+  padding-top: 10px;
+  border-top: 1px solid var(--tv-line);
+}
+
+.tv-home-projects {
+  gap: 8px 22px;
+  margin-top: 8px;
+}
+
+.tv-home-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 230px;
+  min-width: 0;
+  color: var(--tv-text);
+  text-decoration: none;
+}
+
+.tv-home-chip:hover .tv-home-chip__name {
+  color: var(--tv-text-strong);
+  text-decoration: underline;
+  text-decoration-color: var(--tv-red-hot);
+}
+
+.tv-home-chip__swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  clip-path: polygon(30% 0, 100% 0, 70% 100%, 0 100%);
+}
+
+.tv-home-chip__name {
+  flex: 0 1 auto;
+}
+
+.tv-home-chip b {
+  flex: none;
+  font-weight: 600;
+}
+
+/* ---------- empty state ---------- */
+
+.tv-home-empty__body {
+  display: flex;
+  gap: 26px;
+  align-items: flex-start;
+  padding: 10px 4px 6px;
+}
+
+.tv-home-empty__mark {
+  flex: none;
+  width: 74px;
+  height: 74px;
+  border: 2px solid var(--tv-red-hot);
+  clip-path: polygon(22% 0, 100% 0, 100% 78%, 78% 100%, 0 100%, 0 22%);
+  background:
+    repeating-linear-gradient(135deg, rgb(255 45 63 / 0.25) 0 2px, transparent 2px 7px),
+    var(--tv-red-ink);
+  box-shadow: 0 0 22px var(--tv-red-glow);
+}
+
+.tv-home-empty__lead {
+  font-size: var(--tv-fs-lg);
+  color: var(--tv-text-strong);
+}
+
+.tv-home-empty__steps {
+  margin: 10px 0 18px;
+  padding-left: 20px;
+  color: var(--tv-text);
+  line-height: 1.8;
+}
+
+.tv-home-empty__steps li::marker {
+  color: var(--tv-red-hot);
+  font-weight: 600;
+}

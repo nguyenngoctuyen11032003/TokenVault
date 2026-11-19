@@ -1,0 +1,63 @@
+{
+  "home": {
+    "teamsTitle": "Nhóm",
+    "teams": {
+      "label": "Chọn nhóm",
+      "all": "Tất cả",
+      "none": "(chưa có nhóm)",
+      "status": "{online}/{total} máy online"
+    },
+    "todayTitle": "Hôm nay",
+    "gauge": {
+      "tokens": "Tổng token",
+      "tokensUnit": "TOKEN",
+      "cost": "Chi phí ước tính",
+      "costUnit": "USD",
+      "sessions": "Phiên làm việc",
+      "sessionsUnit": "PHIÊN"
+    },
+    "costNote": "Chi phí ước tính theo giá API, không phải hoá đơn thực tế.",
+    "costPartial": "Chưa tính token của model chưa có giá: {models}",
+    "costUnknown": "Không có giá cho model: {models}",
+    "costPartialHint": "Một phần token thuộc model chưa có giá, chi phí thực tế cao hơn.",
+    "scaleNote": "Thang đo: ngày cao nhất trong 30 ngày qua",
+    "unknownCost": "UNKNOWN",
+    "employeesTitle": "Nhân viên",
+    "employeesLabel": "Token của nhân viên hôm nay",
+    "noEmployees": "Chưa có nhân viên nào trong nhóm này.",
+    "seeAll": "Xem tất cả nhân viên",
+    "status": {
+      "online": "đang online",
+      "offline": "offline"
+    },
+    "table": {
+      "account": "Tài khoản Claude",
+      "tokens": "Token",
+      "share": "Tỉ trọng",
+      "cost": "Chi phí",
+      "costHint": "Chi phí ước tính theo giá API",
+      "shareOf": "{pct} tổng token"
+    },
+    "monitorTitle": "Monitoring",
+    "hourly": "Token / giờ – hôm nay",
+    "hourlyLabel": "Biểu đồ token theo từng giờ trong hôm nay",
+    "tokensUnit": "token",
+    "peak": "Đỉnh: {value} lúc {hour}",
+    "noPeak": "Chưa có hoạt động hôm nay",
+    "rateLabel": "Giờ hiện tại",
+    "perHour": "/giờ",
+    "topProjects": "Dự án tốn nhất hôm nay",
+    "noProjects": "Chưa có dự án nào hôm nay",
+    "noProjectName": "(không rõ dự án)",
+    "empty": {
+      "title": "Chưa có máy nhân viên nào",
+      "lead": "TokenVault chưa nhận được dữ liệu từ máy nhân viên nào. Để bắt đầu theo dõi:",
+      "step1": "Mở trang Tạo bộ cài, đặt tên nhóm cho máy (ví dụ Dev, QA).",
+      "step2": "Gửi tệp bộ cài cho nhân viên và chạy trên máy của họ, cùng mạng LAN với máy quản lý.",
+      "step3": "Máy hiện ở đây sau vài giây kể từ khi kết nối; số liệu cập nhật trực tiếp.",
+      "action": "Tạo bộ cài cho nhân viên"
+    },
+    "loadError": "Không tải được dữ liệu: {detail}",
+    "retry": "Thử lại"
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "employee": {
+    "range": {
+      "today": "Hôm nay",
+      "7d": "7 ngày",
+      "30d": "30 ngày"
+    },
+    "rangeLabel": "Khoảng thời gian",
+    "noTeam": "chưa có nhóm",
+    "headingLoading": "Đang tải thông tin nhân viên…",
+    "gauge": {
+      "label": "Tổng token",
+      "unit": {
+        "today": "TOKEN · HÔM NAY",
+        "7d": "TOKEN · 7 NGÀY",
+        "30d": "TOKEN · 30 NGÀY"
+      }
+    },
+    "scaleToday": "Thang đo: ngày cao nhất của nhân viên trong 30 ngày qua",
+    "scaleRange": "Thang đo: ngày cao nhất trong 30 ngày qua × {days} ngày",
+    "kpi": {
+      "cost": "Chi phí ước tính",
+      "sessions": "Phiên",
+      "events": "Lượt phản hồi",
+      "cache": "Token đọc từ cache"
+    },
+    "costNote": "Chi phí ước tính theo giá API, không phải hoá đơn thực tế.",
+    "costPartial": "Chưa tính token của model chưa có giá: {models}",
+    "costUnknown": "Không có giá cho model: {models}",
+    "costPartialHint": "Một phần token thuộc model chưa có giá, chi phí thực tế cao hơn.",
+    "unknownCost": "UNKNOWN",
+    "projectsTitle": "Phân bổ theo dự án",
+    "projectShare": "{tokens} · {pct}",
+    "noProjects": "Chưa có dữ liệu dự án trong khoảng này.",
+    "noProjectName": "(không rõ dự án)",
+    "devicesTitle": "Máy của nhân viên",
+    "deviceUser": "Windows user: {user}",
+    "deviceTeam": "Nhóm: {team}",
+    "online": "Online",
+    "offline": "Offline",
+    "lastSeen": "Lần cuối: {time}",
+    "noDevices": "Chưa có máy nào.",
+    "trendTitle": "Xu hướng token",
+    "dailyLabel": "Biểu đồ token theo ngày",
+    "hourlyLabel": "Biểu đồ token theo giờ hôm nay",
+    "tokensUnit": "token",
+    "modelsTitle": "Theo model",
+    "modelsLabel": "Tỉ lệ token theo model",
+    "noModels": "Chưa có dữ liệu model.",
+    "sessionsTitle": "Phiên làm việc",
+    "sessions": {
+      "title": "Tiêu đề phiên",
+      "project": "Dự án",
+      "model": "Model",
+      "tokens": "Token",
+      "cost": "Chi phí",
+      "started": "Bắt đầu",
+      "untitled": "(không có tiêu đề)",
+      "none": "Không có phiên nào trong khoảng này."
+    },
+    "back": "Danh sách nhân viên",
+    "loadError": "Không tải được dữ liệu nhân viên: {detail}",
+    "retry": "Thử lại"
+  }
+}

@@ -1,0 +1,114 @@
+/* #/employees list (Task 14). Scoped to .tv-employees* classes. */
+
+.tv-employees {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tv-gap);
+  min-width: 0;
+}
+
+.tv-employees-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+}
+
+.tv-employees-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+}
+
+.tv-employees-field--search {
+  flex: 1 1 220px;
+  max-width: 340px;
+}
+
+.tv-employees-search,
+.tv-employees-team {
+  height: 32px;
+  border: 1px solid var(--tv-line-strong);
+  background: #0f0f12;
+  color: var(--tv-text);
+  font: inherit;
+  font-size: var(--tv-fs-md);
+}
+
+.tv-employees-search {
+  width: 100%;
+  padding: 0 12px;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+}
+
+.tv-employees-search::placeholder {
+  color: var(--tv-muted);
+}
+
+.tv-employees-team {
+  min-width: 150px;
+  max-width: 220px;
+  padding: 0 8px;
+}
+
+.tv-employees-search:focus-visible,
+.tv-employees-team:focus-visible {
+  outline: none;
+  border-color: var(--tv-red-hot);
+  box-shadow: 0 0 0 1px var(--tv-red-hot);
+}
+
+.tv-employees-count {
+  margin-left: auto;
+  color: var(--tv-muted);
+  font-size: var(--tv-fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-employees-tablewrap {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.tv-employees .tv-emptable {
+  min-width: 700px;
+}
+
+.tv-employees .tv-emptable__col--team {
+  width: 10%;
+}
+
+.tv-employees .tv-emptable__col--devices {
+  width: 56px;
+}
+
+.tv-employees .tv-emptable__col--tokens {
+  width: 76px;
+}
+
+.tv-employees .tv-emptable__col--share {
+  width: 13%;
+}
+
+.tv-employees .tv-emptable__col--sessions {
+  width: 64px;
+}
+
+.tv-employees .tv-emptable__col--cost {
+  width: 88px;
+}
+
+.tv-employees .tv-emptable__col--lastSeen {
+  width: 116px;
+}
+
+.tv-employees-nomatch {
+  margin: 14px 0 0;
+}
+
+.tv-employees .tv-costnote {
+  margin-top: 14px;
+}
