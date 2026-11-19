@@ -14,6 +14,7 @@ which is `"device:<id>"` for devices without a Claude account), `start`/`end` ar
 - `overview(filter) -> Overview` · `employees(filter) -> EmployeeRow[]`
 - `employee(key, range) -> EmployeeView` (`range` in `"today"|"7d"|"30d"`)
 - `projects(filter) -> ProjectRow[]` · `sessions(filter) -> SessionRow[]`
+- `session(session_id) -> SessionRow | null` (single session header; Task 12 builds it via a new `Aggregates.session()`; the UI uses it instead of scanning `sessions()`)
 - `session_turns(session_id) -> SessionTurn[]` (ordered by timestamp)
 - `skills(range) -> SkillsView` · `orchestration(range) -> OrchestrationView`
 - `teams() -> [{name, devices, online}]` (team names come from devices; `"(no team)"` allowed)
@@ -36,3 +37,14 @@ which is `"device:<id>"` for devices without a Claude account), `start`/`end` ar
 ## Live push
 Python calls `tv.onLive(<json>)` at most 2/s with `{online, total, last_event_at, devices:{online,total}}`;
 pages refetch what they show (debounced).
+
+## Time zones
+The Manager sets `Store(tz_offset_minutes=<Windows local offset at start>)`; the pywebview UI runs on the SAME
+machine, so browser-local time == the server's bucketing offset. Day/hour *bucket strings* in series come from the
+server and must be used as-is for axes. Instants (`SessionTurn.timestamp`, `last_event_at`, `last_seen`) are ISO-8601
+UTC (`...Z`/offset) and the UI converts them to browser-local time for display. Pages must not compute their own
+buckets from the browser clock except for the *current* day/hour used for range bounds.
+
+## Error classification
+Errors the UI must react to carry a machine-readable prefix in the exception message:
+`[template_missing]`, `[cert_error]`, `[revoked]`, `[invalid_team]`. The UI tests for the prefix, never for words.
