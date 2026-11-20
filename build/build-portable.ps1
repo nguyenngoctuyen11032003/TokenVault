@@ -14,6 +14,11 @@
 
   Needs internet once (python.org + PyPI wheels). Offline: -EmbedZip <local zip> and
   -WheelDir <folder of cp312-win_amd64 wheels>.
+
+  -RefreshOnly: the runtime folder already exists (embedded Python + wheels are kept as
+  they are); only the TokenVault sources (app\tokenvault), pricing table and scripts\ are
+  replaced from this checkout and byte-compiled. Fast and offline - packaging\build.ps1 uses
+  it so an installer never ships stale sources.
 #>
 [CmdletBinding()]
 param(
@@ -28,7 +33,8 @@ param(
     [string]$EmbedZip,
     [string]$WheelDir,
     [switch]$SkipTk,
-    [switch]$NoManagerZip
+    [switch]$NoManagerZip,
+    [switch]$RefreshOnly
 )
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
@@ -52,6 +58,7 @@ function Assert-Psf($file) {
 }
 
 try {
+  if (-not $RefreshOnly) {
     # 1. embeddable Python ---------------------------------------------------------------------
     Step "embeddable Python $EmbedVersion"
     if (-not $EmbedZip) {
@@ -111,9 +118,17 @@ try {
         }
     }
 
+  } else {
+    $rt = Join-Path $OutDir 'runtime'
+    $sp = Join-Path $rt 'Lib\site-packages'
+    if (-not (Test-Path -LiteralPath (Join-Path $rt 'python.exe'))) { throw "-RefreshOnly: no runtime at $rt (run build-portable.ps1 without it first)" }
+    $sha = ''; $signers = @{ 'python.exe' = '' }
+  }
+
     # 5. TokenVault sources + byte-compile ------------------------------------------------------
     Step 'TokenVault sources'
     $app = Join-Path $rt 'app'
+    if ($RefreshOnly -and (Test-Path -LiteralPath $app)) { Remove-Item -LiteralPath $app -Recurse -Force }
     New-Item -ItemType Directory -Force $app | Out-Null
     Copy-Item (Join-Path $repo 'src\tokenvault') (Join-Path $app 'tokenvault') -Recurse -Force
     Get-ChildItem $app -Recurse -Directory -Filter '__pycache__' | Remove-Item -Recurse -Force
@@ -127,8 +142,15 @@ try {
     # 6. scripts + manifest ---------------------------------------------------------------------
     Step 'scripts'
     $sc = Join-Path $OutDir 'scripts'
+    if ($RefreshOnly -and (Test-Path -LiteralPath $sc)) { Remove-Item -LiteralPath $sc -Recurse -Force }
     New-Item -ItemType Directory -Force $sc | Out-Null
     Copy-Item (Join-Path $repo 'packaging\portable\*') $sc -Force -Exclude '*.py'
+    if ($RefreshOnly) {
+        & (Join-Path $rt 'python.exe') -c "import tokenvault.manager.app, tokenvault.adapter, webview, reportlab"
+        if ($LASTEXITCODE -ne 0) { throw 'imports failed after the source refresh' }
+        Write-Host "Portable runtime sources refreshed: $OutDir" -ForegroundColor Green
+        return
+    }
     $unsigned = @(Get-ChildItem $rt -Recurse -Include *.pyd, *.dll -File | Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -ne 'Valid' } | ForEach-Object { $_.FullName.Substring($rt.Length + 1) })
     $manifest = [ordered]@{
         python = $EmbedVersion; embed_sha256 = $sha; python_signer = $signers['python.exe']
