@@ -74,9 +74,15 @@ New-Item -ItemType Directory -Force $tmp | Out-Null
 
 try {
   # 1. outputs ---------------------------------------------------------------------------
-  foreach ($f in @($adapterExe, $mgrExe, (Join-Path $mgrDir '_internal\tokenvault\ui\index.html'),
-                   (Join-Path $mgrDir '_internal\data\pricing.json'),
-                   (Join-Path $mgrDir '_internal\tokenvault\manager\schema.sql'))) {
+  # The shipped Manager is the portable runtime (signed python), not a PyInstaller exe; the
+  # exe (build.ps1 -WithManagerExe) is checked only when it was built.
+  $files = @($adapterExe)
+  if (Test-Path $mgrExe) {
+    $files += @($mgrExe, (Join-Path $mgrDir '_internal\tokenvault\ui\index.html'),
+                (Join-Path $mgrDir '_internal\data\pricing.json'),
+                (Join-Path $mgrDir '_internal\tokenvault\manager\schema.sql'))
+  }
+  foreach ($f in $files) {
     if (Test-Path $f) { Add-Result "exists $([IO.Path]::GetFileName($f))" PASS ('{0:N1} MB' -f ((Get-Item $f).Length / 1MB)) }
     else { Add-Result "exists $f" FAIL 'missing - run packaging\build.ps1' }
   }
@@ -94,8 +100,12 @@ try {
   else { Add-Result 'adapter no-payload exit' FAIL "exit $($r.Code): $($r.Out)" }
 
   # 3. manager selftest ----------------------------------------------------------------------
-  $r = Invoke-Exe $mgrExe @('--selftest', '--require-template')
-  if ($r.Blocked) { Add-Result 'manager --selftest --require-template' BLOCKED $r.Out.Trim() }
+  if (-not (Test-Path $mgrExe)) {
+    Add-Result 'manager exe --selftest' SKIP 'PyInstaller Manager exe not built (not shipped; build.ps1 -WithManagerExe)'
+    $r = $null
+  } else { $r = Invoke-Exe $mgrExe @('--selftest', '--require-template') }
+  if ($null -eq $r) { }
+  elseif ($r.Blocked) { Add-Result 'manager --selftest --require-template' BLOCKED $r.Out.Trim() }
   elseif ($r.Code -eq 0) { Add-Result 'manager --selftest --require-template' PASS 'exit 0' }
   else { Add-Result 'manager --selftest --require-template' FAIL "exit $($r.Code): $($r.Out)" }
 
@@ -160,10 +170,15 @@ try {
     if ($r.Blocked) { Add-Result 'manager installer silent install + selftest' BLOCKED $r.Out.Trim() }
     elseif ($r.Code -ne 0) { Add-Result 'manager installer silent install + selftest' FAIL "installer exit $($r.Code)" }
     else {
-      $s = Invoke-Exe (Join-Path $inst 'TokenVault-Manager.exe') @('--selftest', '--require-template')
+      # The installed Manager is the signed python runtime: selftest through it, plus a
+      # dry-run of the firewall helper (never creates a rule).
+      $py = Join-Path $inst 'runtime\python.exe'
+      $s = Invoke-Exe $py @('-m', 'tokenvault.manager', '--selftest', '--require-template')
       $hasTpl = Test-Path (Join-Path $inst 'adapter-setup-template.exe')
-      if ($s.Code -eq 0 -and $hasTpl) { Add-Result 'manager installer silent install + selftest' PASS 'installed selftest exit 0' }
-      else { Add-Result 'manager installer silent install + selftest' FAIL "selftest exit $($s.Code), template present: $hasTpl" }
+      $fw = Invoke-Exe $py @('-m', 'tokenvault.manager', 'firewall', '--ensure', '--dry-run')
+      $noExe = -not (Test-Path (Join-Path $inst 'TokenVault-Manager.exe'))
+      if ($s.Code -eq 0 -and $hasTpl -and $fw.Code -eq 0 -and $noExe) { Add-Result 'manager installer silent install + selftest' PASS 'installed runtime selftest exit 0, no unsigned Manager exe' }
+      else { Add-Result 'manager installer silent install + selftest' FAIL "selftest exit $($s.Code), template present: $hasTpl, firewall dry-run exit $($fw.Code), no exe: $noExe" }
       $un = Get-ChildItem $inst -Filter 'unins*.exe' | Select-Object -First 1
       if ($un) { Invoke-Exe $un.FullName @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') | Out-Null }
     }

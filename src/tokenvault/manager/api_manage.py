@@ -273,7 +273,7 @@ def _warnings(m: Manager) -> list[str]:
         w.append(
             f"The Windows Firewall rule is missing (TCP {firewall.tcp_range(bound)}, UDP "
             f"{DISCOVERY_PORT}): other PCs cannot connect. Reinstall the Manager or run "
-            "'TokenVault-Manager.exe firewall --ensure' as administrator."
+            f"this once as administrator: {firewall.manual_command(m.port_requested or bound)}"
         )
     if not template_ok(m):
         w.append(f"No adapter template found at {m.cfg.template}: installers cannot be "

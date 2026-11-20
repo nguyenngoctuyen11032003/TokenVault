@@ -84,10 +84,19 @@ def is_frozen() -> bool:
     return bool(getattr(sys, "frozen", False))
 
 
+def _embedded_root() -> Path | None:
+    """Running from the signed embeddable runtime installed by the Manager installer
+    (``<app>/runtime/app/tokenvault/manager``): ``<app>``, the folder holding ``runtime/``."""
+    rt = _PKG_DIR.parents[2]
+    if rt.name.lower() == "runtime" and (rt / "python.exe").is_file():
+        return rt.parent
+    return None
+
+
 def install_dir() -> Path:
     if is_frozen():
         return Path(sys.executable).resolve().parent
-    return _REPO_ROOT
+    return _embedded_root() or _REPO_ROOT
 
 
 def template_path(override: str | Path | None = None) -> Path:

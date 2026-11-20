@@ -14,11 +14,13 @@ Bắt đầu từ trang **Chẩn đoán** của Manager (nút "Kiểm tra kết 
 ## 2. Tường lửa
 Bộ cài Manager tạo các quy tắc `TokenVault-Manager-*` (TCP cổng ingest, UDP 47801). Kiểm tra:
 ```powershell
-TokenVault-Manager.exe firewall --check      # in JSON, mã thoát 0 = đủ quy tắc
-TokenVault-Manager.exe firewall --ensure     # tạo lại (hiện UAC)
+"<thư mục cài>\runtime\python.exe" -m tokenvault.manager firewall --check     # in JSON, mã thoát 0 = đủ quy tắc
+"<thư mục cài>\runtime\python.exe" -m tokenvault.manager firewall --ensure    # tạo lại (cần quyền admin)
+"<thư mục cài>\runtime\python.exe" -m tokenvault.manager firewall --ensure --dry-run   # chỉ in lệnh netsh, không đổi gì
 netsh advfirewall firewall show rule name=all | findstr TokenVault
 ```
-Lưu ý: nếu mạng Windows được đặt là **Public**, hãy đổi sang **Private**, hoặc bảo đảm quy tắc áp dụng cho cả profile Public. Phần mềm diệt virus/tường lửa bên thứ ba cần cho phép riêng `TokenVault-Manager.exe` và cổng 47800.
+`<thư mục cài>` mặc định là `%LOCALAPPDATA%\Programs\TokenVault Manager`. Cách dễ nhất để tạo lại quy tắc: Start menu -> **"Mở cổng tường lửa cho TokenVault (cần quyền admin)"** -> Yes. Quy tắc chỉ áp dụng cho `runtime\pythonw.exe` (tiến trình mà mọi lối tắt khởi động); nếu bạn tự chạy Manager bằng `python.exe` hoặc từ thư mục khác, hãy chạy `--ensure --no-program`.
+Lưu ý: nếu mạng Windows được đặt là **Public**, hãy đổi sang **Private**, hoặc bảo đảm quy tắc áp dụng cho cả profile Public. Phần mềm diệt virus/tường lửa bên thứ ba cần cho phép riêng `runtime\pythonw.exe` của Manager và cổng 47800.
 
 ## 3. VPN / Wi-Fi so với LAN
 * Máy nhân viên phải tới được IP của Manager trên TCP 47800. Nhiều router tách Wi-Fi và dây thành mạng con khác nhau hoặc bật "AP/Client isolation": thử `Test-NetConnection <IP-Manager> -Port 47800` từ máy nhân viên.
@@ -48,3 +50,20 @@ Khi không gửi được, sự kiện nằm trong `outbox.db` (SQLite bền v�
 * **Mac: không có biểu tượng thanh menu / thiết bị không gửi dữ liệu:** Adapter cố ý dừng thu thập khi không hiện được biểu tượng (`status` báo `no_indicator`, thoát mã 0 nên launchd không chạy lại). Đăng nhập lại hoặc cài lại; xem `~/Library/Logs/TokenVault/adapter.log`.
 * **Mac: kiểm tra/gỡ thủ công:** `launchctl print gui/$(id -u)/vn.ics.tokenvault.adapter`; gỡ bằng `Uninstall.command`. Phần Mac chưa được kiểm chứng trên Mac thật ([e2e-checklist.md](e2e-checklist.md)).
 * Nhật ký: Manager `%APPDATA%\TokenVault\Manager\manager.log`, Adapter `%LOCALAPPDATA%\TokenVault\Adapter\adapter.log` (xoay vòng 1 MB x 3, không chứa khoá).
+
+## 9. Lỗi 4551 "An Application Control policy has blocked this file" (Smart App Control / WDAC)
+**Triệu chứng.** Bộ cài chạy nhưng sau đó báo `CreateProcess failed; code 4551. An Application Control policy has blocked this file.` khi mở `TokenVault-Manager.exe` hoặc `TokenVaultAdapter.exe`; hoặc bước tường lửa báo "rules could not be created (administrator approval is required)" (vì nó cũng chạy chính tệp .exe bị chặn).
+
+**Vì sao.** Windows đang chặn mọi chương trình `.exe` **chưa ký số** (TokenVault không có chứng chỉ ký mã). Hai cơ chế khác nhau, đừng nhầm:
+| | SmartScreen | Smart App Control / Application Control (WDAC, AppLocker) |
+|---|---|---|
+| Bản chất | cảnh báo **mềm** về tệp tải từ Internet (có Mark-of-the-Web) | chặn **cứng** theo chính sách: chỉ chạy mã đã ký/được tin cậy |
+| Hiển thị | "Windows protected your PC" | lỗi 4551, hoặc chương trình không khởi động, không có nút bỏ qua |
+| Cách vượt | "More info" -> "Run anyway", hoặc `Unblock-File`, hoặc gửi qua USB/chia sẻ mạng | **không có** cách vượt cho exe chưa ký (kể cả từ USB). Smart App Control đã tắt thì không bật lại được; IT quản lý WDAC |
+
+**Cách sửa miễn phí, không cần mua chứng chỉ, không tắt Smart App Control:** dùng Python đã được **Python Software Foundation ký số** thay cho exe chưa ký.
+* **Manager:** cài bằng `TokenVault-Manager-Setup.exe` bản mới (từ Task 29). Nó chỉ cài `runtime\pythonw.exe` (đã ký) + mã nguồn và mở Manager bằng `pythonw.exe -m tokenvault.manager`; bước tường lửa cũng chạy `python.exe` đã ký. Nếu chính file Setup bị chặn: giải nén `TokenVault-Manager-portable.zip` và chạy `Start-Manager.cmd` / `Install-Manager.ps1`.
+* **Nhân viên:** trong Manager, trang **Tạo bộ cài**, chọn **"Windows – gói không cần exe"** (mặc định) và gửi `TokenVault-Adapter-<Nhóm>-portable.zip`; nhân viên giải nén rồi chạy `Install.cmd`.
+* **Tường lửa:** nếu lỡ từ chối UAC: Start menu -> "Mở cổng tường lửa cho TokenVault (cần quyền admin)", hoặc chạy trong cửa sổ quản trị `"<thư mục cài>\runtime\python.exe" -m tokenvault.manager firewall --ensure --port 47800` (xem mục 2).
+
+**Giới hạn.** Các module `.pyd`/`.dll` trong gói wheel (cryptography, Pillow, ...) không có chữ ký số. Chính sách chặn cả DLL chưa ký (không chỉ exe) sẽ chặn cả chúng; khi đó chỉ IT mới giải quyết được (ký hoặc cho phép theo đường dẫn/ hash). Chưa kiểm chứng trên máy bị chặn thật.

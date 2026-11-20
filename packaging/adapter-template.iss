@@ -141,8 +141,9 @@ begin
               ': ' + SysErrorMessage(Rc) + ').' + #13#10 + #13#10 +
               'This computer probably blocks unsigned programs (Smart App Control / ' +
               'Application Control / antivirus). Nothing was changed.' + #13#10 + #13#10 +
-              'Ask your manager for the "no .exe" package (Windows - goi khong can exe) ' +
-              'and run Install.cmd from it.';
+              'Ask your manager for the portable ZIP instead (the "no .exe" package, file ' +
+              'name ending in -portable.zip, "Windows - goi khong can exe" in the Manager): ' +
+              'extract it and run Install.cmd.';
     Exit;
   end;
   if Rc = 0 then
@@ -181,7 +182,8 @@ begin
   begin
     SuppressibleMsgBox('Windows would not start the TokenVault Adapter (error ' + IntToStr(Rc) +
       ': ' + SysErrorMessage(Rc) + '). This computer probably blocks unsigned programs. ' +
-      'Uninstall this entry and ask your manager for the "no .exe" package.',
+      'Uninstall this entry and ask your manager for the portable ZIP (the "no .exe" ' +
+      'package, file name ending in -portable.zip).',
       mbError, MB_OK, IDOK);
     Exit;
   end;

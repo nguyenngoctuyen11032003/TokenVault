@@ -1,18 +1,25 @@
 <#
 .SYNOPSIS
-  Builds the TokenVault installers: adapter -> adapter template -> Manager -> Manager installer.
+  Builds the TokenVault installers: adapter -> adapter template -> portable runtime -> Manager installer.
 
 .DESCRIPTION
+  The Manager installer ships NO unsigned exe of its own (Smart App Control / Application
+  Control blocks those, error 4551): it installs the portable runtime - the Authenticode-signed
+  embeddable Python + wheels + TokenVault sources - and starts the Manager with
+  runtime\pythonw.exe -m tokenvault.manager (see manager.iss).
+
   1. PyInstaller: Adapter (onefile, windowed)    -> dist\adapter\TokenVaultAdapter.exe
   2. Inno Setup:  adapter-template.iss           -> dist\adapter-setup-template.exe  (UNSIGNED)
-  3. Template placed next to the Manager exe     -> dist\manager\TokenVault-Manager\adapter-setup-template.exe
-     (manager\paths.py looks for it in the install folder)
-  4. PyInstaller: Manager (onedir, windowed)     -> dist\manager\TokenVault-Manager\
-  5. WebView2 bootstrapper (downloaded once into packaging\redist, git-ignored)
-  6. Inno Setup:  manager.iss                    -> dist\TokenVault-Manager-Setup.exe
+  3. Portable runtime: templates\portable-runtime is built with build\build-portable.ps1 when it
+     is missing (needs internet once; offline: -EmbedZip / -WheelDir are passed through), and
+     its TokenVault sources are always refreshed from this checkout (-RefreshOnly)
+  4. WebView2 bootstrapper (downloaded once into packaging\redist, git-ignored)
+  5. Inno Setup:  manager.iss                    -> dist\TokenVault-Manager-Setup.exe
+  (optional, -WithManagerExe: PyInstaller Manager onedir -> dist\manager\TokenVault-Manager\,
+  for the smoke tests only; it is NOT part of the installer)
 
-  Steps 2, 5 and 6 need Inno Setup 6.3+ (ISCC.exe). When it is missing the script still
-  builds the PyInstaller outputs, says clearly what was skipped and exits with code 3.
+  Steps 2, 4 and 5 need Inno Setup 6.3+ (ISCC.exe). When it is missing the script still
+  builds what it can, says clearly what was skipped and exits with code 3.
 
 .PARAMETER DevTemplate
   Only when Inno Setup is unavailable: copy the raw adapter exe in as the "template" so the
@@ -21,6 +28,19 @@
 
 .PARAMETER Python
   Python with pyinstaller + the project dependencies (default: .venv, else "python").
+
+.PARAMETER PortableRuntime
+  Folder with the prepared portable runtime (default <repo>\templates\portable-runtime).
+
+.PARAMETER EmbedZip
+  Offline build of the portable runtime: local python-3.12.x-embed-amd64.zip (passed to
+  build-portable.ps1; only used when the runtime has to be built).
+
+.PARAMETER WheelDir
+  Offline build of the portable runtime: folder of cp312-win_amd64 wheels (idem).
+
+.PARAMETER WithManagerExe
+  Also build the PyInstaller Manager exe (dist\manager\TokenVault-Manager) - not shipped.
 
 .PARAMETER SkipWebView2Download
   Do not try to download the WebView2 bootstrapper (the Manager installer then only prints a
@@ -34,13 +54,18 @@ param(
   [switch]$DevTemplate,
   [string]$Python,
   [string]$DistDir,   # output folder (default <repo>\dist); use another one while a built Manager is running
-  [switch]$SkipWebView2Download
+  [switch]$SkipWebView2Download,
+  [string]$PortableRuntime,
+  [string]$EmbedZip,
+  [string]$WheelDir,
+  [switch]$WithManagerExe
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $Pkg = Join-Path $Root 'packaging'
 $Dist = if ($DistDir) { $DistDir } else { Join-Path $Root 'dist' }
 $Work = Join-Path $Root 'build'
+if (-not $PortableRuntime) { $PortableRuntime = Join-Path $Root 'templates\portable-runtime' }
 Set-Location $Root
 
 if (-not $Python) {
@@ -97,26 +122,38 @@ if ($iscc) {
   $skipped += 'adapter-template.iss'
 }
 
-# 3+4. Manager onedir, template next to the exe -----------------------------------------
-Invoke-Step 'PyInstaller: manager' {
-  & $Python -m PyInstaller (Join-Path $Pkg 'manager.spec') --noconfirm `
-    --distpath (Join-Path $Dist 'manager') --workpath (Join-Path $Work 'pyi-manager')
-}
+# 3. Portable runtime (signed python + wheels + sources): the content of the Manager installer.
 $mgrDir = Join-Path $Dist 'manager\TokenVault-Manager'
-if (Test-Path $template) {
-  Copy-Item $template (Join-Path $mgrDir 'adapter-setup-template.exe') -Force
-} else {
-  Write-Warning 'No adapter template: "Create installer" in the Manager will not work.'
+$bp = Join-Path $Root 'build\build-portable.ps1'
+if (-not (Test-Path (Join-Path $PortableRuntime 'runtime\python.exe'))) {
+  Invoke-Step 'Portable runtime: build (build-portable.ps1)' {
+    $a = @{ Python = $Python; OutDir = $PortableRuntime; NoManagerZip = $true }
+    if ($EmbedZip) { $a.EmbedZip = $EmbedZip }
+    if ($WheelDir) { $a.WheelDir = $WheelDir }
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bp @(($a.GetEnumerator() | ForEach-Object {
+      if ($_.Value -is [bool]) { "-$($_.Key)" } else { "-$($_.Key)"; "$($_.Value)" } }))
+  }
+}
+# Never ship stale sources: always re-copy src\tokenvault + scripts into the runtime (offline, fast).
+Invoke-Step 'Portable runtime: refresh sources' {
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $bp -Python $Python -OutDir $PortableRuntime -RefreshOnly
+}
+$pyExe = Join-Path $PortableRuntime 'runtime\python.exe'
+$sig = Get-AuthenticodeSignature $pyExe
+if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'Python Software Foundation') {
+  throw "The runtime's python.exe is not validly signed by the Python Software Foundation ($($sig.Status)): the installed Manager would be blocked by Application Control."
 }
 
-# 3b. Portable runtime for the "windows-portable" installer target: the Manager looks for
-# <exe dir>\portable-runtime (runtime\ + scripts\). Prepared once by build\build-portable.ps1
-# (needs internet); without it that installer target reports a clear "runtime missing" error.
-$portableSrc = Join-Path $Root 'templates\portable-runtime'
-if (Test-Path (Join-Path $portableSrc 'runtime\python.exe')) {
-  Copy-Item $portableSrc (Join-Path $mgrDir 'portable-runtime') -Recurse -Force
-} else {
-  Write-Warning 'templates\portable-runtime is missing (run build\build-portable.ps1 first): this build will NOT offer the windows-portable installer target.'
+# 3b. (optional, not shipped) PyInstaller Manager exe for the smoke tests.
+if ($WithManagerExe) {
+  Invoke-Step 'PyInstaller: manager (not part of the installer)' {
+    & $Python -m PyInstaller (Join-Path $Pkg 'manager.spec') --noconfirm `
+      --distpath (Join-Path $Dist 'manager') --workpath (Join-Path $Work 'pyi-manager')
+  }
+  if (Test-Path $template) { Copy-Item $template (Join-Path $mgrDir 'adapter-setup-template.exe') -Force }
+}
+if (-not (Test-Path $template)) {
+  Write-Warning 'No adapter template: the "Windows .exe" employee target of the Manager will not work (the portable ZIP target does).'
 }
 
 # 5. WebView2 bootstrapper ---------------------------------------------------------------
@@ -145,7 +182,7 @@ if (Test-Path $boot) {
 # 6. Manager installer -------------------------------------------------------------------
 if ($iscc) {
   Invoke-Step 'Inno Setup: Manager installer' {
-    & $iscc "/DSourceDir=$mgrDir" "/DRedistDir=$redist" "/O$Dist" (Join-Path $Pkg 'manager.iss')
+    & $iscc "/DRuntimeDir=$PortableRuntime" "/DTemplateExe=$template" "/DRedistDir=$redist" "/O$Dist" (Join-Path $Pkg 'manager.iss')
   }
 } else {
   $skipped += 'manager.iss'
@@ -156,7 +193,7 @@ Write-Host ''
 Write-Host 'Outputs:' -ForegroundColor Green
 Get-ChildItem $adapterExe, $template, (Join-Path $Dist 'TokenVault-Manager-Setup.exe') -ErrorAction SilentlyContinue |
   ForEach-Object { '  {0}  ({1:N1} MB)' -f $_.FullName, ($_.Length / 1MB) }
-'  {0}  (folder)' -f $mgrDir
+if ($WithManagerExe) { '  {0}  (folder, smoke tests only)' -f $mgrDir }
 
 if ($skipped.Count -gt 0) {
   Write-Host ''
