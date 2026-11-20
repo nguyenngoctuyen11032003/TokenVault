@@ -1,0 +1,60 @@
+﻿DOC TRUOC / READ ME FIRST - TOKENVAULT ADAPTER
+==============================================
+
+ĐÂY LÀ GÌ?
+  Gói cài "Adapter" của TokenVault: một chương trình nhỏ chạy nền trên máy bạn, gửi SỐ LIỆU
+  sử dụng Claude (số token, tên model...) về Manager của công ty. Không cần quyền Administrator.
+
+CÁCH CÀI (3 bước)
+  1. Chuột phải file .zip  ->  "Giải nén tất cả..." (Extract All...)  ->  chọn một thư mục
+     thường (ví dụ Documents\TokenVault).
+     KHÔNG chạy trực tiếp bên trong WinRAR / trình xem ZIP: sẽ báo lỗi thiếu file.
+  2. Mở thư mục vừa giải nén, nháy đúp file   1-CAI-DAT.cmd
+  3. Cửa sổ "Đồng ý" hiện ra, liệt kê chính xác dữ liệu được gửi. Đọc rồi bấm "Đồng ý".
+     (Mất khoảng 10-30 giây.) Xong: biểu tượng TokenVault nằm ở khay hệ thống (góc phải thanh
+     tác vụ, có thể trong nút mũi tên ẩn).
+
+Chỉ cần nháy đúp file có số 1. Thư mục "_he-thong" là phần kỹ thuật bên trong gói - KHÔNG cần
+mở, KHÔNG xóa, KHÔNG đổi tên.
+
+DỮ LIỆU ĐƯỢC GỬI
+  Chỉ số token, tên model, tên thư mục dự án (không phải đường dẫn đầy đủ), tiêu đề phiên,
+  tên công cụ, email tài khoản Claude, tên máy và tên người dùng Windows.
+DỮ LIỆU KHÔNG BAO GIỜ ĐƯỢC GỬI
+  Nội dung hội thoại, câu lệnh bạn gõ, nội dung file, đường dẫn đầy đủ.
+
+CÁCH KIỂM TRA
+  Bấm vào biểu tượng TokenVault ở khay hệ thống -> "Dữ liệu gửi đi là gì?" để xem danh sách
+  trên máy bạn. Mã nguồn đọc được trong  _he-thong\runtime\app\tokenvault.
+
+GỠ CÀI ĐẶT
+  Nháy đúp   2-GO-CAI-DAT.cmd   (hoặc Cài đặt Windows -> Ứng dụng -> Ứng dụng đã cài -> TokenVault Adapter).
+  Nó tắt Adapter, bỏ tự khởi động và xóa chương trình, rồi in bảng ĐÃ XÓA / GIỮ LẠI. Dữ liệu cục bộ
+  (cấu hình, hàng đợi gửi, khóa thiết bị) mặc định được GIỮ; chạy với -RemoveData nếu muốn xóa hết.
+  Lưu ý: gỡ Adapter không xóa thiết bị trên Manager - người quản lý có thể thu hồi/đặt lại ở đó.
+
+CÂU HỎI THƯỜNG GẶP
+  * Windows báo "đã chặn ứng dụng" (Smart App Control)? Gói này KHÔNG có file .exe lạ; nó
+    chạy bằng Python chính thức do Python Software Foundation ký số. Nếu vẫn bị chặn, gửi ảnh
+    chụp màn hình cho người quản lý / IT.
+  * Tải ZIP bằng trình duyệt? File sẽ có dấu "tải từ Internet"; 1-CAI-DAT.cmd tự gỡ dấu này.
+  * Gói này chứa mã đăng ký của MỘT nhóm: chỉ chia sẻ cho đúng nhóm đó. Mã chỉ dùng được
+    với Manager của công ty và có thể bị thu hồi ngay trên Manager.
+
+--------------------------------------------------------------------------------------
+ENGLISH SUMMARY
+  What it is: TokenVault Adapter, a small background program that sends Claude USAGE
+  numbers (tokens, model names...) to your company's Manager. No administrator rights.
+  1. Right-click the ZIP -> "Extract All..." (do NOT run it from inside a ZIP viewer).
+  2. Open the extracted folder, double-click  1-CAI-DAT.cmd
+  3. Read the consent screen (it lists exactly what is sent) and press Accept.
+  Only click the file numbered 1. The "_he-thong" folder is the technical part: leave it alone.
+  Sent: token counts, model names, project folder NAME (not the full path), session titles,
+  tool names, Claude account email, machine name, Windows user name.
+  Never sent: conversation text, prompts, file contents, full paths.
+  Check: tray icon -> "What is sent?". Source is readable in _he-thong\runtime\app\tokenvault.
+  Uninstall: double-click 2-GO-CAI-DAT.cmd or Windows Settings > Installed apps > TokenVault Adapter;
+  it prints what was removed / kept (local data is kept unless -RemoveData). It does not delete
+  the device on the Manager (your manager can revoke / reset it there).
+  Smart App Control: the package has no unknown .exe; it runs the official Python runtime
+  signed by the Python Software Foundation. If blocked anyway, send a screenshot to IT.

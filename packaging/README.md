@@ -44,16 +44,19 @@ Software Foundation), vendored wheels, TokenVault's Python source and `.cmd`/`.p
 * Prepare once: `build\build-portable.ps1` (downloads python-3.12.10-embed-amd64.zip, verifies its
   SHA-256 and the Authenticode publisher, pip-installs cp312-win_amd64 wheels with `--target`,
   copies tkinter for the consent screen, compiles, writes `templates\portable-runtime\`, and
-  builds `dist\TokenVault-Manager-portable.zip`).
+  builds `dist\TokenVault-Manager-<version>.zip`).
 * Per team: Manager -> create installer with target `windows-portable`
   (`Api.create_installer(team, label, "windows-portable")`) -> `TokenVault-Adapter-<team>-portable.zip`.
-  Employee: extract, double-click `Install.cmd` (per user, no admin, consent screen as usual).
-  Remove: `Uninstall.cmd`.
-* Manager: extract `TokenVault-Manager-portable.zip`; `Start-Manager.cmd` runs it in place,
-  `Install-Manager.ps1` adds Start-menu/Desktop shortcuts and one elevated firewall step.
+  Employee: extract, double-click `1-CAI-DAT.cmd` (per user, no admin, consent screen as usual).
+  Remove: `2-GO-CAI-DAT.cmd`.
+* Manager: extract `TokenVault-Manager-<version>.zip`; root = `DOC-TRUOC.txt`, `1-CHAY-MANAGER.cmd` (run in place),
+  `2-CAI-MANAGER-VAO-MAY.cmd` (Start-menu/Desktop shortcuts with logo, one elevated firewall step, starts it),
+  `3-GO-CAI-MANAGER.cmd`; everything else is in `_he-thong\` (`runtime\`, `scripts\`). The employee ZIP:
+  `DOC-TRUOC.txt`, `1-CAI-DAT.cmd`, `2-GO-CAI-DAT.cmd`, `_he-thong\`. `_he-thong` is also a valid runtime dir
+  (holds `runtime\` + `scripts\`), so an extracted Manager ZIP builds employee ZIPs as is.
 * Shipped Manager: the installer copies `templates\portable-runtime\runtime` to `<install dir>\runtime` and `scripts` to `<install dir>\scripts` (the Manager finds them there; a PyInstaller exe, built only with `build.ps1 -WithManagerExe`, would look in `<exe dir>\portable-runtime`). Without it the windows-portable target is unavailable;
   `--selftest` prints a `portable_runtime` step and Diagnostics reports `portable_runtime.present`. A portable
-  Manager ZIP also carries the adapter scripts under `scripts/` (copied by `Install-Manager.ps1`).
+  Manager ZIP also carries the adapter scripts under `_he-thong\scripts\` (copied by `Install-Manager.ps1`).
 * Check the runtime: `runtime\python.exe -m tokenvault.adapter --selftest` (or
   `-m tokenvault.manager --selftest`) prints a `runtime:` line with the signature status.
 * Hand the ZIP out via a network share, USB stick or chat file transfer (no Mark-of-the-Web, so no

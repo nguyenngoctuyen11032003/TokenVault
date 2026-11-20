@@ -7,10 +7,12 @@
                                           (Lib\site-packages) + TokenVault source (app\tokenvault),
                                           python312._pth enabling both, tkinter copied from the
                                           base interpreter (consent screen) - all byte-compiled
-    templates\portable-runtime\scripts\   Install.cmd, install.ps1, Start-Manager.cmd, ...
+    templates\portable-runtime\scripts\   1-CAI-DAT.cmd, install.ps1, 1-CHAY-MANAGER.cmd, ...
     templates\portable-runtime\manifest.json
 
-  and, unless -NoManagerZip, dist\TokenVault-Manager-portable.zip (generic, no credential).
+  and, unless -NoManagerZip, dist\TokenVault-Manager-<version>.zip (generic, no credential;
+  root = DOC-TRUOC.txt + 1-CHAY-MANAGER.cmd + 2-CAI-MANAGER-VAO-MAY.cmd + 3-GO-CAI-MANAGER.cmd,
+  everything technical in _he-thong\ - see portable_packager.py).
 
   Needs internet once (python.org + PyPI wheels). Offline: -EmbedZip <local zip> and
   -WheelDir <folder of cp312-win_amd64 wheels>.
@@ -145,6 +147,10 @@ try {
     if ($RefreshOnly -and (Test-Path -LiteralPath $sc)) { Remove-Item -LiteralPath $sc -Recurse -Force }
     New-Item -ItemType Directory -Force $sc | Out-Null
     Copy-Item (Join-Path $repo 'packaging\portable\*') $sc -Force -Exclude '*.py'
+    Copy-Item (Join-Path $repo 'src\tokenvault\ui\assets\logo\tokenvault.ico') (Join-Path $sc 'tokenvault.ico') -Force
+    # version shown in Settings > Installed apps (read by the install scripts)
+    $vm = [regex]::Match((Get-Content -LiteralPath (Join-Path $repo 'pyproject.toml') -Raw), '(?m)^version\s*=\s*"([^"]+)"')
+    if ($vm.Success) { [IO.File]::WriteAllText((Join-Path $sc 'version.txt'), $vm.Groups[1].Value + "`r`n", (New-Object Text.UTF8Encoding($false))) }
     if ($RefreshOnly) {
         & (Join-Path $rt 'python.exe') -c "import tokenvault.manager.app, tokenvault.adapter, webview, reportlab"
         if ($LASTEXITCODE -ne 0) { throw 'imports failed after the source refresh' }
@@ -170,7 +176,10 @@ try {
     # 8. Manager ZIP -------------------------------------------------------------------------------
     if (-not $NoManagerZip) {
         Step 'Manager portable zip'
-        $zip = Join-Path $repo 'dist\TokenVault-Manager-portable.zip'
+        $ver = '0.0.0'
+        $m = [regex]::Match((Get-Content -LiteralPath (Join-Path $repo 'pyproject.toml') -Raw), '(?m)^version\s*=\s*"([^"]+)"')
+        if ($m.Success) { $ver = $m.Groups[1].Value }
+        $zip = Join-Path $repo "dist\TokenVault-Manager-$ver.zip"
         $env:PYTHONPATH = Join-Path $repo 'src'
         & $Python -m tokenvault.manager.portable_packager manager-zip $OutDir $zip
         if ($LASTEXITCODE -ne 0) { throw 'manager zip failed' }

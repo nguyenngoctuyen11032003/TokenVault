@@ -3,7 +3,7 @@
   the firewall).
 
   * copies the signed embeddable Python runtime + TokenVault to
-    %LOCALAPPDATA%\TokenVault\ManagerApp\runtime
+    %LOCALAPPDATA%\Programs\TokenVault Manager\runtime
   * Start menu (and Desktop) shortcut -> pythonw.exe -m tokenvault.manager
     (falls back to a .cmd launcher when shortcuts cannot be created)
   * firewall rules (inbound TCP 47800-47820, UDP 47801, local subnet) through the
@@ -19,26 +19,49 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'TokenVault\ManagerApp'),
+    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Programs\TokenVault Manager'),
     [string]$StartMenuDir = (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'),
     [string]$DesktopDir = [Environment]::GetFolderPath('Desktop'),
     [int]$Port = 47800,
     [switch]$NoDesktop,
     [switch]$SkipFirewall,
-    [switch]$SkipSignatureCheck
+    [switch]$SkipSignatureCheck,
+    [switch]$NoStart,
+    [string]$RegistryRoot = 'HKCU:\Software',   # tests use a throwaway sub key
+    [switch]$Silent   # accepted for IT / tests (the .cmd wrapper then does not pause)
 )
 $ErrorActionPreference = 'Stop'
+# Lives in <zip root>\_he-thong\scripts\ ; the runtime is its sibling <zip root>\_he-thong\runtime
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$sys = Split-Path -Parent $here
 function Say($m) { Write-Host $m }
+
+# Settings > Installed apps registration (HKCU, no admin); removed again by the uninstaller.
+function Register-Uninstall($name, $display, $unCmd, $icon, $loc) {
+    $ver = ''
+    foreach ($vf in @((Join-Path $here 'version.txt'), (Join-Path (Split-Path -Parent $here) 'version.txt'))) {
+        if (-not $ver -and (Test-Path -LiteralPath $vf)) { $ver = (Get-Content -LiteralPath $vf -TotalCount 1).Trim() }
+    }
+    $k = "$RegistryRoot\Microsoft\Windows\CurrentVersion\Uninstall\$name"
+    New-Item -Path $k -Force | Out-Null
+    Set-ItemProperty -Path $k -Name 'DisplayName' -Value $display
+    if ($ver) { Set-ItemProperty -Path $k -Name 'DisplayVersion' -Value $ver }
+    Set-ItemProperty -Path $k -Name 'Publisher' -Value 'TokenVault'
+    if ($icon -and (Test-Path -LiteralPath $icon)) { Set-ItemProperty -Path $k -Name 'DisplayIcon' -Value $icon }
+    Set-ItemProperty -Path $k -Name 'InstallLocation' -Value $loc
+    Set-ItemProperty -Path $k -Name 'UninstallString' -Value $unCmd
+    Set-ItemProperty -Path $k -Name 'NoModify' -Value 1 -Type DWord
+    Set-ItemProperty -Path $k -Name 'NoRepair' -Value 1 -Type DWord
+}
 function Fail($code, $m) { Write-Host "ERROR: $m" -ForegroundColor Red; exit $code }
 
 try {
-    Get-ChildItem -LiteralPath $here -Recurse -File -Force -ErrorAction SilentlyContinue |
+    Get-ChildItem -LiteralPath (Split-Path -Parent $sys) -Recurse -File -Force -ErrorAction SilentlyContinue |
         ForEach-Object { try { Unblock-File -LiteralPath $_.FullName -ErrorAction SilentlyContinue } catch {} }
 } catch {}
 
-$srcRuntime = Join-Path $here 'runtime'
-if (-not (Test-Path -LiteralPath (Join-Path $srcRuntime 'pythonw.exe'))) { Fail 1 'runtime\pythonw.exe not found. Extract the whole ZIP first.' }
+$srcRuntime = Join-Path $sys 'runtime'
+if (-not (Test-Path -LiteralPath (Join-Path $srcRuntime 'pythonw.exe'))) { Fail 1 '_he-thong\runtime\pythonw.exe not found. Extract the whole ZIP first (right-click the .zip, Extract All).' }
 
 if (-not $SkipSignatureCheck) {
     $sig = Get-AuthenticodeSignature -LiteralPath (Join-Path $srcRuntime 'python.exe')
@@ -73,7 +96,7 @@ try {
     Copy-Item -LiteralPath $srcRuntime -Destination $destRuntime -Recurse -Force
 } catch { Fail 1 "cannot copy to ${InstallDir}: $($_.Exception.Message)" }
 # adapter package scripts: the installed Manager needs them to build "windows-portable" packages
-$srcScripts = Join-Path $here 'scripts'
+$srcScripts = $here
 $destScripts = Join-Path $InstallDir 'scripts'
 if (Test-Path -LiteralPath $srcScripts) {
     try {
@@ -89,7 +112,7 @@ $ico = Join-Path $destRuntime 'app\tokenvault\ui\assets\logo\tokenvault.ico'
 $iconLocation = if (Test-Path -LiteralPath $ico) { $ico } else { "$pyw,0" }
 
 function New-Launcher($dir, $name) {
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop | Out-Null
     $lnk = Join-Path $dir "$name.lnk"
     try {
         $sh = New-Object -ComObject WScript.Shell
@@ -107,10 +130,34 @@ function New-Launcher($dir, $name) {
         return $cmd
     }
 }
+function Try-Launcher($dir) { try { return (New-Launcher $dir 'TokenVault Manager') } catch { return $null } }
+# the uninstaller next to the program (Windows Settings > Installed apps calls it)
+$goSrc = Join-Path (Split-Path -Parent $sys) '3-GO-CAI-MANAGER.cmd'
+$goDst = Join-Path $InstallDir '3-GO-CAI-MANAGER.cmd'
+if (Test-Path -LiteralPath $goSrc) { Copy-Item -LiteralPath $goSrc -Destination $goDst -Force }
+try {
+    if (Test-Path -LiteralPath $goDst) {
+        Register-Uninstall 'TokenVaultManager' 'TokenVault Manager' ('cmd.exe /c ""' + $goDst + '""') $ico $InstallDir
+    }
+} catch { Write-Host "WARNING: could not register in Settings > Installed apps: $($_.Exception.Message)" -ForegroundColor Yellow }
 $made = @()
-$made += New-Launcher $StartMenuDir 'TokenVault Manager'
-if (-not $NoDesktop) { $made += New-Launcher $DesktopDir 'TokenVault Manager' }
+$startLnk = Try-Launcher $StartMenuDir
+if ($startLnk) { $made += $startLnk }
+if (-not $NoDesktop) {
+    # Desktop may be redirected (OneDrive): $DesktopDir comes from GetFolderPath('Desktop').
+    $deskLnk = Try-Launcher $DesktopDir
+    if (-not $deskLnk -and -not $PSBoundParameters.ContainsKey('DesktopDir')) {
+        $deskLnk = Try-Launcher ([Environment]::GetFolderPath('CommonDesktopDirectory'))  # Public desktop, last resort
+    }
+    if ($deskLnk) { $made += $deskLnk } else { Write-Host 'WARNING: could not create the Desktop shortcut.' -ForegroundColor Yellow }
+}
+if (-not $startLnk) { Write-Host 'WARNING: could not create the Start menu shortcut.' -ForegroundColor Yellow }
 $made | ForEach-Object { Say "Shortcut: $_" }
+# Tell Explorer right away so the icons show up without a restart / icon-cache refresh.
+try {
+    Add-Type -Namespace TV -Name Shell -MemberDefinition '[System.Runtime.InteropServices.DllImport("shell32.dll")] public static extern void SHChangeNotify(int e, uint f, System.IntPtr a, System.IntPtr b);'
+    [TV.Shell]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)  # SHCNE_ASSOCCHANGED
+} catch {}
 
 $rc = 0
 if (-not $SkipFirewall) {
@@ -126,4 +173,7 @@ if (-not $SkipFirewall) {
     }
 }
 Say 'TokenVault Manager installed. Start it from the Start menu.'
+if (-not $NoStart -and -not $Silent) {
+    try { Start-Process -FilePath $pyw -ArgumentList '-m tokenvault.manager' -WorkingDirectory $destRuntime } catch {}
+}
 exit $rc

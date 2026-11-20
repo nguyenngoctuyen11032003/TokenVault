@@ -22,24 +22,43 @@ param(
     [switch]$NoStart,
     [switch]$Silent,
     [switch]$Accept,
-    [switch]$SkipSignatureCheck
+    [switch]$SkipSignatureCheck,
+    [string]$RegistryRoot = 'HKCU:\Software'   # tests use a throwaway sub key
 )
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 if (-not $Payload) { $Payload = Join-Path $here 'tokenvault-config.bin' }
 
 function Say($m) { Write-Host $m }
+
+# Settings > Installed apps registration (HKCU, no admin); removed again by the uninstaller.
+function Register-Uninstall($name, $display, $unCmd, $icon, $loc) {
+    $ver = ''
+    foreach ($vf in @((Join-Path $here 'version.txt'), (Join-Path (Split-Path -Parent $here) 'version.txt'))) {
+        if (-not $ver -and (Test-Path -LiteralPath $vf)) { $ver = (Get-Content -LiteralPath $vf -TotalCount 1).Trim() }
+    }
+    $k = "$RegistryRoot\Microsoft\Windows\CurrentVersion\Uninstall\$name"
+    New-Item -Path $k -Force | Out-Null
+    Set-ItemProperty -Path $k -Name 'DisplayName' -Value $display
+    if ($ver) { Set-ItemProperty -Path $k -Name 'DisplayVersion' -Value $ver }
+    Set-ItemProperty -Path $k -Name 'Publisher' -Value 'TokenVault'
+    if ($icon -and (Test-Path -LiteralPath $icon)) { Set-ItemProperty -Path $k -Name 'DisplayIcon' -Value $icon }
+    Set-ItemProperty -Path $k -Name 'InstallLocation' -Value $loc
+    Set-ItemProperty -Path $k -Name 'UninstallString' -Value $unCmd
+    Set-ItemProperty -Path $k -Name 'NoModify' -Value 1 -Type DWord
+    Set-ItemProperty -Path $k -Name 'NoRepair' -Value 1 -Type DWord
+}
 function Fail($code, $m) { Write-Host "ERROR: $m" -ForegroundColor Red; exit $code }
 
 # 1. Mark-of-the-Web: a ZIP downloaded in a browser tags every extracted file.
 try {
-    Get-ChildItem -LiteralPath $here -Recurse -File -Force -ErrorAction SilentlyContinue |
+    Get-ChildItem -LiteralPath (Split-Path -Parent $here) -Recurse -File -Force -ErrorAction SilentlyContinue |
         ForEach-Object { try { Unblock-File -LiteralPath $_.FullName -ErrorAction SilentlyContinue } catch {} }
 } catch {}
 
 $srcRuntime = Join-Path $here 'runtime'
 $srcPy = Join-Path $srcRuntime 'pythonw.exe'
-if (-not (Test-Path -LiteralPath $srcPy)) { Fail 1 "runtime\pythonw.exe not found next to this script. Extract the whole ZIP first." }
+if (-not (Test-Path -LiteralPath $srcPy)) { Fail 1 "runtime\pythonw.exe not found in _he-thong. Extract the whole ZIP first (right-click the .zip, Extract All)." }
 if (-not (Test-Path -LiteralPath $Payload)) { Fail 2 "payload not found: $Payload" }
 
 # 2. The interpreter must be the one signed by the Python Software Foundation.
@@ -104,7 +123,23 @@ try {
     while (-not $p.HasExited) { Start-Sleep -Milliseconds 300 }
 } catch { Fail 10 "Windows refused to start $py : $($_.Exception.Message)" }
 switch ($p.ExitCode) {
-    0 { Say 'TokenVault Adapter installed and running (tray icon).'; exit 0 }
+    0 {
+        # the uninstaller next to the program + Settings > Installed apps entry
+        try {
+            Copy-Item -LiteralPath (Join-Path $here 'uninstall.ps1') -Destination (Join-Path $InstallDir 'uninstall.ps1') -Force
+            $icoSrc = Join-Path $here 'tokenvault.ico'
+            if (Test-Path -LiteralPath $icoSrc) { Copy-Item -LiteralPath $icoSrc -Destination (Join-Path $InstallDir 'tokenvault.ico') -Force }
+            $vf = Join-Path $here 'version.txt'
+            if (Test-Path -LiteralPath $vf) { Copy-Item -LiteralPath $vf -Destination (Join-Path $InstallDir 'version.txt') -Force }
+            $goSrc = Join-Path (Split-Path -Parent $here) '2-GO-CAI-DAT.cmd'
+            $goDst = Join-Path $InstallDir '2-GO-CAI-DAT.cmd'
+            if (Test-Path -LiteralPath $goSrc) {
+                Copy-Item -LiteralPath $goSrc -Destination $goDst -Force
+                Register-Uninstall 'TokenVaultAdapter' 'TokenVault Adapter' ('cmd.exe /c ""' + $goDst + '""') (Join-Path $InstallDir 'tokenvault.ico') $InstallDir
+            }
+        } catch { Write-Host "WARNING: could not register in Settings > Installed apps: $($_.Exception.Message)" -ForegroundColor Yellow }
+        Say 'TokenVault Adapter installed and running (tray icon).'; exit 0
+    }
     2 { Fail 2 'The package carries no valid configuration payload.' }
     3 { Say 'Installation cancelled: you declined the consent screen. Nothing was sent.'; exit 3 }
     4 { Fail 4 'The consent screen could not be shown.' }
