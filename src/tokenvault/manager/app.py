@@ -12,8 +12,9 @@ CLI (``TokenVault-Manager.exe`` / ``python -m tokenvault.manager.app``)::
                                  headless start/exercise/stop of every component; exit 0 = ok
     --selftest-window [--screenshot PNG] [--seconds S]
                                  open the real window on demo data, screenshot the desktop, exit
-    firewall --ensure|--check [--port N] [--program EXE]
-                                 add (elevated) / check the inbound firewall rules; prints JSON
+    firewall --ensure|--check|--remove [--port N] [--program EXE|--no-program] [--dry-run]
+                                 add (elevated) / check / remove the inbound firewall rules;
+                                 prints JSON (--dry-run: only show the netsh commands)
 """
 
 from __future__ import annotations

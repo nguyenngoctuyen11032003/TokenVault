@@ -12,10 +12,21 @@ on another routed subnet need the rule widened by an admin) and
 accept ingest connections). If the office network is classified "Public", set it to
 Private in Windows.
 
-With ``program`` the rules only apply to that program; ``firewall --ensure`` run from
-the frozen Manager exe defaults it to that exe. Adding rules needs elevation: only the
-Manager installer runs ``TokenVault-Manager.exe firewall --ensure`` (one UAC prompt). The running
-app only *checks* (``check_rules``) and reports a missing rule in Diagnostics.
+With ``program`` the rules only apply to that program. ``firewall --ensure`` picks it:
+
+* frozen Manager exe -> that exe;
+* Manager running from the embeddable (Authenticode-signed) Python runtime, the layout the
+  installer ships since Task 29 -> the runtime's ``pythonw.exe`` (the interpreter every
+  shortcut / autostart entry launches; resolved only when ``python*._pth`` and
+  ``pythonw.exe`` sit next to ``sys.executable``, else no restriction);
+* any other interpreter (development venv) -> no program restriction (a venv's python
+  path is not stable enough to pin a rule to it).
+
+``--no-program`` forces an unrestricted rule. Adding rules needs elevation: the installer
+runs ``runtime\\python.exe -m tokenvault.manager firewall --ensure`` through UAC (one
+prompt; never an unsigned exe, which Application Control may block). The running app only
+*checks* (``check_rules``) and reports a missing rule in Diagnostics. ``--dry-run`` prints
+the netsh commands without running them; ``--remove`` deletes every rule of this product.
 
 ``ensure_rules`` deletes then re-adds each rule, so re-running it updates the
 port range. ``check_rules`` parses ``netsh ... show rule name=<n> verbose``;
@@ -32,6 +43,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
+from pathlib import Path
 
 from tokenvault.common.discovery_wire import DISCOVERY_PORT
 
@@ -52,6 +64,27 @@ UDP_RULE = f"TokenVault-Manager-Discovery-UDP-{DISCOVERY_PORT}"
 Runner = Callable[[Sequence[str]], tuple[int, str]]
 _NETSH = ["netsh", "advfirewall", "firewall"]
 _PORT_TOKEN = re.compile(r"\b(\d{1,5})(?:\s*-\s*(\d{1,5}))?\b")
+
+
+def default_program() -> str | None:
+    """Executable the rules should be restricted to (see the module docstring)."""
+    if getattr(sys, "frozen", False):
+        return sys.executable
+    exe = Path(sys.executable)
+    pyw = exe.with_name("pythonw.exe")
+    if pyw.is_file() and any(exe.parent.glob("python*._pth")):
+        return str(pyw)
+    return None
+
+
+def manual_command(port: int = DEFAULT_PORT) -> str:
+    """The one-line command an administrator can run later to (re)create the rules."""
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}" firewall --ensure --port {port}'
+    exe = Path(sys.executable)
+    if sys.platform == "win32":
+        exe = exe.with_name("python.exe")
+    return f'"{exe}" -m tokenvault.manager firewall --ensure --port {port}'
 
 
 def run_netsh(args: Sequence[str]) -> tuple[int, str]:
@@ -105,6 +138,38 @@ def ensure_rules(
         except (OSError, subprocess.SubprocessError) as e:
             results.append({"name": name, "ok": False, "detail": f"{type(e).__name__}: {e}"})
     return {"ok": all(r["ok"] for r in results), "rules": results}
+
+
+def dry_run_runner(log: list[list[str]]) -> Runner:
+    """A runner that only records the netsh commands (``--dry-run``)."""
+    def run(args: Sequence[str]) -> tuple[int, str]:
+        log.append(list(args))
+        return 0, "dry-run"
+    return run
+
+
+_OWN_RULE = re.compile(r"TokenVault-Manager-[A-Za-z0-9._-]+")
+
+
+def remove_rules(*, runner: Runner | None = None) -> dict[str, object]:
+    """Delete every inbound rule this product created, whatever base port it used (the TCP
+    rule name embeds the port range). Needs elevation. Never raises for netsh errors."""
+    run = runner or run_netsh
+    names = {tcp_rule(DEFAULT_PORT), UDP_RULE}
+    try:
+        _rc, out = run([*_NETSH, "show", "rule", "name=all"])
+        names.update(_OWN_RULE.findall(out))
+    except (OSError, subprocess.SubprocessError):
+        pass
+    results = []
+    for name in sorted(names):
+        try:
+            rc, out = run([*_NETSH, "delete", "rule", f"name={name}"])
+            results.append({"name": name, "ok": rc == 0, "detail": out.strip()[:200]})
+        except (OSError, subprocess.SubprocessError) as e:
+            results.append({"name": name, "ok": False, "detail": f"{type(e).__name__}: {e}"})
+    # an absent rule is fine: success means "none of ours is left"
+    return {"ok": True, "rules": results}
 
 
 def _value_lines(text: str, label: str) -> list[str]:
@@ -164,23 +229,42 @@ def check_rules(port: int = DEFAULT_PORT, *, base_port: int = DEFAULT_PORT,
 
 
 def main(argv: Sequence[str]) -> int:
-    """``firewall --ensure|--check [--port N] [--program EXE]``: prints JSON, exit 0 = ok."""
-    ap = argparse.ArgumentParser(prog="TokenVault-Manager firewall")
+    """``firewall --ensure|--check|--remove [--port N] [--program EXE] [--dry-run]``: prints
+    JSON, exit 0 = ok."""
+    ap = argparse.ArgumentParser(prog="python -m tokenvault.manager firewall")
     act = ap.add_mutually_exclusive_group(required=True)
     act.add_argument("--ensure", action="store_true", help="add/update the rules (elevated)")
     act.add_argument("--check", action="store_true", help="report whether the rules exist")
+    act.add_argument("--remove", action="store_true", help="delete all TokenVault rules (elevated)")
     ap.add_argument("--port", type=int, default=DEFAULT_PORT)
     ap.add_argument("--program", default=None, help="restrict the rules to this exe")
+    ap.add_argument("--no-program", action="store_true", help="do not restrict to a program")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="--ensure/--remove: print the netsh commands, change nothing")
     a = ap.parse_args(list(argv))
     try:
         _check_port(a.port)
     except ValueError as e:
         print(json.dumps({"ok": False, "error": str(e)}))
         return 2
+    log: list[list[str]] = []
+    runner: Runner = dry_run_runner(log) if a.dry_run else run_netsh
+    if a.remove:
+        out: dict[str, object] = {**remove_rules(runner=runner), "dry_run": a.dry_run}
+        if a.dry_run:
+            out["commands"] = [" ".join(c) for c in log]
+        print(json.dumps(out, ensure_ascii=False))
+        return 0
     if a.ensure:
-        program = a.program or (sys.executable if getattr(sys, "frozen", False) else None)
-        res = ensure_rules(a.port, program=program, runner=run_netsh)
-        print(json.dumps({**res, "port": a.port}, ensure_ascii=False))
+        program = None if a.no_program else (a.program or default_program())
+        res = ensure_rules(a.port, program=program, runner=runner)
+        out = {**res, "port": a.port, "program": program, "dry_run": a.dry_run}
+        if a.dry_run:
+            out["commands"] = [" ".join(c) for c in log]
+        if not res["ok"]:
+            out["hint"] = ("Run this once as administrator / Chay lenh nay mot lan voi quyen "
+                           "quan tri: " + manual_command(a.port))
+        print(json.dumps(out, ensure_ascii=False))
         return 0 if res["ok"] else 1
     st = check_rules(a.port, runner=run_netsh)
     print(json.dumps({**asdict(st), "port": a.port}, ensure_ascii=False))

@@ -191,3 +191,112 @@ def test_ensure_from_frozen_exe_defaults_program(
     adds = [c for c in run.calls if "add" in c]
     assert adds and all("program=" + EXE in c for c in adds)
     assert all("profile=private,domain" in c for c in adds)
+
+
+def _fake_runtime(tmp_path: pytest.TempPathFactory | object, with_pth: bool = True) -> str:
+    from pathlib import Path
+
+    rt = Path(str(tmp_path)) / "runtime"
+    rt.mkdir()
+    (rt / "python.exe").write_bytes(b"x")
+    (rt / "pythonw.exe").write_bytes(b"x")
+    if with_pth:
+        (rt / "python312._pth").write_text("python312.zip\n", encoding="utf-8")
+    return str(rt / "python.exe")
+
+
+def test_default_program_embedded_runtime_is_pythonw(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    py = _fake_runtime(tmp_path)
+    monkeypatch.setattr(firewall.sys, "frozen", False, raising=False)
+    monkeypatch.setattr(firewall.sys, "executable", py)
+    assert firewall.default_program() == py.replace("python.exe", "pythonw.exe")
+
+
+def test_default_program_plain_interpreter_is_unrestricted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    py = _fake_runtime(tmp_path, with_pth=False)  # a venv-like folder: no ._pth
+    monkeypatch.setattr(firewall.sys, "frozen", False, raising=False)
+    monkeypatch.setattr(firewall.sys, "executable", py)
+    assert firewall.default_program() is None
+
+
+def test_manual_command_uses_python_module_form(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    py = _fake_runtime(tmp_path)
+    monkeypatch.setattr(firewall.sys, "frozen", False, raising=False)
+    monkeypatch.setattr(firewall.sys, "executable", py.replace("python.exe", "pythonw.exe"))
+    cmd = firewall.manual_command(47900)
+    assert cmd == f'"{py}" -m tokenvault.manager firewall --ensure --port 47900' or \
+        firewall.sys.platform != "win32"
+
+
+def test_ensure_dry_run_changes_nothing_and_lists_commands(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = FakeRunner({})
+    monkeypatch.setattr(firewall, "run_netsh", run)
+    assert firewall.main(["--ensure", "--dry-run", "--port", "47900",
+                          "--program", r"C:\rt\pythonw.exe"]) == 0
+    assert run.calls == []  # the real runner was never used
+    out = json.loads(capsys.readouterr().out)
+    assert out["dry_run"] is True and out["program"] == r"C:\rt\pythonw.exe"
+    adds = [c for c in out["commands"] if " add rule " in c]
+    assert len(adds) == 2 and all(r"program=C:\rt\pythonw.exe" in c for c in adds)
+    assert any("localport=47900-47920" in c for c in adds)
+
+
+def test_ensure_no_program_flag(monkeypatch: pytest.MonkeyPatch,
+                                capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(firewall.sys, "frozen", True, raising=False)
+    monkeypatch.setattr(firewall.sys, "executable", EXE)
+    assert firewall.main(["--ensure", "--dry-run", "--no-program"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["program"] is None and not any("program=" in c for c in out["commands"])
+
+
+def test_failed_ensure_prints_manual_command_hint(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run = FakeRunner({f"add:{UDP_RULE}": (1, "Access denied")})
+    monkeypatch.setattr(firewall, "run_netsh", run)
+    monkeypatch.setattr(firewall, "default_program", lambda: None)
+    assert firewall.main(["--ensure"]) == 1
+    out = json.loads(capsys.readouterr().out)
+    assert "firewall --ensure --port 47800" in out["hint"] and "administrator" in out["hint"]
+
+
+def test_remove_deletes_every_own_rule_including_other_ports(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    other = "TokenVault-Manager-Ingest-TCP-48000-48020"
+    listing = rule_output(other, "TCP", "48000-48020") + "Rule Name: Unrelated-Rule\n"
+    run = FakeRunner({"show:all": (0, listing)})
+    res = firewall.remove_rules(runner=run)
+    deleted = [c[-1].removeprefix("name=") for c in run.calls if c[3] == "delete"]
+    assert set(deleted) == {TCP_RULE, UDP_RULE, other} and res["ok"] is True
+    run2 = FakeRunner({})
+    monkeypatch.setattr(firewall, "run_netsh", run2)
+    assert firewall.main(["--remove", "--dry-run"]) == 0
+    assert run2.calls == []
+    assert json.loads(capsys.readouterr().out)["dry_run"] is True
+
+
+def test_install_dir_of_installed_runtime_is_folder_holding_runtime(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    from pathlib import Path
+
+    from tokenvault.manager import paths
+
+    app = Path(str(tmp_path)) / "app"
+    pkg = app / "runtime" / "app" / "tokenvault" / "manager"
+    pkg.mkdir(parents=True)
+    (app / "runtime" / "python.exe").write_bytes(b"x")
+    monkeypatch.setattr(paths, "_PKG_DIR", pkg)
+    monkeypatch.setattr(paths.sys, "frozen", False, raising=False)
+    assert paths.install_dir() == app
+    assert paths.template_path() == app / "adapter-setup-template.exe"

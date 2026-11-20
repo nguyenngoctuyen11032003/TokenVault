@@ -21,7 +21,7 @@ def command() -> str:
     exe = Path(sys.executable)
     pyw = exe.with_name("pythonw.exe")
     return subprocess.list2cmdline(
-        [str(pyw if pyw.exists() else exe), "-m", "tokenvault.manager.app", "--minimized"]
+        [str(pyw if pyw.exists() else exe), "-m", "tokenvault.manager", "--minimized"]
     )
 
 
