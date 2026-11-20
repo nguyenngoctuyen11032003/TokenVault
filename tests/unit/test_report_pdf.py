@@ -342,3 +342,28 @@ def test_device_lines_never_show_raw_device_ids() -> None:
 
     lines = sections._device_lines([DeviceInfo("dev-secret-id", "", "", "", False, None)])
     assert "dev-secret-id" not in lines[0] and lines[0].startswith("—")
+
+
+def _image_count(path: Path) -> int:
+    return len(list(PdfReader(str(path)).pages[0].images))
+
+
+def test_cover_carries_the_logo_image(store: Store, agg: Aggregates, tmp_path: Path) -> None:
+    demo_dataset(store, employees=3, days=5)
+    out = tmp_path / "logo.pdf"
+    build(agg, ReportSpec(range="7d"), out)
+    assert _image_count(out) >= 1
+
+
+def test_report_still_builds_without_the_logo(
+    store: Store, agg: Aggregates, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tokenvault.common import brand
+
+    monkeypatch.setattr(brand, "logo_dir", lambda: tmp_path / "nope")
+    demo_dataset(store, employees=3, days=5)
+    out = tmp_path / "nologo.pdf"
+    res = build(agg, ReportSpec(range="7d"), out)
+    assert out.is_file() and res.pages >= 1
+    assert _image_count(out) == 0
+    assert "TOKENVAULT" in flat(text_of(out)).upper()
