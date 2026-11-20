@@ -26,7 +26,10 @@ LƯU Ý QUAN TRỌNG
 FILE NÀO LÀ GÌ
   1-CHAY-MANAGER.cmd          chạy ngay, không cài gì lên máy
   2-CAI-MANAGER-VAO-MAY.cmd   cài vào máy (biểu tượng + tường lửa); không bắt buộc
-  3-GO-CAI-MANAGER.cmd        gỡ bản đã cài (dữ liệu của Manager được giữ lại)
+  3-GO-CAI-MANAGER.cmd        gỡ bản đã cài (cũng có trong Cài đặt Windows -> Ứng dụng đã cài).
+                              Tắt Manager, xóa biểu tượng, tự khởi động, luật tường lửa (một lần
+                              hỏi quyền Admin) và chương trình; hỏi có xóa cả dữ liệu thống kê đã
+                              lưu không (mặc định K = giữ lại, nằm ở %APPDATA%\TokenVault\Manager).
   _he-thong\                  phần kỹ thuật bên trong - KHÔNG mở, KHÔNG xóa, KHÔNG đổi tên
 
 SAU KHI MỞ MANAGER
@@ -55,7 +58,9 @@ ENGLISH SUMMARY
   Closing the window only hides it to the system tray (icon under the ^ arrow): double-click it
   to reopen, right-click -> Thoat to quit. Start-menu search finds "TokenVault Manager" only
   after option 2 (which also makes the Desktop shortcut).
-  Remove the installed copy: 3-GO-CAI-MANAGER.cmd (Manager data is kept).
+  Remove the installed copy: 3-GO-CAI-MANAGER.cmd or Settings > Installed apps > TokenVault Manager
+  (asks whether to delete the saved statistics, default keep; removes shortcuts, autostart,
+  firewall rules after one UAC prompt, and the program; prints a removed / kept checklist).
   The "_he-thong" folder holds the technical files: do not open, delete or rename it.
   FAQ: Smart App Control blocks it -> only signed Python runs here; ask IT. Window does not
   appear -> install the WebView2 runtime. Employee PCs cannot connect -> run option 2 and

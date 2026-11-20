@@ -28,8 +28,10 @@ CÁCH KIỂM TRA
   trên máy bạn. Mã nguồn đọc được trong  _he-thong\runtime\app\tokenvault.
 
 GỠ CÀI ĐẶT
-  Nháy đúp   2-GO-CAI-DAT.cmd   (dữ liệu đã thu thập được giữ lại; chạy với -RemoveData nếu
-  muốn xóa luôn).
+  Nháy đúp   2-GO-CAI-DAT.cmd   (hoặc Cài đặt Windows -> Ứng dụng -> Ứng dụng đã cài -> TokenVault Adapter).
+  Nó tắt Adapter, bỏ tự khởi động và xóa chương trình, rồi in bảng ĐÃ XÓA / GIỮ LẠI. Dữ liệu cục bộ
+  (cấu hình, hàng đợi gửi, khóa thiết bị) mặc định được GIỮ; chạy với -RemoveData nếu muốn xóa hết.
+  Lưu ý: gỡ Adapter không xóa thiết bị trên Manager - người quản lý có thể thu hồi/đặt lại ở đó.
 
 CÂU HỎI THƯỜNG GẶP
   * Windows báo "đã chặn ứng dụng" (Smart App Control)? Gói này KHÔNG có file .exe lạ; nó
@@ -51,6 +53,8 @@ ENGLISH SUMMARY
   tool names, Claude account email, machine name, Windows user name.
   Never sent: conversation text, prompts, file contents, full paths.
   Check: tray icon -> "What is sent?". Source is readable in _he-thong\runtime\app\tokenvault.
-  Uninstall: double-click 2-GO-CAI-DAT.cmd (add -RemoveData to delete collected data too).
+  Uninstall: double-click 2-GO-CAI-DAT.cmd or Windows Settings > Installed apps > TokenVault Adapter;
+  it prints what was removed / kept (local data is kept unless -RemoveData). It does not delete
+  the device on the Manager (your manager can revoke / reset it there).
   Smart App Control: the package has no unknown .exe; it runs the official Python runtime
   signed by the Python Software Foundation. If blocked anyway, send a screenshot to IT.

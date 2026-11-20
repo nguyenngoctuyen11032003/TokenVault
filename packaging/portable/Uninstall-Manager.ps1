@@ -108,15 +108,16 @@ if (Test-Path -LiteralPath $uninstKey) {
     else { [void]$removed.Add('Da xoa muc trong Settings > Installed apps') }
 }
 
-# 5. the installed copy (runtime first; the folder holding the running uninstaller last)
+# 5. the installed copy: everything but the .cmd that may be running us now; that file (and then
+#    the folder) is removed by a detached cmd a few seconds later
 if (Test-Path -LiteralPath $InstallDir) {
-    foreach ($sub in 'runtime', 'scripts') { [void](Remove-Tree (Join-Path $InstallDir $sub)) }
-    if (Remove-Tree $InstallDir) { [void]$removed.Add("Da xoa thu muc cai dat $InstallDir") }
-    else {
-        # a file is still in use (usually the .cmd that started this script): finish it detached
+    $wrapper = '3-GO-CAI-MANAGER.cmd'
+    foreach ($c in @(Get-ChildItem -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne $wrapper })) { [void](Remove-Tree $c.FullName) }
+    if (Test-Path -LiteralPath (Join-Path $InstallDir $wrapper)) {
         Start-Process -FilePath "$env:SystemRoot\System32\cmd.exe" -WindowStyle Hidden -ArgumentList '/c', ('ping -n 4 127.0.0.1 >nul & rd /s /q "' + $InstallDir + '"')
-        [void]$removed.Add("Thu muc cai dat $InstallDir se tu xoa sau vai giay")
-    }
+        [void]$removed.Add("Da xoa chuong trinh; thu muc cai dat $InstallDir se tu xoa sau vai giay")
+    } elseif (Remove-Tree $InstallDir) { [void]$removed.Add("Da xoa thu muc cai dat $InstallDir") }
+    else { $script:hard++; [void]$failed.Add("Khong xoa het duoc $InstallDir (dang bi dung?)") }
 } else { [void]$kept.Add('Khong con thu muc cai dat') }
 
 # 6. the statistics

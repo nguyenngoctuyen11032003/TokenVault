@@ -65,8 +65,10 @@ DOC_NAME = "DOC-TRUOC.txt"
 ADAPTER_ROOT = {"1-CAI-DAT.cmd": "1-CAI-DAT.cmd", "2-GO-CAI-DAT.cmd": "2-GO-CAI-DAT.cmd",
                 "DOC-TRUOC.employee.txt": DOC_NAME}
 VERSION_FILE = "version.txt"  # written by build-portable.ps1 from pyproject (optional)
-ADAPTER_SYSTEM = ("install.ps1", "uninstall.ps1", VERSION_FILE)
-ADAPTER_SCRIPTS = (*ADAPTER_ROOT, *ADAPTER_SYSTEM)  # version.txt is optional (_check)
+ICON_FILE = "tokenvault.ico"  # logo for Settings > Installed apps (optional, copied by the build)
+OPTIONAL_SCRIPTS = (VERSION_FILE, ICON_FILE)
+ADAPTER_SYSTEM = ("install.ps1", "uninstall.ps1", *OPTIONAL_SCRIPTS)
+ADAPTER_SCRIPTS = (*ADAPTER_ROOT, *ADAPTER_SYSTEM)  # version.txt / ico optional
 # Manager package: clickable root files, and the helper scripts kept under _he-thong/scripts
 MANAGER_ROOT = {"1-CHAY-MANAGER.cmd": "1-CHAY-MANAGER.cmd",
                 "2-CAI-MANAGER-VAO-MAY.cmd": "2-CAI-MANAGER-VAO-MAY.cmd",
@@ -179,7 +181,7 @@ class PortablePackager:
                 "The portable runtime is missing: run build\\build-portable.ps1 "
                 f"(expected {self.runtime_dir / 'runtime' / 'python.exe'}).")
         missing = [n for n in ADAPTER_SCRIPTS
-                   if n != VERSION_FILE and not (self.scripts_dir / n).is_file()]
+                   if n not in OPTIONAL_SCRIPTS and not (self.scripts_dir / n).is_file()]
         if missing:
             raise PackagerError(f"Portable package scripts are missing: {', '.join(missing)}")
 
@@ -300,7 +302,7 @@ def build_manager_zip(runtime_dir: Path, out_zip: Path, scripts_dir: Path | None
     sd = Path(scripts_dir) if scripts_dir else (
         runtime_dir / "scripts" if (runtime_dir / "scripts").is_dir() else default_scripts_dir())
     missing = [n for n in (*MANAGER_SCRIPTS, *ADAPTER_SCRIPTS)
-               if n != VERSION_FILE and not (sd / n).is_file()]
+               if n not in OPTIONAL_SCRIPTS and not (sd / n).is_file()]
     if missing:
         raise PackagerError(f"Manager package scripts are missing: {', '.join(missing)}")
     out_zip = Path(out_zip)

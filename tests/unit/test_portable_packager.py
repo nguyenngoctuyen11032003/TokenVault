@@ -138,7 +138,7 @@ def test_manager_zip_carries_adapter_scripts_so_an_installed_manager_can_build(
     with zipfile.ZipFile(out) as z:
         names = set(z.namelist())
         assert {"_he-thong/scripts/" + n for n in pp.ADAPTER_SCRIPTS
-                if n != pp.VERSION_FILE} <= names
+                if n not in pp.OPTIONAL_SCRIPTS} <= names
         z.extractall(tmp_path / "installed")
     # an extracted Manager ZIP: <root>/_he-thong/{runtime,scripts} (== an Inno {app} layout)
     root = tmp_path / "installed" / "_he-thong"
@@ -299,6 +299,7 @@ def test_version_file_is_carried_into_both_zips(
     sd = tmp_path / "scripts"
     shutil.copytree(SCRIPTS, sd)
     (sd / "version.txt").write_text("1.2.3")
+    (sd / "tokenvault.ico").write_bytes(b"ico")
     with zipfile.ZipFile(pp.build_manager_zip(runtime, tmp_path / "m.zip", scripts_dir=sd)) as z:
         assert z.read("_he-thong/scripts/version.txt").strip() == b"1.2.3"
     b = pp.PortablePackager(runtime, enr, CertInfo(tmp_path / "c", tmp_path / "k", FP),
@@ -306,6 +307,7 @@ def test_version_file_is_carried_into_both_zips(
                             scripts_dir=sd).build_for_team("Dev", None)
     with zipfile.ZipFile(b.path) as z:
         assert z.read("_he-thong/version.txt").strip() == b"1.2.3"
+        assert z.read("_he-thong/tokenvault.ico") == b"ico"
 
 
 def test_uninstall_scripts_are_clean_one_click_and_registered() -> None:

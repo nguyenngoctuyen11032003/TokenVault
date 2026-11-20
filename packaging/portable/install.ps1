@@ -127,13 +127,15 @@ switch ($p.ExitCode) {
         # the uninstaller next to the program + Settings > Installed apps entry
         try {
             Copy-Item -LiteralPath (Join-Path $here 'uninstall.ps1') -Destination (Join-Path $InstallDir 'uninstall.ps1') -Force
+            $icoSrc = Join-Path $here 'tokenvault.ico'
+            if (Test-Path -LiteralPath $icoSrc) { Copy-Item -LiteralPath $icoSrc -Destination (Join-Path $InstallDir 'tokenvault.ico') -Force }
             $vf = Join-Path $here 'version.txt'
             if (Test-Path -LiteralPath $vf) { Copy-Item -LiteralPath $vf -Destination (Join-Path $InstallDir 'version.txt') -Force }
             $goSrc = Join-Path (Split-Path -Parent $here) '2-GO-CAI-DAT.cmd'
             $goDst = Join-Path $InstallDir '2-GO-CAI-DAT.cmd'
             if (Test-Path -LiteralPath $goSrc) {
                 Copy-Item -LiteralPath $goSrc -Destination $goDst -Force
-                Register-Uninstall 'TokenVaultAdapter' 'TokenVault Adapter' ('cmd.exe /c ""' + $goDst + '""') (Join-Path $destRuntime 'app\tokenvault\ui\assets\logo\tokenvault.ico') $InstallDir
+                Register-Uninstall 'TokenVaultAdapter' 'TokenVault Adapter' ('cmd.exe /c ""' + $goDst + '""') (Join-Path $InstallDir 'tokenvault.ico') $InstallDir
             }
         } catch { Write-Host "WARNING: could not register in Settings > Installed apps: $($_.Exception.Message)" -ForegroundColor Yellow }
         Say 'TokenVault Adapter installed and running (tray icon).'; exit 0

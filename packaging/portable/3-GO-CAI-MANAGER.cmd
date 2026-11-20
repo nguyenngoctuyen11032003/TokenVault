@@ -7,11 +7,12 @@ rem -KeepData answer the question. Everything after setlocal is ONE block, parse
 rem runs: the file may delete itself.
 setlocal EnableDelayedExpansion
 title TokenVault Manager - Go cai dat / Uninstall
-cd /d "%~dp0"
 set "TVQUIET="
 echo %* | "%SystemRoot%\System32\find.exe" /i "-Silent" >nul && set "TVQUIET=1"
 set "TVPS=%~dp0_he-thong\scripts\Uninstall-Manager.ps1"
 if not exist "%TVPS%" set "TVPS=%~dp0scripts\Uninstall-Manager.ps1"
+rem the current folder must not be the install dir (it would lock it)
+cd /d "%TEMP%"
 (
   echo ==============================================================
   echo   TokenVault Manager - Go cai dat / Uninstall

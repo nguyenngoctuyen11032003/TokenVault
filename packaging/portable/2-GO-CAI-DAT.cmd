@@ -6,12 +6,13 @@ rem -RemoveData wipes the local data too, -KeepData keeps it without asking.
 rem Everything after setlocal is ONE block, parsed before it runs: the file may delete itself.
 setlocal EnableDelayedExpansion
 title TokenVault Adapter - Go cai dat / Uninstall
-cd /d "%~dp0"
 set "TVQUIET="
 echo %* | "%SystemRoot%\System32\find.exe" /i "-Silent" >nul && set "TVQUIET=1"
 echo %* | "%SystemRoot%\System32\find.exe" /i "-NoAutostart" >nul && set "TVQUIET=1"
 set "TVPS=%~dp0_he-thong\uninstall.ps1"
 if not exist "%TVPS%" set "TVPS=%~dp0uninstall.ps1"
+rem the current folder must not be the install dir (it would lock it)
+cd /d "%TEMP%"
 (
   echo ==============================================================
   echo   TokenVault Adapter - Go cai dat / Uninstall

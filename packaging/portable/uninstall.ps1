@@ -75,28 +75,28 @@ if (Test-Path -LiteralPath $uninstKey) {
     else { [void]$removed.Add('Da xoa muc trong Settings > Installed apps') }
 }
 
-# 3. the installed runtime (+ the uninstaller copy; the .cmd that started us goes last, detached)
-$late = $false
+# 3. the installed runtime (+ uninstaller copy). The .cmd that may be running us now goes last:
+#    a detached cmd removes it (and, with -RemoveData, the folder) a few seconds later.
 if (Test-Path -LiteralPath $InstallDir) {
+    $wrapper = '2-GO-CAI-DAT.cmd'
+    $rest = @(Get-ChildItem -LiteralPath $InstallDir -Force -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne $wrapper })
     if ($wipe) {
-        if (Remove-Tree $InstallDir) { [void]$removed.Add("Da xoa TOAN BO du lieu va chuong trinh: $InstallDir") }
-        else { $late = $true }
+        foreach ($c in $rest) { [void](Remove-Tree $c.FullName) }
+        [void]$removed.Add("Da xoa TOAN BO du lieu cuc bo va chuong trinh: $InstallDir")
     } else {
         if (Remove-Tree (Join-Path $InstallDir 'runtime')) { [void]$removed.Add('Da xoa chuong trinh (runtime)') }
         else { $script:hard++; [void]$failed.Add('Khong xoa het duoc thu muc runtime (dang bi dung?)') }
-        foreach ($f in 'uninstall.ps1', '2-GO-CAI-DAT.cmd', 'version.txt') {
+        foreach ($f in 'uninstall.ps1', 'version.txt', 'tokenvault.ico') {
             $fp = Join-Path $InstallDir $f
             if (Test-Path -LiteralPath $fp) { Remove-Item -LiteralPath $fp -Force -ErrorAction SilentlyContinue }
         }
-        if (Test-Path -LiteralPath (Join-Path $InstallDir '2-GO-CAI-DAT.cmd')) {
-            Start-Process -FilePath "$env:SystemRoot\System32\cmd.exe" -WindowStyle Hidden -ArgumentList '/c', ('ping -n 4 127.0.0.1 >nul & del /f /q "' + (Join-Path $InstallDir '2-GO-CAI-DAT.cmd') + '"')
-        }
         [void]$kept.Add("Giu lai du lieu cuc bo: $InstallDir (cau hinh, hang doi, khoa thiet bi; xoa tay hoac chay lai voi -RemoveData)")
     }
-    if ($late) {
-        Start-Process -FilePath "$env:SystemRoot\System32\cmd.exe" -WindowStyle Hidden -ArgumentList '/c', ('ping -n 4 127.0.0.1 >nul & rd /s /q "' + $InstallDir + '"')
-        [void]$removed.Add("Thu muc $InstallDir se tu xoa sau vai giay")
-    }
+    $wp = Join-Path $InstallDir $wrapper
+    if (Test-Path -LiteralPath $wp) {
+        $tail = if ($wipe) { 'rd /s /q "' + $InstallDir + '"' } else { 'del /f /q "' + $wp + '"' }
+        Start-Process -FilePath "$env:SystemRoot\System32\cmd.exe" -WindowStyle Hidden -ArgumentList '/c', ('ping -n 4 127.0.0.1 >nul & ' + $tail)
+    } elseif ($wipe) { [void](Remove-Tree $InstallDir) }
 } else { [void]$kept.Add('Khong con thu muc cai dat') }
 
 Say ''

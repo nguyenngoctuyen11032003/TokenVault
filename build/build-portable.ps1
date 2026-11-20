@@ -147,6 +147,7 @@ try {
     if ($RefreshOnly -and (Test-Path -LiteralPath $sc)) { Remove-Item -LiteralPath $sc -Recurse -Force }
     New-Item -ItemType Directory -Force $sc | Out-Null
     Copy-Item (Join-Path $repo 'packaging\portable\*') $sc -Force -Exclude '*.py'
+    Copy-Item (Join-Path $repo 'src\tokenvault\ui\assets\logo\tokenvault.ico') (Join-Path $sc 'tokenvault.ico') -Force
     # version shown in Settings > Installed apps (read by the install scripts)
     $vm = [regex]::Match((Get-Content -LiteralPath (Join-Path $repo 'pyproject.toml') -Raw), '(?m)^version\s*=\s*"([^"]+)"')
     if ($vm.Success) { [IO.File]::WriteAllText((Join-Path $sc 'version.txt'), $vm.Groups[1].Value + "`r`n", (New-Object Text.UTF8Encoding($false))) }
