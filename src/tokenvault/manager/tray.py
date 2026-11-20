@@ -1,7 +1,8 @@
 """Tray icon (pystray) for the Manager: Open / Create employee installer / Quit.
 
-The icon image is drawn with Pillow (chamfered red plate, white "T"), so no
-image file has to be shipped. pystray's Win32 backend runs its message loop in
+The icon is the TokenVault logo (common/brand.py); when the file is missing a
+chamfered red plate with a white "T" is drawn with Pillow instead. pystray's Win32 backend
+runs its message loop in
 its own thread, next to pywebview's GUI loop on the main thread.
 """
 
@@ -14,6 +15,8 @@ from typing import Any
 
 from PIL import Image, ImageDraw
 
+from tokenvault.common import brand
+
 log = logging.getLogger(__name__)
 
 TITLE = "TokenVault Manager"
@@ -23,6 +26,11 @@ LABEL_QUIT = "Thoát"
 
 
 def icon_image(size: int = 64) -> Image.Image:
+    logo: Image.Image | None = brand.tray_image(size)
+    return logo if logo is not None else _drawn_icon(size)
+
+
+def _drawn_icon(size: int) -> Image.Image:
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     c = size // 5

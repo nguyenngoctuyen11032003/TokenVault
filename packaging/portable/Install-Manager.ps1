@@ -84,6 +84,10 @@ if (Test-Path -LiteralPath $srcScripts) {
 $pyw = Join-Path $destRuntime 'pythonw.exe'
 $py = Join-Path $destRuntime 'python.exe'
 
+# Brand icon shipped inside the copied app folder; the python icon only if it is missing.
+$ico = Join-Path $destRuntime 'app\tokenvault\ui\assets\logo\tokenvault.ico'
+$iconLocation = if (Test-Path -LiteralPath $ico) { $ico } else { "$pyw,0" }
+
 function New-Launcher($dir, $name) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     $lnk = Join-Path $dir "$name.lnk"
@@ -93,7 +97,7 @@ function New-Launcher($dir, $name) {
         $s.TargetPath = $pyw
         $s.Arguments = '-m tokenvault.manager'
         $s.WorkingDirectory = $destRuntime
-        $s.IconLocation = "$pyw,0"
+        $s.IconLocation = $iconLocation
         $s.Description = 'TokenVault Manager'
         $s.Save()
         return $lnk

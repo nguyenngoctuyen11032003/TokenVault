@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from tokenvault.adapter.strings import STRINGS, t
+from tokenvault.common import brand
 
 log = logging.getLogger("tokenvault.adapter.tray")
 
@@ -87,10 +88,18 @@ def to_pystray_menu(entries: list[MenuEntry]) -> Any:
 
 
 def make_icon(state: str) -> Any:
-    """64x64 icon drawn in code (no image files): dark tile, ring + dot in the state colour."""
+    """64x64 tray icon: the TokenVault logo with a state-coloured dot in the corner.
+
+    Falls back to the icon drawn in code when the logo file is missing."""
+    color = _STATE_COLOR.get(state, (128, 128, 128))
+    img = brand.tray_image(64, color)
+    return img if img is not None else _drawn_icon(color)
+
+
+def _drawn_icon(color: tuple[int, int, int]) -> Any:
+    """Fallback: dark tile, ring + dot in the state colour."""
     from PIL import Image, ImageDraw
 
-    color = _STATE_COLOR.get(state, (128, 128, 128))
     img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.rounded_rectangle((2, 2, 61, 61), radius=12, fill=(20, 20, 22, 255))

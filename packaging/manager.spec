@@ -12,7 +12,7 @@ SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))  # hooks/analysis import THIS checkout's tokenvault
 
 datas = [
-    (str(SRC / "tokenvault" / "ui"), "tokenvault/ui"),                 # HTML/CSS/JS + echarts
+    (str(SRC / "tokenvault" / "ui"), "tokenvault/ui"),                 # HTML/CSS/JS + echarts + assets/logo (brand.py)
     (str(SRC / "tokenvault" / "manager" / "schema.sql"), "tokenvault/manager"),  # store.py
     (str(ROOT / "data" / "pricing.json"), "data"),                     # paths.pricing_path()
 ]
@@ -52,5 +52,6 @@ exe = EXE(
     name="TokenVault-Manager",
     console=False, upx=False,
     version=str(ROOT / "packaging" / "version_manager.txt"),
+    icon=str(ROOT / "assets" / "logo" / "tokenvault.ico"),
 )
 coll = COLLECT(exe, a.binaries, a.datas, name="TokenVault-Manager", upx=False)

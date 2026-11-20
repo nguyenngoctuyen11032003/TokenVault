@@ -454,7 +454,8 @@ def test_tray_status_text() -> None:
 def test_tray_icon_image_is_generated() -> None:
     img = tray.make_icon("connected")
     assert img.size == (64, 64)
-    assert tray.make_icon("offline").getpixel((32, 32)) != img.getpixel((32, 32))
+    # the state dot sits in the bottom-right corner
+    assert tray.make_icon("offline").getpixel((52, 52)) != img.getpixel((52, 52))
 
 
 def test_tray_what_is_sent_spawns_child_process(

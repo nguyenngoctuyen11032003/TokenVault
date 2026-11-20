@@ -17,6 +17,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from tokenvault.common import brand
 from tokenvault.manager import api_manage, firewall, win_autostart
 from tokenvault.manager.api import Api, dispatch
 from tokenvault.manager.app_support import (
@@ -175,7 +176,9 @@ def run_gui(a: argparse.Namespace, *, demo: bool = False, screenshot: Path | Non
                 threading.Thread(target=_smoke, args=(shell, screenshot, seconds, report,
                                                       quit_app), daemon=True).start()
 
-        webview.start(started, private_mode=False, storage_path=str(paths.webview))
+        ico = brand.icon_ico()
+        webview.start(started, private_mode=False, storage_path=str(paths.webview),
+                      icon=str(ico) if ico else None)
     except Exception as e:  # noqa: BLE001 - e.g. WebView2 runtime missing
         log.exception("window failed")
         message_box(f"TokenVault Manager window failed:\n\n{e}\n\n"

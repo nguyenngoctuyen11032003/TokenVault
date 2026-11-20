@@ -20,6 +20,7 @@ from reportlab.lib.utils import simpleSplit
 from reportlab.pdfgen.canvas import Canvas
 from reportlab.platypus import Flowable
 
+from tokenvault.common import brand
 from tokenvault.manager.reports import fonts
 from tokenvault.manager.reports import palette as P
 from tokenvault.manager.reports import strings_vi as S
@@ -29,6 +30,7 @@ PAGE_W, PAGE_H = A4
 MARGIN = 15 * mm
 FRAME_W = PAGE_W - 2 * MARGIN
 FOOTER_Y = 8 * mm
+LOGO_PT = 22.0  # cover logo mark size (pt)
 
 
 def esc(text: object, font: str) -> str:
@@ -171,13 +173,28 @@ class CoverBand(Flowable):  # type: ignore[misc]
         self.height = 96.0
         return aw, self.height
 
+    @staticmethod
+    def _draw_mark(c: Canvas, y: float) -> bool:
+        """The logo mark at the top-left of the cover; silently skipped when unavailable."""
+        path = brand.logo_png(128)
+        if path is None:
+            return False
+        try:
+            c.drawImage(str(path), 0, y, LOGO_PT, LOGO_PT, mask="auto")
+        except Exception:  # noqa: BLE001 - a missing/corrupt logo must not break the report
+            return False
+        return True
+
     def draw(self) -> None:
         f = fonts.ensure_fonts()
         c, w, h = self.canv, self.width, self.height
         left_w = w * 0.6
+        text_x = 0.0
+        if self._draw_mark(c, h - LOGO_PT + 1):
+            text_x = LOGO_PT + 7
         c.setFillColor(HexColor(P.ACCENT))
         c.setFont(f.bold, 10)
-        c.drawString(0, h - 12, S.WORDMARK, charSpace=3.2)
+        c.drawString(text_x, h - 12, S.WORDMARK, charSpace=3.2)
         c.setFillColor(HexColor(P.INK))
         c.setFont(f.bold, 19)
         c.drawString(0, h - 40, fit(S.TITLE, 19, left_w, True))

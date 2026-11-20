@@ -43,6 +43,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=no
 RestartApplications=no
 WizardStyle=modern
+SetupIconFile=..\assets\logo\tokenvault.ico
+WizardImageFile=brand\wizard-large.bmp
+WizardSmallImageFile=brand\wizard-small.bmp
 
 [Files]
 Source: "{#AdapterExe}"; DestDir: "{app}"; DestName: "{#ExeName}"; Flags: ignoreversion

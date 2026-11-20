@@ -1,7 +1,7 @@
 {
   "app": {
     "documentTitle": "TokenVault Manager",
-    "brand": "ICS",
+    "logoAlt": "TokenVault",
     "titleBold": "TOKEN",
     "titleLight": "VAULT",
     "skipToContent": "Bỏ qua đến nội dung chính"

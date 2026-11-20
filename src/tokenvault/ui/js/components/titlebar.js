@@ -17,7 +17,8 @@ export class TvTitlebar extends HTMLElement {
     this._built = true;
     this.innerHTML = `
       <div class="tv-titlebar__brand pywebview-drag-region">
-        <span class="tv-titlebar__badge">${t('app.brand')}</span>
+        <img class="tv-titlebar__logo" src="assets/logo/tokenvault-mark-small.svg" alt="${t('app.logoAlt')}"
+             width="30" height="30" draggable="false">
       </div>
       <div class="tv-titlebar__title pywebview-drag-region" role="heading" aria-level="1">
         <b>${t('app.titleBold')}</b><span>${t('app.titleLight')}</span>
