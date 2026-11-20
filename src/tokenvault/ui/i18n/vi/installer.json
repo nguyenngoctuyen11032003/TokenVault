@@ -16,13 +16,13 @@
     "labelPlaceholder": "Ví dụ: Tầng 3",
     "targetLabel": "Hệ điều hành của nhân viên",
     "target": {
-      "windows": "Windows (tệp .exe)",
-      "windows-portable": "Windows – gói không cần exe (cho máy chặn file chưa ký)",
+      "windows-portable": "Windows – gói không cần exe",
+      "windows": "Windows – bộ cài .exe (có thể bị Windows chặn nếu máy bật Smart App Control)",
       "mac": "macOS (tệp .zip)"
     },
     "targetHint": {
-      "windows": "Dùng cho máy Windows bình thường. SmartScreen có thể cảnh báo: bấm “More info” → “Run anyway”. Nếu máy chặn hẳn tệp .exe chưa ký (Smart App Control / Application Control) thì chọn gói không cần exe.",
-      "windows-portable": "Gói .zip chạy bằng Python đã được ký số sẵn, không có tệp .exe chưa ký nên qua được máy chặn file chưa ký. Cần chạy build/build-portable.ps1 một lần trên máy Manager.",
+      "windows": "Chỉ dùng khi máy nhân viên cho chạy tệp .exe chưa ký. SmartScreen chỉ cảnh báo mềm (bấm “More info” → “Run anyway” là chạy được). Nhưng nếu máy bật Smart App Control hoặc Application Control (WDAC) thì tệp .exe chưa ký bị chặn hẳn, không có nút bỏ qua (lỗi “An Application Control policy has blocked this file”): khi đó hãy dùng gói không cần exe.",
+      "windows-portable": "Khuyên dùng. Gói .zip chạy bằng Python đã được ký số sẵn (Python Software Foundation), không có tệp .exe chưa ký nên chạy được cả trên máy bật Smart App Control / Application Control. Có sẵn khi cài Manager bằng bộ cài chuẩn; nếu chạy từ mã nguồn, chạy build/build-portable.ps1 một lần.",
       "mac": "Bộ cài macOS là tệp .zip chưa ký số; cần có sẵn bộ mẫu build trên máy Mac (build/build-mac.sh)."
     },
     "generate": "Tạo bộ cài",
@@ -62,7 +62,7 @@
     "instructionsTitle": "Hướng dẫn gửi kèm cho nhân viên",
     "copyInstructions": "Chép hướng dẫn",
     "again": "Tạo bộ cài khác",
-    "smartscreenNote": "Bộ cài chưa được ký số nên Windows SmartScreen sẽ cảnh báo. Đã có hướng dẫn bấm “More info” → “Run anyway” trong phần hướng dẫn.",
+    "smartscreenNote": "Bộ cài chưa được ký số nên Windows SmartScreen sẽ cảnh báo (bấm “More info” → “Run anyway”, đã có trong hướng dẫn). Máy bật Smart App Control hoặc Application Control sẽ chặn hẳn tệp này: với các máy đó hãy gửi gói không cần exe.",
     "instr": {
       "l1": "Hướng dẫn cài TokenVault (nhóm {team})",
       "l2": "1. Lưu tệp {file} vào máy rồi nhấp đúp để chạy. Không cần quyền quản trị.",

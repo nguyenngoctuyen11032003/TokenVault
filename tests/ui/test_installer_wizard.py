@@ -36,6 +36,9 @@ def _state(page: Any) -> str:
 
 
 def _generate(page: Any, team: str, label: str = "") -> None:
+    # The wizard flows below are the "Windows .exe" target; since Task 29 the default (and
+    # first) target is the no-exe package, so this helper selects the exe target explicitly.
+    page.check("#tv-view #tv-installer-target-windows")
     page.fill(TEAM, team)
     page.fill(LABEL, label)
     page.click(GENERATE)

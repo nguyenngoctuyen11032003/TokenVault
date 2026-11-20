@@ -23,6 +23,11 @@ def _generate(page: Any, team: str) -> None:
     page.click(GENERATE)
 
 
+def _generate_default(page: Any, team: str) -> None:
+    page.fill(TEAM, team)
+    page.click(GENERATE)
+
+
 def _create_error(page: Any) -> Any:
     banner = page.locator("#tv-view [data-create-error]")
     banner.wait_for()
@@ -30,8 +35,8 @@ def _create_error(page: Any) -> Any:
 
 
 TARGET_CASES = [
-    ("windows", None, "TokenVault-Adapter-Dev.exe", "Run anyway"),
     ("windows-portable", "windows-portable", "TokenVault-Adapter-Dev-portable.zip", "Install.cmd"),
+    ("windows", None, "TokenVault-Adapter-Dev.exe", "Run anyway"),
     ("mac", "mac", "TokenVault-Adapter-Dev-mac.zip", "Install.command"),
 ]
 
@@ -40,12 +45,30 @@ def test_target_selector_has_three_targets_with_hints(open_mgr: Any) -> None:
     page = open_mgr("#/installer")
     radios = page.locator("#tv-view input[name='target']")
     assert [radios.nth(i).get_attribute("value") for i in range(radios.count())] == [
-        "windows", "windows-portable", "mac"]
-    assert page.locator("#tv-view #tv-installer-target-windows").is_checked()
+        "windows-portable", "windows", "mac"]
+    # the no-exe package is the first option and the default for new installs
+    assert page.locator("#tv-view #tv-installer-target-windows-portable").is_checked()
+    assert not page.locator("#tv-view #tv-installer-target-windows").is_checked()
     hint = page.locator("#tv-view [data-target-hint]")
-    before = hint.inner_text()
-    page.check("#tv-view #tv-installer-target-windows-portable")
-    assert hint.inner_text() != before and "build-portable.ps1" in hint.inner_text()
+    assert "build-portable.ps1" in hint.inner_text()
+    page.check("#tv-view #tv-installer-target-windows")
+    assert "Smart App Control" in hint.inner_text() and "SmartScreen" in hint.inner_text()
+
+
+def test_target_labels_are_honest_about_application_control(open_mgr: Any) -> None:
+    page = open_mgr("#/installer")
+    label = lambda t: page.locator(f"#tv-view label[for='tv-installer-target-{t}']").inner_text()  # noqa: E731
+    assert label("windows-portable").strip().startswith("Windows – gói không cần exe")
+    assert "bộ cài .exe" in label("windows") and "Smart App Control" in label("windows")
+
+
+def test_default_target_generates_the_portable_package_without_choosing(open_mgr: Any) -> None:
+    page = open_mgr("#/installer")
+    _generate_default(page, "Dev")
+    page.wait_for_selector(f"{WIZ}[data-state='done']")
+    assert calls(page, "create_installer") == [["Dev", None, "windows-portable"]]
+    assert page.locator("#tv-view [data-result-file]").inner_text() == (
+        "TokenVault-Adapter-Dev-portable.zip")
 
 
 @pytest.mark.parametrize(("radio", "api_target", "file_name", "marker"), TARGET_CASES)

@@ -7,12 +7,14 @@
 //   missingKey  message for a [template_missing] error of this target
 
 export const TARGETS = Object.freeze([
-  { id: 'windows', apiTarget: null, hintKey: 'targetHint.windows', instrKey: 'instr', noteKey: 'smartscreenNote', missingKey: 'templateMissing' },
   { id: 'windows-portable', apiTarget: 'windows-portable', hintKey: 'targetHint.windows-portable', instrKey: 'instrPortable', noteKey: 'portableNote', missingKey: 'templateMissingPortable' },
+  { id: 'windows', apiTarget: null, hintKey: 'targetHint.windows', instrKey: 'instr', noteKey: 'smartscreenNote', missingKey: 'templateMissing' },
   { id: 'mac', apiTarget: 'mac', hintKey: 'targetHint.mac', instrKey: 'instrMac', noteKey: 'macNote', missingKey: 'templateMissingMac' },
 ]);
 
-export const DEFAULT_TARGET = 'windows';
+// The no-exe package is the default and first option: it runs on machines whose Smart App
+// Control / Application Control blocks every unsigned .exe (and on all the others).
+export const DEFAULT_TARGET = 'windows-portable';
 
 export function targetById(id) {
   return TARGETS.find((x) => x.id === id) ?? TARGETS[0];
