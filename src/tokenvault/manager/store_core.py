@@ -5,8 +5,10 @@ connection, locking, migration and write/read orchestration.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from tokenvault.common.models import UsageEvent
 
@@ -92,6 +94,21 @@ UPSERT_TITLE = (
     "WHERE excluded.title_ts >= session_meta.title_ts"
 )
 
+UPSERT_DEVICE = (
+    "INSERT INTO devices (device_id, team, email, windows_user, hostname, last_seen) "
+    "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET "
+    "team = CASE WHEN devices.team = '' THEN excluded.team ELSE devices.team END, "
+    "email = COALESCE(NULLIF(excluded.email, ''), devices.email), "
+    "windows_user = COALESCE(NULLIF(excluded.windows_user, ''), devices.windows_user), "
+    "hostname = COALESCE(NULLIF(excluded.hostname, ''), devices.hostname), "
+    "last_seen = MAX(devices.last_seen, excluded.last_seen)"
+)
+# Presence tick: same effect as UPSERT_DEVICE with no team/e-mail/user/host.
+TOUCH_DEVICE = (
+    "INSERT INTO devices (device_id, last_seen) VALUES (?, ?) ON CONFLICT(device_id) "
+    "DO UPDATE SET last_seen = MAX(devices.last_seen, excluded.last_seen)"
+)
+
 UPSERT_DEVICE_FROM_EVENTS = (
     "INSERT INTO devices (device_id, team, email, windows_user, hostname, last_seen) "
     "VALUES (?, ?, ?, ?, ?, 0) ON CONFLICT(device_id) DO UPDATE SET "
@@ -102,6 +119,23 @@ UPSERT_DEVICE_FROM_EVENTS = (
     "hostname = CASE WHEN devices.hostname = '' THEN excluded.hostname "
     "ELSE devices.hostname END"
 )
+
+# Covering indexes for the read side (Task 30, measured on 2M events / 50 employees /
+# 90 days: overview/today 106 -> ~30 ms). Created on every open (IF NOT EXISTS), so
+# existing databases get them without a schema version bump (a few seconds, once).
+PERF_INDEXES = """
+CREATE INDEX IF NOT EXISTS ix_rs_span
+    ON rollup_session (device_id, session_id, last_ts, first_ts, email, sidechain_tokens);
+CREATE INDEX IF NOT EXISTS ix_rs_project_span
+    ON rollup_session (project, device_id, session_id, last_ts, first_ts, email);
+CREATE INDEX IF NOT EXISTS ix_rd_day_cover ON rollup_day (day, model, sidechain, project,
+    device_id, email, input, output, cache_read, cache_5m, cache_1h, events);
+CREATE INDEX IF NOT EXISTS ix_rtd_day_cover ON rollup_tool_day (day, tool, calls);
+CREATE INDEX IF NOT EXISTS ix_rt_hour_cover ON rollup_tool_hour (hour, tool, calls);
+"""
+# Read-only connection: bigger page cache, memory-mapped reads, in-memory temp b-trees.
+READER_PRAGMAS = ("PRAGMA cache_size=-16384", "PRAGMA mmap_size=134217728",
+                  "PRAGMA temp_store=MEMORY")
 
 # Rebuild the UTC-hour and session rollups from `events`.
 REBUILD_FROM_EVENTS = f"""
@@ -247,6 +281,33 @@ class Row:
             windows_user=e.windows_user,
             hostname=e.hostname,
             team=e.team,
+        )
+
+    @classmethod
+    def from_db(cls, r: Any) -> Row:
+        """From an ``events`` row selected with :data:`EVENT_COLS` (sqlite3.Row)."""
+        return cls(
+            key=r["msg_key"],
+            uuid=r["uuid"],
+            message_id=r["message_id"],
+            session_id=r["session_id"],
+            timestamp=r["timestamp"],
+            ts=r["ts"],
+            hour=r["hour"],
+            model=r["model"],
+            effort=r["reasoning_effort"],
+            sidechain=r["sidechain"],
+            tokens=[r[c] for c in TOKEN_COLS],
+            project=r["project"],
+            title=r["session_title"],
+            title_ts=r["title_ts"],
+            tools=json.loads(r["tool_names"]),
+            account_email=r["account_email"],
+            email=r["email"],
+            account_uuid=r["account_uuid"],
+            windows_user=r["windows_user"],
+            hostname=r["hostname"],
+            team=r["team_at_send"],
         )
 
     def absorb(self, other: Row) -> None:

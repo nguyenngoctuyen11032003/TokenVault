@@ -48,8 +48,12 @@ from tokenvault.manager.store_core import (
     MIGRATE_V1_BACKFILL,
     MIGRATE_V1_COLUMNS,
     N_EVENT_COLS,
+    PERF_INDEXES,
+    READER_PRAGMAS,
     TOKEN_COLS,
     TOOL_TABLES,
+    TOUCH_DEVICE,
+    UPSERT_DEVICE,
     UPSERT_DEVICE_FROM_EVENTS,
     UPSERT_SESSION,
     UPSERT_TITLE,
@@ -163,6 +167,8 @@ class Store:
         self._rcon.row_factory = sqlite3.Row
         self._rcon.execute("PRAGMA query_only=1")
         self._rcon.execute(f"PRAGMA busy_timeout={self._busy_ms}")
+        for pragma in READER_PRAGMAS:
+            self._rcon.execute(pragma)
         self._snap = ReadSnapshot(self._rcon)
 
     # ------------------------------------------------------------------ setup
@@ -188,6 +194,7 @@ class Store:
             self.tz_offset_minutes = want
             if recorded != want:
                 con.executescript(_txn(rebuild_local_sql(want)))
+            con.executescript(_txn(PERF_INDEXES))
 
     def _recorded_tz(self) -> int | None:
         row = self._con.execute("SELECT value FROM meta WHERE key = 'tz_offset_minutes'").fetchone()
@@ -197,7 +204,16 @@ class Store:
         with self._rlock:
             self._rcon.close()
         with self._wlock:
+            try:
+                self._con.execute("PRAGMA optimize")  # refresh planner stats (cheap)
+            except sqlite3.Error:
+                pass
             self._con.close()
+
+    def data_version(self) -> int:
+        """Changes whenever another connection (the writer) committed (read caches)."""
+        with self._rlock:
+            return int(self._rcon.execute("PRAGMA data_version").fetchone()[0])
 
     # ------------------------------------------------------------------ reads
     @contextmanager
@@ -257,17 +273,19 @@ class Store:
         frozen at ingest).
         """
         with self._wlock:
-            self._con.execute(
-                "INSERT INTO devices (device_id, team, email, windows_user, hostname, last_seen) "
-                "VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET "
-                "team = CASE WHEN devices.team = '' THEN excluded.team ELSE devices.team END, "
-                "email = COALESCE(NULLIF(excluded.email, ''), devices.email), "
-                "windows_user = COALESCE(NULLIF(excluded.windows_user, ''), "
-                "devices.windows_user), "
-                "hostname = COALESCE(NULLIF(excluded.hostname, ''), devices.hostname), "
-                "last_seen = MAX(devices.last_seen, excluded.last_seen)",
-                (device_id, team or "", email, windows_user or "", hostname or "", last_seen),
-            )
+            self._con.execute(UPSERT_DEVICE, (device_id, team or "", email, windows_user or "",
+                                              hostname or "", last_seen))
+
+    def touch_devices(self, device_ids: Iterable[str], last_seen: float) -> None:
+        """Presence: ``upsert_device(d, None, None, last_seen)`` for many devices, ONE commit."""
+        with self._wlock:
+            self._con.execute("BEGIN IMMEDIATE")
+            try:
+                self._con.executemany(TOUCH_DEVICE, [(d, last_seen) for d in device_ids])
+                self._con.execute("COMMIT")
+            except BaseException:
+                self._con.execute("ROLLBACK")
+                raise
 
     def set_device_team(self, device_id: str, team: str) -> None:
         with self._wlock:
@@ -330,29 +348,7 @@ class Store:
                 f"SELECT {EVENT_COLS} FROM events WHERE device_id = ? AND msg_key IN ({marks})",
                 (device_id, *part),
             ):
-                out[r["msg_key"]] = Row(
-                    key=r["msg_key"],
-                    uuid=r["uuid"],
-                    message_id=r["message_id"],
-                    session_id=r["session_id"],
-                    timestamp=r["timestamp"],
-                    ts=r["ts"],
-                    hour=r["hour"],
-                    model=r["model"],
-                    effort=r["reasoning_effort"],
-                    sidechain=r["sidechain"],
-                    tokens=[r[c] for c in TOKEN_COLS],
-                    project=r["project"],
-                    title=r["session_title"],
-                    title_ts=r["title_ts"],
-                    tools=json.loads(r["tool_names"]),
-                    account_email=r["account_email"],
-                    email=r["email"],
-                    account_uuid=r["account_uuid"],
-                    windows_user=r["windows_user"],
-                    hostname=r["hostname"],
-                    team=r["team_at_send"],
-                )
+                out[r["msg_key"]] = Row.from_db(r)
         return out
 
     def _apply(self, device_id: str, chunk: list[Row]) -> int:
