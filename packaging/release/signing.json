@@ -1,0 +1,23 @@
+{
+  "_comment": "Release signing/verification policy (Task 31). Read by sign.ps1, verify-release.ps1 and release_verify.py. first_party / unsigned_by_design are matched case-insensitively against the FILE NAME; allowed_scripts against the path relative to the scanned folder, with forward slashes (fnmatch: * also matches /). sign_unsigned_bundled: also sign redistributed binaries that carry NO vendor signature (Smart App Control checks every DLL/.pyd that is loaded); vendor-signed files are never re-signed.",
+  "expected_publisher": "TokenVault",
+  "first_party": [
+    "TokenVault-Manager.exe",
+    "TokenVaultAdapter.exe",
+    "TokenVault-Manager-Setup.exe",
+    "TokenVault-Adapter-*.exe",
+    "uninst.e32.tmp"
+  ],
+  "unsigned_by_design": {
+    "adapter-setup-template.exe": "The Manager appends each team's enrollment payload (TVLTCFG1) to a copy of this file; any Authenticode signature would be invalidated by the appended bytes. Team installers made from it are therefore always unsigned (use the no-exe portable package on Smart App Control machines)."
+  },
+  "sign_unsigned_bundled": true,
+  "pe_extensions": [".exe", ".dll", ".pyd", ".sys", ".ocx", ".cpl", ".scr", ".msi", ".msix", ".efi"],
+  "script_extensions": [".ps1", ".psm1", ".psd1", ".cmd", ".bat", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".hta", ".lnk", ".com", ".jar"],
+  "allowed_scripts": [
+    "*/_internal/tokenvault/ui/*.js",
+    "*/_internal/webview/js/*.js",
+    "*/_internal/webview/*.js",
+    "*/portable-runtime/scripts/*"
+  ]
+}

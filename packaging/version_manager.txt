@@ -6,6 +6,9 @@ VSVersionInfo(
       StringStruct('CompanyName', 'TokenVault'),
       StringStruct('FileDescription', 'TokenVault Manager'),
       StringStruct('FileVersion', '0.1.0.0'),
+      StringStruct('InternalName', 'TokenVault-Manager'),
+      StringStruct('LegalCopyright', 'Copyright (C) 2026 TokenVault'),
+      StringStruct('OriginalFilename', 'TokenVault-Manager.exe'),
       StringStruct('ProductName', 'TokenVault'),
       StringStruct('ProductVersion', '0.1.0.0')])]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])

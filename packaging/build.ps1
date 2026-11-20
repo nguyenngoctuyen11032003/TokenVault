@@ -34,7 +34,9 @@ param(
   [switch]$DevTemplate,
   [string]$Python,
   [string]$DistDir,   # output folder (default <repo>\dist); use another one while a built Manager is running
-  [switch]$SkipWebView2Download
+  [switch]$SkipWebView2Download,
+  [switch]$Sign,   # Task 31 hook: sign via packaging\release\sign.ps1 (see BUILD.md)
+  [ValidateSet('Development','Production')][string]$SignMode = 'Development'
 )
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
@@ -68,6 +70,28 @@ function Find-Iscc {
   return $null
 }
 
+# --- Task 31 release signing hook (begin) -----------------------------------------------
+# -Sign: sign.ps1 -CheckCredentials decides; without credentials Development stays unsigned
+# (banner), Production stops here. ISCC signs Setup + uninstaller through /Stvsign=...
+$SignScript = Join-Path $Pkg 'release\sign.ps1'
+$SignReady = $false
+$IsccSign = @()
+if ($Sign) {
+  & $SignScript -Mode $SignMode -CheckCredentials
+  if ($LASTEXITCODE -eq 0) { $SignReady = $true }
+  elseif ($LASTEXITCODE -ne 10) { throw "signing preflight failed (exit $LASTEXITCODE)" }
+  if ($SignReady) {
+    $IsccSign = @(('/Stvsign=powershell.exe -NoProfile -ExecutionPolicy Bypass -File $q' + $SignScript +
+                   '$q -Mode ' + $SignMode + ' -Path $f'), '/DTvSignTool=tvsign')
+  }
+}
+function Invoke-ReleaseSign([string[]]$Paths) {
+  if (-not $SignReady) { return }
+  & $SignScript -Mode $SignMode -Path $Paths
+  if ($LASTEXITCODE -ne 0) { throw "signing failed (exit $LASTEXITCODE)" }
+}
+# --- Task 31 release signing hook (end) -------------------------------------------------
+
 $iscc = Find-Iscc
 New-Item -ItemType Directory -Force $Dist | Out-Null
 # A template left over from an earlier build must never be bundled by mistake.
@@ -80,6 +104,7 @@ Invoke-Step 'PyInstaller: adapter' {
 }
 $adapterExe = Join-Path $Dist 'adapter\TokenVaultAdapter.exe'
 if (-not (Test-Path $adapterExe)) { throw "missing $adapterExe" }
+Invoke-ReleaseSign @($adapterExe)   # Task 31 hook: before the template embeds it
 
 # 2. Adapter template installer ---------------------------------------------------------
 $template = Join-Path $Dist 'adapter-setup-template.exe'
@@ -143,9 +168,10 @@ if (Test-Path $boot) {
 }
 
 # 6. Manager installer -------------------------------------------------------------------
+Invoke-ReleaseSign @($mgrDir)   # Task 31 hook: before Inno packs the folder
 if ($iscc) {
   Invoke-Step 'Inno Setup: Manager installer' {
-    & $iscc "/DSourceDir=$mgrDir" "/DRedistDir=$redist" "/O$Dist" (Join-Path $Pkg 'manager.iss')
+    & $iscc @IsccSign "/DSourceDir=$mgrDir" "/DRedistDir=$redist" "/O$Dist" (Join-Path $Pkg 'manager.iss')
   }
 } else {
   $skipped += 'manager.iss'
