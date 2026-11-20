@@ -179,27 +179,12 @@ html.window--fullscreen {
   padding-left: calc(var(--tv-chamfer) * 0.55);
 }
 
-.tv-titlebar__badge {
-  position: relative;
-  padding-left: 16px;
-  font-family: var(--tv-font-display);
-  font-size: 18px;
-  font-weight: 800;
-  font-style: italic;
-  letter-spacing: 0.06em;
-  color: #d7d7dc;
-}
-
-.tv-titlebar__badge::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 8px;
-  height: 16px;
-  transform: translateY(-50%) skewX(-18deg);
-  background: linear-gradient(180deg, var(--tv-red-hot), var(--tv-red));
-  box-shadow: 0 0 10px var(--tv-red-glow);
+/* Brand mark (gold/navy logo; the UI accent stays red). */
+.tv-titlebar__logo {
+  display: block;
+  width: 30px;
+  height: 30px;
+  pointer-events: none; /* the brand area is a drag region */
 }
 
 /* Center "hood": dark trapezoid hanging from the top edge, red underline. */
