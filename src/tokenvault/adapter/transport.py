@@ -28,6 +28,8 @@ from typing import Any, Protocol
 
 from websockets.asyncio.client import ClientConnection, connect
 
+from tokenvault.adapter.cpu_budget import CpuBudget
+from tokenvault.adapter.framing import frame_rows
 from tokenvault.adapter.outbox import PendingEvent
 from tokenvault.adapter.transport_tls import (
     PinMismatch,
@@ -41,7 +43,6 @@ from tokenvault.adapter.transport_tls import (
 from tokenvault.common.protocol import (
     MAX_BATCH,
     MAX_FRAME_BYTES,
-    Batch,
     Hello,
     ProtocolError,
     Receipt,
@@ -99,7 +100,9 @@ class Transport:
         rejected_retry_s: float = 300.0,
         open_timeout: float = 10.0,
         reply_timeout: float = 60.0,
+        budget: CpuBudget | None = None,
     ) -> None:
+        self.budget = budget  # paces FULL batches (a backlog); live sends are never delayed
         self._outbox = outbox
         self.endpoint = endpoint
         self._hello_factory = hello_factory
@@ -338,6 +341,8 @@ class Transport:
                 rows = await asyncio.to_thread(self._outbox.pending, self.batch_size)
                 if rows:
                     await self._send_batch(ws, rows)
+                    if self.budget is not None and len(rows) >= self.batch_size:
+                        await asyncio.sleep(self.budget.delay())
                     continue
                 waiter = asyncio.ensure_future(wake.wait())
                 try:
@@ -361,25 +366,11 @@ class Transport:
         await asyncio.to_thread(self._outbox.ack, [(r.message_id, r.revision) for r in rows])
 
     async def _send_batch(self, ws: ClientConnection, rows: list[PendingEvent]) -> None:
-        good: list[PendingEvent] = []
-        bad: list[PendingEvent] = []
-        for r in rows:  # a row that cannot be framed on its own is poison
-            try:
-                encode_msg(Batch([r.event]))
-                good.append(r)
-            except (ProtocolError, ValueError):  # incl. UnicodeEncodeError, oversize
-                bad.append(r)
+        frame, rows, bad = frame_rows(rows)
         if bad:
             await self._drop(bad, "cannot be encoded into a frame")
-        if not good:
+        if frame is None:
             return
-        rows = good
-        while True:
-            try:
-                frame = encode_msg(Batch([r.event for r in rows]))
-                break
-            except (ProtocolError, ValueError):
-                rows = rows[: max(1, len(rows) // 2)]  # too big together: send fewer
         await ws.send(frame)
         msg = await self._recv_msg(ws)
         if not isinstance(msg, Receipt):

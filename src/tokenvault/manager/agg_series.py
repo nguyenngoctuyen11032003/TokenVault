@@ -177,7 +177,7 @@ def top_tools(ctx: QueryContext, flt: Filter, limit: int = 15) -> list[ToolCount
 
 def project_rows(ctx: QueryContext, flt: Filter, by_proj: dict[str, Acc]) -> list[ProjectRow]:
     src, params = ctx.scope(flt, "rollup_session", session=True)
-    stats = {
+    stats = {  # index-only scan of ix_rs_project_span (Task 30)
         p: (int(n), int(e), float(last))
         for p, n, e, last in ctx.q(
             "SELECT r.project, COUNT(DISTINCT r.device_id || char(31) || r.session_id), "

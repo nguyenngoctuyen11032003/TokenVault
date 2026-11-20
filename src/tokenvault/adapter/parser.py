@@ -68,6 +68,12 @@ def _str(value: Any) -> str | None:
 
 
 def parse_line(line: bytes, ctx: SessionContext) -> ParsedLine | None:
+    # Fast path (Task 30): only "assistant" and "ai-title" lines matter, and their type
+    # string is always present verbatim (JSON.stringify never escapes ASCII letters).
+    # Prompts and tool output - most of a transcript's bytes - are skipped unparsed.
+    if (isinstance(line, bytes | bytearray) and b'"assistant"' not in line
+            and b'"ai-title"' not in line):
+        return None
     try:
         obj = json.loads(line)
     except (ValueError, RecursionError):

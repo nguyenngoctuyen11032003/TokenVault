@@ -1,0 +1,399 @@
+{
+ "label": "after",
+ "part": "manager",
+ "date": "2026-11-20 11:46:50",
+ "cpus": 12,
+ "python": "3.12.10",
+ "dataset": {
+  "events": 1998000,
+  "seconds": 196.7,
+  "store_events_per_s": 10156,
+  "db_mb": 1423.5
+ },
+ "queries": {
+  "calls": {
+   "overview/today": {
+    "cold_ms": 54.6,
+    "p50_ms": 48.5,
+    "p95_ms": 62.3
+   },
+   "employees/today": {
+    "cold_ms": 21.1,
+    "p50_ms": 12.4,
+    "p95_ms": 13.0
+   },
+   "projects/today": {
+    "cold_ms": 21.3,
+    "p50_ms": 13.9,
+    "p95_ms": 14.8
+   },
+   "sessions/today": {
+    "cold_ms": 14.4,
+    "p50_ms": 12.1,
+    "p95_ms": 12.9
+   },
+   "employee/today": {
+    "cold_ms": 42.8,
+    "p50_ms": 37.8,
+    "p95_ms": 39.3
+   },
+   "skills/today": {
+    "cold_ms": 1.7,
+    "p50_ms": 0.7,
+    "p95_ms": 0.8
+   },
+   "orchestration/today": {
+    "cold_ms": 17.4,
+    "p50_ms": 10.1,
+    "p95_ms": 10.4
+   },
+   "overview/7d": {
+    "cold_ms": 83.8,
+    "p50_ms": 93.5,
+    "p95_ms": 104.4
+   },
+   "employees/7d": {
+    "cold_ms": 38.3,
+    "p50_ms": 29.8,
+    "p95_ms": 30.1
+   },
+   "projects/7d": {
+    "cold_ms": 49.5,
+    "p50_ms": 44.8,
+    "p95_ms": 46.6
+   },
+   "sessions/7d": {
+    "cold_ms": 13.5,
+    "p50_ms": 11.0,
+    "p95_ms": 12.5
+   },
+   "employee/7d": {
+    "cold_ms": 44.1,
+    "p50_ms": 43.2,
+    "p95_ms": 46.1
+   },
+   "skills/7d": {
+    "cold_ms": 8.1,
+    "p50_ms": 4.7,
+    "p95_ms": 5.2
+   },
+   "orchestration/7d": {
+    "cold_ms": 31.2,
+    "p50_ms": 23.3,
+    "p95_ms": 24.3
+   },
+   "overview/30d": {
+    "cold_ms": 285.4,
+    "p50_ms": 285.4,
+    "p95_ms": 294.0
+   },
+   "employees/30d": {
+    "cold_ms": 151.8,
+    "p50_ms": 112.8,
+    "p95_ms": 122.1
+   },
+   "projects/30d": {
+    "cold_ms": 172.6,
+    "p50_ms": 170.5,
+    "p95_ms": 171.4
+   },
+   "sessions/30d": {
+    "cold_ms": 12.0,
+    "p50_ms": 10.2,
+    "p95_ms": 10.3
+   },
+   "employee/30d": {
+    "cold_ms": 74.4,
+    "p50_ms": 74.9,
+    "p95_ms": 75.3
+   },
+   "skills/30d": {
+    "cold_ms": 33.7,
+    "p50_ms": 21.9,
+    "p95_ms": 23.1
+   },
+   "orchestration/30d": {
+    "cold_ms": 86.8,
+    "p50_ms": 87.1,
+    "p95_ms": 88.7
+   },
+   "overview/90d": {
+    "cold_ms": 484.7,
+    "p50_ms": 460.9,
+    "p95_ms": 484.1
+   },
+   "employees/90d": {
+    "cold_ms": 208.8,
+    "p50_ms": 197.6,
+    "p95_ms": 220.7
+   },
+   "projects/90d": {
+    "cold_ms": 299.1,
+    "p50_ms": 282.0,
+    "p95_ms": 317.5
+   },
+   "sessions/90d": {
+    "cold_ms": 12.0,
+    "p50_ms": 9.8,
+    "p95_ms": 11.3
+   },
+   "employee/90d": {
+    "cold_ms": 94.9,
+    "p50_ms": 97.7,
+    "p95_ms": 99.9
+   },
+   "skills/90d": {
+    "cold_ms": 99.9,
+    "p50_ms": 97.0,
+    "p95_ms": 103.0
+   },
+   "orchestration/90d": {
+    "cold_ms": 165.6,
+    "p50_ms": 166.1,
+    "p95_ms": 167.8
+   },
+   "overview/all": {
+    "cold_ms": 279.9,
+    "p50_ms": 286.1,
+    "p95_ms": 287.6
+   },
+   "employees/all": {
+    "cold_ms": 118.1,
+    "p50_ms": 112.7,
+    "p95_ms": 114.0
+   },
+   "projects/all": {
+    "cold_ms": 201.3,
+    "p50_ms": 194.9,
+    "p95_ms": 198.2
+   },
+   "sessions/all": {
+    "cold_ms": 14.2,
+    "p50_ms": 10.5,
+    "p95_ms": 10.9
+   },
+   "employee/all": {
+    "cold_ms": 91.1,
+    "p50_ms": 84.8,
+    "p95_ms": 86.1
+   },
+   "session_turns": {
+    "cold_ms": 0.8,
+    "p50_ms": 0.5,
+    "p95_ms": 0.5
+   }
+  },
+  "distinct_statements": 197,
+  "slowest_statements": [
+   {
+    "ms": 177.5,
+    "sql": "SELECT p, COUNT(DISTINCT dev || char(31) || sid), COUNT(DISTINCT k), MAX(lt) FROM (SELECT r.project AS p, r.device_id AS dev, r.session_id AS sid, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS k, MAX(r.last_ts) AS lt FROM rollup_session r WHERE r.last_ts >= 1787418000 AND r.first_ts < 1795194000 GROUP BY r.project, r.device_id, r.session_id, k) GROUP BY p",
+    "plan": [
+     "CO-ROUTINE (subquery-1)",
+     "SCAN r USING COVERING INDEX ix_rs_project_span",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN (subquery-1)",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "USE TEMP B-TREE FOR count(DISTINCT)",
+     "USE TEMP B-TREE FOR count(DISTINCT)"
+    ]
+   },
+   {
+    "ms": 176.8,
+    "sql": "SELECT p, COUNT(DISTINCT dev || char(31) || sid), COUNT(DISTINCT k), MAX(lt) FROM (SELECT r.project AS p, r.device_id AS dev, r.session_id AS sid, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS k, MAX(r.last_ts) AS lt FROM rollup_session r GROUP BY r.project, r.device_id, r.session_id, k) GROUP BY p",
+    "plan": [
+     "CO-ROUTINE (subquery-1)",
+     "SCAN r USING COVERING INDEX ix_rs_project_span",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN (subquery-1)",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "USE TEMP B-TREE FOR count(DISTINCT)",
+     "USE TEMP B-TREE FOR count(DISTINCT)"
+    ]
+   },
+   {
+    "ms": 115.9,
+    "sql": "SELECT r.device_id, r.session_id, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS k, SUM(r.sidechain_tokens) AS st, MAX(m.title) FROM rollup_session r LEFT JOIN session_meta m ON m.device_id = r.device_id AND m.session_id = r.session_id WHERE r.last_ts >= 1787418000 AND r.first_ts < 1795194000 GROUP BY r.device_id, r.session_id HAVING st > 0 ORDER BY st DESC, r.session_id",
+    "plan": [
+     "SCAN r USING COVERING INDEX ix_rs_span",
+     "SEARCH m USING INDEX sqlite_autoindex_session_meta_1 (device_id=? AND session_id=?) LEFT-JOIN",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   {
+    "ms": 113.7,
+    "sql": "SELECT g, COUNT(*) FROM (SELECT CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS g FROM rollup_session r WHERE r.last_ts >= 1787418000 AND r.first_ts < 1795194000 GROUP BY r.device_id, r.session_id, g) GROUP BY g",
+    "plan": [
+     "CO-ROUTINE (subquery-1)",
+     "SCAN r USING COVERING INDEX ix_rs_span",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN (subquery-1)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 109.8,
+    "sql": "SELECT g, COUNT(*) FROM (SELECT CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS g FROM rollup_session r GROUP BY r.device_id, r.session_id, g) GROUP BY g",
+    "plan": [
+     "CO-ROUTINE (subquery-1)",
+     "SCAN r USING COVERING INDEX ix_rs_span",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN (subquery-1)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 100.9,
+    "sql": "SELECT r.day, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END, SUM(r.calls) FROM rollup_tool_day r WHERE r.day >= 20688 AND r.day < 20778 AND r.tool = 'Skill' GROUP BY r.day, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END",
+    "plan": [
+     "SEARCH r USING INDEX ix_rtd_tool_day (tool=? AND day>? AND day<?)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 67.2,
+    "sql": "SELECT p, COUNT(DISTINCT dev || char(31) || sid), COUNT(DISTINCT k), MAX(lt) FROM (SELECT r.project AS p, r.device_id AS dev, r.session_id AS sid, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS k, MAX(r.last_ts) AS lt FROM rollup_session r WHERE r.last_ts >= 1792602000 AND r.first_ts < 1795194000 GROUP BY r.project, r.device_id, r.session_id, k) GROUP BY p",
+    "plan": [
+     "CO-ROUTINE (subquery-1)",
+     "SCAN r USING COVERING INDEX ix_rs_project_span",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN (subquery-1)",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "USE TEMP B-TREE FOR count(DISTINCT)",
+     "USE TEMP B-TREE FOR count(DISTINCT)"
+    ]
+   },
+   {
+    "ms": 58.6,
+    "sql": "SELECT r.tool, SUM(r.calls) FROM rollup_tool_day r WHERE r.day >= 20748 AND r.day < 20778 GROUP BY r.tool",
+    "plan": [
+     "SEARCH r USING COVERING INDEX ix_rtd_day_cover (day>? AND day<?)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 56.5,
+    "sql": "SELECT r.device_id, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END, r.model, SUM(r.input), SUM(r.output), SUM(r.cache_read), SUM(r.cache_5m), SUM(r.cache_1h), SUM(r.events) FROM rollup_day r WHERE r.day >= 20748 AND r.day < 20778 GROUP BY r.device_id, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END, r.model",
+    "plan": [
+     "SEARCH r USING COVERING INDEX ix_rd_day_cover (day>? AND day<?)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 50.1,
+    "sql": "SELECT r.day, r.project, r.model, SUM(r.input), SUM(r.output), SUM(r.cache_read), SUM(r.cache_5m), SUM(r.cache_1h), SUM(r.events) FROM rollup_day r WHERE r.day >= 20748 AND r.day < 20778 GROUP BY r.day, r.project, r.model",
+    "plan": [
+     "SEARCH r USING COVERING INDEX ix_rd_day_cover (day>? AND day<?)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 49.0,
+    "sql": "SELECT r.device_id, r.session_id, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS k, SUM(r.sidechain_tokens) AS st, MAX(m.title) FROM rollup_session r LEFT JOIN session_meta m ON m.device_id = r.device_id AND m.session_id = r.session_id WHERE r.last_ts >= 1792602000 AND r.first_ts < 1795194000 GROUP BY r.device_id, r.session_id HAVING st > 0 ORDER BY st DESC, r.session_id",
+    "plan": [
+     "SCAN r USING COVERING INDEX ix_rs_span",
+     "SEARCH m USING INDEX sqlite_autoindex_session_meta_1 (device_id=? AND session_id=?) LEFT-JOIN",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   {
+    "ms": 43.3,
+    "sql": "SELECT g, COUNT(*) FROM (SELECT CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS g FROM rollup_session r WHERE r.last_ts >= 1792602000 AND r.first_ts < 1795194000 GROUP BY r.device_id, r.session_id, g) GROUP BY g",
+    "plan": [
+     "CO-ROUTINE (subquery-1)",
+     "SCAN r USING COVERING INDEX ix_rs_span",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN (subquery-1)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   }
+  ],
+  "worst_call": {
+   "name": "overview/90d",
+   "cold_ms": 484.7,
+   "p50_ms": 460.9,
+   "p95_ms": 484.1
+  }
+ },
+ "backend": {
+  "startup_s": 3.05,
+  "idle_no_clients": {
+   "seconds": 60.3,
+   "cpu_pct_of_one_core": 0.207,
+   "cpu_pct_peak_sample": 1.6,
+   "cpu_pct_sustained_5s": 0.9,
+   "wakeups_per_s": 20.9,
+   "ws_mb_avg": 52.8,
+   "ws_mb_max": 52.9,
+   "private_mb_max": 36.2,
+   "write_mb": 0.0,
+   "write_ops": 0,
+   "processes": 1
+  },
+  "http": {
+   "overview": {
+    "p50_ms": 15.9,
+    "p95_ms": 17.5
+   },
+   "employees": {
+    "p50_ms": 15.9,
+    "p95_ms": 138.7
+   },
+   "projects": {
+    "p50_ms": 15.7,
+    "p95_ms": 209.5
+   },
+   "sessions": {
+    "p50_ms": 15.8,
+    "p95_ms": 35.3
+   },
+   "skills": {
+    "p50_ms": 15.8,
+    "p95_ms": 55.0
+   },
+   "orchestration": {
+    "p50_ms": 15.9,
+    "p95_ms": 104.8
+   }
+  },
+  "clients_connect": {
+   "connected": 50,
+   "seconds": 1.56
+  },
+  "idle_with_clients": {
+   "seconds": 60.3,
+   "cpu_pct_of_one_core": 0.259,
+   "cpu_pct_peak_sample": 1.6,
+   "cpu_pct_sustained_5s": 0.9,
+   "wakeups_per_s": 26.6,
+   "ws_mb_avg": 92.2,
+   "ws_mb_max": 92.3,
+   "private_mb_max": 73.8,
+   "write_mb": 0.05,
+   "write_ops": 24,
+   "processes": 1
+  },
+  "ingest": {
+   "seconds": 5.14,
+   "cpu_pct_of_one_core": 79.903,
+   "cpu_pct_peak_sample": 109.4,
+   "cpu_pct_sustained_5s": 99.5,
+   "wakeups_per_s": 4183.6,
+   "ws_mb_avg": 120.4,
+   "ws_mb_max": 124.5,
+   "private_mb_max": 106.0,
+   "write_mb": 281.22,
+   "write_ops": 123057,
+   "processes": 1,
+   "sent": 100000,
+   "events_per_s": 19455
+  },
+  "pdf_all_30d": {
+   "seconds": 7.41,
+   "pages": 54,
+   "cpu_pct_of_one_core": 97.721,
+   "ws_mb_max": 104.4,
+   "private_mb_max": 84.3
+  }
+ }
+}

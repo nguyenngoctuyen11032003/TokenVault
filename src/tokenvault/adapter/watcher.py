@@ -7,14 +7,18 @@ collect lock, so live and backfill collection never run concurrently.
 
 If ``root`` does not exist yet (Claude never ran) the worker retries attaching
 every ``_retry_s`` seconds (30 s by default; deliberately slow and simple).
+
+Backfill is BACKGROUND work (Task 30): the thread runs in Windows background mode
+(low CPU/I-O/memory priority), reads at most ``BACKFILL_CHUNK_BYTES`` per step and
+rests between steps so the whole process stays within a :class:`CpuBudget`
+(default 10 % of one core over 5 s). The collect lock is released while resting, so
+live files are never delayed by a resting backfill.
 """
 
 from __future__ import annotations
 
-import ctypes
 import logging
 import os
-import sys
 import threading
 import time
 from collections.abc import Callable
@@ -22,25 +26,36 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
-from watchdog.observers import Observer
 
 from tokenvault.adapter.collector import CollectResult
+from tokenvault.adapter.cpu_budget import CpuBudget
+from tokenvault.adapter.fswatch import make_observer
+from tokenvault.adapter.priority import (
+    set_background_priority,
+    thread_background,
+    trim_working_set,
+)
+
+__all__ = ["Watcher", "set_background_priority"]
 
 log = logging.getLogger("tokenvault.adapter.watcher")
 
-BELOW_NORMAL_PRIORITY_CLASS = 0x4000
 JOIN_TIMEOUT_S = 5.0
 MAX_WAIT_S = 1.0  # a file is collected at most this long after its first event
 # Hot-file stat poll: OS notifications can be withheld while a file is written
 # continuously, so files that produced an event are stat-ed every HOT_POLL_S and
-# dropped after HOT_TTL_S without activity. Nothing is polled when idle.
+# dropped after HOT_TTL_S without activity. Nothing is polled when idle. A hot file
+# that has not changed for HOT_QUIET_S is polled only every HOT_POLL_SLOW_S.
 HOT_POLL_S = 1.0
+HOT_POLL_SLOW_S = 3.0
+HOT_QUIET_S = 10.0
 HOT_TTL_S = 60.0
 # watchdog's default (1 s) is how long the Windows emitter waits for a QUIET gap before
 # it hands over a batch of notifications: every change arrived >= 1 s late, and a file
-# written continuously produced none at all. 0.1 s costs ~10 idle wake-ups/s (Task 23
-# E2E: idle agent ~0.3% of one core, was ~0.1%; append -> Manager median 0.65 s, was 1.6 s).
+# written continuously produced none at all. 0.1 s (Task 23: append -> Manager median
+# 0.65 s, was 1.6 s). fswatch.make_observer keeps it from polling while idle.
 OBSERVER_TIMEOUT_S = 0.1
+BACKFILL_CHUNK_BYTES = 1 << 20
 
 
 def _stat(path: Path) -> os.stat_result:
@@ -48,27 +63,7 @@ def _stat(path: Path) -> os.stat_result:
 
 
 class _CollectorLike(Protocol):
-    def collect_file(self, path: Path) -> CollectResult: ...
-
-
-def set_background_priority() -> bool:
-    """Set this process to BELOW_NORMAL priority on Windows; no-op elsewhere."""
-    if sys.platform == "darwin":
-        from tokenvault.adapter.platform import mac
-
-        return mac.set_background_priority()
-    if sys.platform != "win32":
-        return False
-    try:
-        kernel32 = ctypes.windll.kernel32
-        kernel32.GetCurrentProcess.restype = ctypes.c_void_p
-        kernel32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
-        return bool(
-            kernel32.SetPriorityClass(kernel32.GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS)
-        )
-    except Exception:
-        log.exception("could not set background priority")
-        return False
+    def collect_file(self, path: Path, max_bytes: int | None = None) -> CollectResult: ...
 
 
 def _is_jsonl(p: str | bytes) -> bool:
@@ -103,11 +98,13 @@ class Watcher:
         collector: _CollectorLike,
         on_new: Callable[[], None],
         debounce_s: float = 0.5,
+        budget: CpuBudget | None = None,
     ) -> None:
         self._root = Path(root)
         self._collector = collector
         self._on_new = on_new
         self._debounce_s = debounce_s
+        self.budget = budget if budget is not None else CpuBudget()
         self._retry_s = 30.0
         self._attached = False
         self._observer: Any = None
@@ -162,7 +159,7 @@ class Watcher:
             self._next_attach = time.monotonic() + self._retry_s
             return
         try:
-            obs = Observer(timeout=OBSERVER_TIMEOUT_S)
+            obs = make_observer(OBSERVER_TIMEOUT_S)
             obs.schedule(_Handler(self._schedule), str(self._root), recursive=True)
             obs.daemon = True
             obs.start()
@@ -202,6 +199,8 @@ class Watcher:
         with self._cond:
             if not self._hot:
                 self._next_poll = now + HOT_POLL_S
+            else:  # activity again: back to the fast poll
+                self._next_poll = min(self._next_poll, now + HOT_POLL_S)
             self._hot[path] = (now, seen)
             self._cond.notify_all()
 
@@ -243,6 +242,13 @@ class Watcher:
                         del self._hot[path]
                     else:
                         self._hot[path] = (active, cur)
+        with self._cond:  # nothing changed for a while: poll the hot files less often
+            now = time.monotonic()
+            if self._hot and all(now - a > HOT_QUIET_S for a, _ in self._hot.values()):
+                self._next_poll = max(self._next_poll, now + HOT_POLL_SLOW_S)
+            went_idle = bool(snapshot) and not self._hot and not self._pending
+        if went_idle and self.backfill_done.is_set():
+            trim_working_set()  # the last active file went quiet: give the memory back
 
     # -- worker ----------------------------------------------------------
     def _run(self) -> None:
@@ -286,19 +292,28 @@ class Watcher:
             return
         self._collect(path)
 
-    def _collect(self, path: Path) -> None:
-        """Collect one file (looping while `more`), serialised; notify if new."""
+    def _collect(self, path: Path, background: bool = False) -> None:
+        """Collect one file (looping while `more`), serialised; notify if new.
+
+        ``background`` (backfill): small chunks, the lock is released between them
+        and the CPU budget decides how long to rest before the next chunk.
+        """
         found = False
-        with self._collect_lock:
-            while not self._stopping.is_set():
+        while not self._stopping.is_set():
+            with self._collect_lock:
                 try:
-                    r = self._collector.collect_file(path)
+                    if background:
+                        r = self._collector.collect_file(path, max_bytes=BACKFILL_CHUNK_BYTES)
+                    else:
+                        r = self._collector.collect_file(path)
                 except Exception:
                     log.exception("collect failed for %s", path.name)
                     break
-                found = found or r.new_events > 0
-                if not r.more:
-                    break
+            found = found or r.new_events > 0
+            if not r.more:
+                break
+            if background and self.budget.pace(self._stopping):
+                break
         if found:
             self._mark_hot(
                 path, baseline=True
@@ -323,6 +338,7 @@ class Watcher:
         t.start()
 
     def _backfill(self, max_age_days: int, rate: int) -> None:
+        background = thread_background(True)
         try:
             cutoff = time.time() - max_age_days * 86400
             files: list[tuple[float, Path]] = []
@@ -344,10 +360,15 @@ class Watcher:
                     self._mark_hot(
                         p, baseline=True
                     )  # being written right now: poll it, not just events
-                self._collect(p)
+                self._collect(p, background=True)
                 if self._stopping.wait(max(0.0, interval - (time.monotonic() - started))):
+                    return
+                if self.budget.pace(self._stopping):
                     return
         except Exception:
             log.exception("backfill failed")
         finally:
+            if background:
+                thread_background(False)
             self.backfill_done.set()
+            trim_working_set()

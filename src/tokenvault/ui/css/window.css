@@ -281,7 +281,10 @@ html.window--fullscreen {
 .tv-live[data-state="online"] .tv-live__dot {
   background: var(--tv-green);
   box-shadow: 0 0 8px var(--tv-green);
-  animation: tv-pulse 2.4s ease-in-out infinite;
+  /* Task 30: three pulses when devices come online, then a steady glow. The former
+     endless box-shadow animation repainted the composited window 60 times a second
+     (~100 % of a core across the WebView2 GPU and renderer processes, even idle). */
+  animation: tv-pulse 2.4s ease-in-out 3;
 }
 
 .tv-live[data-state="waiting"] .tv-live__dot {

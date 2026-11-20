@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import functools
 import inspect
+import json
 import logging
 from collections.abc import Callable
 from typing import Any, Protocol, TypeVar, cast
@@ -33,6 +34,7 @@ from tokenvault.manager.api_models import (
     require_text,
 )
 from tokenvault.manager.lifecycle import Manager
+from tokenvault.manager.read_cache import ReadCache
 from tokenvault.manager.window_control import VirtualNative, WindowGeometry
 
 log = logging.getLogger(__name__)
@@ -95,6 +97,12 @@ class Api:
         self._window = window
         self._reports = rp.ReportState()
         self._headless = WindowGeometry(VirtualNative())  # dev server / no window yet
+        self._reads = ReadCache(lambda: self._m.store.data_version())
+
+    def _read(self, name: str, args: tuple[Any, ...], compute: Callable[[], Any]) -> Any:
+        """Aggregate read through the short-lived revision cache (read_cache.py)."""
+        key = (name, json.dumps(args, sort_keys=True, default=str))
+        return self._reads.get(key, lambda: jsonable(compute()))
 
     def _set_window(self, window: WindowControl | None) -> None:
         self._window = window
@@ -107,23 +115,28 @@ class Api:
     # ------------------------------------------------------------- reads
     @_api
     def overview(self, filter: Any = None) -> Any:  # noqa: A002 - contract name
-        return self._m.aggregates.overview(parse_filter(filter))
+        f = parse_filter(filter)
+        return self._read("overview", (f,), lambda: self._m.aggregates.overview(f))
 
     @_api
     def employees(self, filter: Any = None) -> Any:  # noqa: A002
-        return self._m.aggregates.employees(parse_filter(filter))
+        f = parse_filter(filter)
+        return self._read("employees", (f,), lambda: self._m.aggregates.employees(f))
 
     @_api
     def employee(self, key: Any, range: Any = "today") -> Any:  # noqa: A002
-        return self._m.aggregates.employee(require_text(key, "key"), parse_range(range))
+        k, r = require_text(key, "key"), parse_range(range)
+        return self._read("employee", (k, r), lambda: self._m.aggregates.employee(k, r))
 
     @_api
     def projects(self, filter: Any = None) -> Any:  # noqa: A002
-        return self._m.aggregates.projects(parse_filter(filter))
+        f = parse_filter(filter)
+        return self._read("projects", (f,), lambda: self._m.aggregates.projects(f))
 
     @_api
     def sessions(self, filter: Any = None) -> Any:  # noqa: A002
-        return self._m.aggregates.sessions(parse_filter(filter))
+        f = parse_filter(filter)
+        return self._read("sessions", (f,), lambda: self._m.aggregates.sessions(f))
 
     @_api
     def session(self, session_id: Any) -> Any:
@@ -135,11 +148,13 @@ class Api:
 
     @_api
     def skills(self, range: Any = "7d") -> Any:  # noqa: A002
-        return self._m.aggregates.skills(parse_range(range))
+        r = parse_range(range)
+        return self._read("skills", (r,), lambda: self._m.aggregates.skills(r))
 
     @_api
     def orchestration(self, range: Any = "7d") -> Any:  # noqa: A002
-        return self._m.aggregates.orchestration(parse_range(range))
+        r = parse_range(range)
+        return self._read("orchestration", (r,), lambda: self._m.aggregates.orchestration(r))
 
     @_api
     def teams(self) -> Any:

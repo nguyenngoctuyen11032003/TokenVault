@@ -53,6 +53,7 @@ class LivePusher:
         self._cond = threading.Condition()
         self._dirty = False
         self._closed = False
+        self._paused = False  # window hidden: remember changes, push on resume
         self._stopped = False
         self._last = float("-inf")
         self._thread: threading.Thread | None = None
@@ -71,6 +72,17 @@ class LivePusher:
             self._closed = True
             self._cond.notify()
 
+    def set_paused(self, paused: bool) -> None:
+        """Window hidden / minimised: no pushes (so the page does no work); changes are
+        remembered and ONE push follows when it is shown again (Task 30)."""
+        with self._cond:
+            self._paused = bool(paused)
+            self._cond.notify()
+
+    @property
+    def paused(self) -> bool:
+        return self._paused
+
     # ---------------------------------------------------------------- core
     def pump(self) -> float | None:
         """Push if something is pending and the interval allows it.
@@ -78,7 +90,7 @@ class LivePusher:
         Returns the seconds to wait before a pending push becomes due, else None.
         """
         with self._cond:
-            if self._closed or not self._dirty:
+            if self._closed or self._paused or not self._dirty:
                 return None
             wait = self._last + self.interval - self._clock()
             if wait > 0:
@@ -125,7 +137,8 @@ class LivePusher:
     def _run(self) -> None:
         while True:
             with self._cond:
-                while not self._stopped and not (self._dirty and not self._closed):
+                while not self._stopped and not (self._dirty and not self._closed
+                                                 and not self._paused):
                     self._cond.wait()
                 if self._stopped:
                     return

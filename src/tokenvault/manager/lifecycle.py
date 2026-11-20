@@ -328,14 +328,12 @@ class Manager:
     def touch_presence(self) -> None:
         src = self.presence_source
         ids = src() if src is not None else self.connected()
-        now = time.time()
-        for dev in ids:
-            try:
-                self.store.upsert_device(dev, None, None, now)
-            except TzOffsetChangedError:
-                self.tz_error = True
-            except Exception as e:  # noqa: BLE001 - presence is best effort
-                log.warning("presence update failed for %s: %s", dev, e)
+        try:  # one transaction for every connected device (Task 30)
+            self.store.touch_devices(sorted(ids), time.time())
+        except TzOffsetChangedError:
+            self.tz_error = True
+        except Exception as e:  # noqa: BLE001 - presence is best effort
+            log.warning("presence update failed for %d device(s): %s", len(ids), e)
         if ids != self._last_connected:
             self._last_connected = set(ids)
             self.notify_change()

@@ -1,0 +1,84 @@
+{
+ "label": "after",
+ "part": "ui",
+ "date": "2026-11-20 11:43:48",
+ "cpus": 12,
+ "python": "3.12.10",
+ "browser": {
+  "boot": {
+   "first_route": "settings",
+   "boot_ms": 414,
+   "echarts_loaded_on_non_chart_page": false,
+   "scripts": 24
+  },
+  "navigation": {
+   "navigations": 200,
+   "before": {
+    "heap_mb": 5.39,
+    "nodes": 503,
+    "listeners": 70,
+    "documents": 3
+   },
+   "after": {
+    "heap_mb": 6.88,
+    "nodes": 1206,
+    "listeners": 115,
+    "documents": 3
+   },
+   "heap_growth_mb": 1.49,
+   "node_growth": 703,
+   "listener_growth": 45,
+   "live_charts_on_settings": 0,
+   "render_ms_median": {
+    "home": 92.1,
+    "employees": 76.2,
+    "projects": 76.5,
+    "sessions": 75.1,
+    "skills": 78.3,
+    "orchestration": 76.6,
+    "installer": 88.7,
+    "settings": 78.8,
+    "diagnostics": 75.6
+   }
+  },
+  "live_100_pushes_10s": {
+   "api_calls": 36
+  }
+ },
+ "gui_shown": {
+  "seconds": 60.3,
+  "cpu_pct_of_one_core": 0.492,
+  "cpu_pct_peak_sample": 9.4,
+  "cpu_pct_sustained_5s": 1.9,
+  "wakeups_per_s": 45.5,
+  "ws_mb_avg": 652.2,
+  "ws_mb_max": 722.4,
+  "private_mb_max": 463.6,
+  "write_mb": 0.22,
+  "write_ops": 153,
+  "processes": 7,
+  "python_ws_mb": 128.3,
+  "python_private_mb": 86.2,
+  "webview_processes": 6,
+  "webview_ws_mb": 507.3,
+  "webview_private_mb": 278.9
+ },
+ "gui_hidden": {
+  "seconds": 60.3,
+  "cpu_pct_of_one_core": 3.187,
+  "cpu_pct_peak_sample": 43.8,
+  "cpu_pct_sustained_5s": 23.9,
+  "wakeups_per_s": 310.8,
+  "ws_mb_avg": 629.9,
+  "ws_mb_max": 677.4,
+  "private_mb_max": 410.1,
+  "write_mb": 7.11,
+  "write_ops": 5365,
+  "processes": 7,
+  "python_ws_mb": 129.9,
+  "python_private_mb": 87.5,
+  "webview_processes": 6,
+  "webview_ws_mb": 544.1,
+  "webview_private_mb": 318.8
+ }
+}
