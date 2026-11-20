@@ -1,0 +1,133 @@
+{
+ "label": "before",
+ "part": "adapter",
+ "date": "2026-11-20 11:02:33",
+ "cpus": 12,
+ "python": "3.12.10",
+ "import": {
+  "wall_ms_median": 190.5,
+  "top_cumulative_ms": [
+   [
+    "tokenvault.adapter.main",
+    207.5
+   ],
+   [
+    "tokenvault.adapter.app",
+    99.1
+   ],
+   [
+    "tokenvault.adapter.status_view",
+    21.6
+   ],
+   [
+    "tokenvault.adapter.paths",
+    12.7
+   ],
+   [
+    "tokenvault.adapter.consent",
+    11.7
+   ],
+   [
+    "argparse",
+    11.6
+   ],
+   [
+    "logging.handlers",
+    10.7
+   ],
+   [
+    "tokenvault.adapter.singleton",
+    10.5
+   ]
+  ],
+  "loaded": {
+   "PIL": false,
+   "pystray": false,
+   "tkinter": false,
+   "cryptography": false,
+   "websockets": true,
+   "watchdog": true,
+   "asyncio": true,
+   "ssl": true,
+   "sqlite3": true
+  },
+  "modules": 154
+ },
+ "history": {
+  "messages": 60000,
+  "files": 120,
+  "mb": 239.5
+ },
+ "startup": {
+  "to_started_s": 0.281,
+  "to_connected_s": 0.312
+ },
+ "backfill_wall_since_spawn_s": 25.84,
+ "backfill": {
+  "seconds": 25.5,
+  "cpu_pct_of_one_core": 29.927,
+  "cpu_pct_peak_sample": 40.9,
+  "cpu_pct_sustained_5s": 34.3,
+  "wakeups_per_s": 335.3,
+  "ws_mb_avg": 40.2,
+  "ws_mb_max": 40.6,
+  "private_mb_max": 28.6,
+  "write_mb": 169.46,
+  "write_ops": 73505,
+  "processes": 1,
+  "delivered": 60000,
+  "expected": 60000,
+  "complete": true,
+  "outbox_mb": 44.1,
+  "wal_mb": 4.3,
+  "msgs_per_s": 2350.1
+ },
+ "idle_no_tray": {
+  "seconds": 60.3,
+  "cpu_pct_of_one_core": 0.129,
+  "cpu_pct_peak_sample": 1.6,
+  "cpu_pct_sustained_5s": 0.6,
+  "wakeups_per_s": 17.2,
+  "ws_mb_avg": 40.6,
+  "ws_mb_max": 40.6,
+  "private_mb_max": 28.6,
+  "write_mb": 0.0,
+  "write_ops": 0,
+  "processes": 1
+ },
+ "latency": {
+  "n": 15,
+  "median_s": 0.656,
+  "p90_s": 1.109,
+  "max_s": 1.156
+ },
+ "burst": {
+  "seconds": 1.6,
+  "cpu_pct_of_one_core": 33.989,
+  "cpu_pct_peak_sample": 61.7,
+  "cpu_pct_sustained_5s": 0.0,
+  "wakeups_per_s": 364.7,
+  "ws_mb_avg": 43.1,
+  "ws_mb_max": 44.7,
+  "private_mb_max": 32.6,
+  "write_mb": 16.89,
+  "write_ops": 7537,
+  "processes": 1,
+  "lines": 5000,
+  "all_in_manager_s": 1.59,
+  "arrived": 5000
+ },
+ "idle_tray": {
+  "seconds": 60.4,
+  "cpu_pct_of_one_core": 0.104,
+  "cpu_pct_peak_sample": 1.6,
+  "cpu_pct_sustained_5s": 0.3,
+  "wakeups_per_s": 15.2,
+  "ws_mb_avg": 45.1,
+  "ws_mb_max": 45.1,
+  "private_mb_max": 30.1,
+  "write_mb": 0.0,
+  "write_ops": 0,
+  "processes": 1
+ }
+}
