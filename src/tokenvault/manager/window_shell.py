@@ -37,6 +37,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from tokenvault.common import brand
 from tokenvault.manager.settings_store import SettingsStore
 from tokenvault.manager.window_control import (
     MIN_SIZE,
@@ -101,6 +102,7 @@ class WindowShell:
         self._shown = False
         self._probe_state = "none"  # none | waiting | running | done
         self.geometry: WindowGeometry | None = None
+        self._native: Win32Native | None = None
 
     @property
     def transparent(self) -> bool:
@@ -130,6 +132,17 @@ class WindowShell:
         self._attach_geometry(win)
         return win
 
+    def _apply_icon(self) -> None:
+        """Taskbar / caption icon from the logo .ico (the window is frameless, but the
+        taskbar button and Alt+Tab still use it). Never fatal."""
+        ico = brand.icon_ico()
+        if ico is None or self._native is None:
+            return
+        try:
+            self._native.set_icon(str(ico))
+        except Exception:  # noqa: BLE001
+            log.debug("cannot set the window icon", exc_info=True)
+
     def _initial(self) -> tuple[Rect, bool]:
         """Saved geometry validated against the monitors (logical px before start)."""
         try:
@@ -149,7 +162,8 @@ class WindowShell:
         )
 
     def _attach_geometry(self, win: Any) -> None:
-        geo = WindowGeometry(Win32Native(win), on_change=self._geo_changed,
+        self._native = Win32Native(win)
+        geo = WindowGeometry(self._native, on_change=self._geo_changed,
                              persist=self._persist.push)
         self.geometry = geo
 
@@ -232,6 +246,7 @@ class WindowShell:
             self.on_closed()
 
     def _on_shown(self) -> None:
+        self._apply_icon()
         self._hook_session_end()
 
     def _on_loaded(self) -> None:

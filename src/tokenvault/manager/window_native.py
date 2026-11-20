@@ -21,6 +21,10 @@ SWP_NOZORDER = 0x0004
 SWP_NOACTIVATE = 0x0010
 SW_RESTORE = 9
 MONITOR_DEFAULTTONEAREST = 2
+WM_SETICON = 0x0080
+ICON_SMALL, ICON_BIG = 0, 1
+IMAGE_ICON, LR_LOADFROMFILE = 1, 0x0010
+SM_CXICON, SM_CYICON, SM_CXSMICON, SM_CYSMICON = 11, 12, 49, 50
 
 
 class _MONITORINFO(ctypes.Structure):
@@ -61,6 +65,24 @@ def all_monitors() -> list[tuple[Rect, Rect]]:
     return [(b, w) for b, w, _ in out]
 
 
+def apply_window_icon(hwnd: int, ico_path: str, user32: Any = None) -> bool:
+    """WM_SETICON with both ICON_BIG (taskbar, Alt+Tab) and ICON_SMALL (caption) loaded
+    from the multi-size .ico at the system's metrics. False when nothing could be set."""
+    u = user32 if user32 is not None else _user32()
+    h = wintypes.HWND(hwnd)
+    done = False
+    for kind, cx_metric, cy_metric in ((ICON_BIG, SM_CXICON, SM_CYICON),
+                                       (ICON_SMALL, SM_CXSMICON, SM_CYSMICON)):
+        hicon = u.LoadImageW(None, ico_path, IMAGE_ICON, int(u.GetSystemMetrics(cx_metric)),
+                             int(u.GetSystemMetrics(cy_metric)), LR_LOADFROMFILE)
+        if hicon:
+            u.SendMessageW(h, WM_SETICON, kind, hicon)
+            done = True
+        else:
+            log.debug("cannot load window icon %s (kind %s)", ico_path, kind)
+    return done
+
+
 class Win32Native:
     def __init__(self, window: Any) -> None:
         self._window = window
@@ -70,6 +92,16 @@ class Win32Native:
         if self._hwnd is None:
             self._hwnd = int(self._window.native.Handle.ToInt64())
         return self._hwnd
+
+    def set_icon(self, ico_path: str) -> bool:
+        u = _user32()
+        u.LoadImageW.restype = wintypes.HANDLE
+        u.LoadImageW.argtypes = [wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT,
+                                 ctypes.c_int, ctypes.c_int, wintypes.UINT]
+        u.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM,
+                                   wintypes.LPARAM]
+        u.SendMessageW.restype = wintypes.LPARAM
+        return apply_window_icon(self.hwnd(), ico_path, u)
 
     def scale(self) -> float:
         try:
