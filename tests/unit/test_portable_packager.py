@@ -181,7 +181,9 @@ def test_consent_runs_before_old_install_is_touched() -> None:
 
 def test_scripts_are_ascii_and_reference_the_documented_commands() -> None:
     for f in SCRIPTS.iterdir():
-        f.read_bytes().decode("ascii")  # PowerShell 5.1 reads BOM-less files as ANSI
+        if f.suffix == ".txt":  # plain-text READMEs may be UTF-8 (Notepad detects it)
+            continue
+        f.read_bytes().decode("ascii")  # PowerShell 5.1 / cmd.exe mis-read BOM-less UTF-8
     inst = (SCRIPTS / "install.ps1").read_text()
     assert "-m', 'tokenvault.adapter', 'setup', '--from'" in inst
     assert "Unblock-File" in inst and "LOCALAPPDATA" in inst and "pythonw.exe" in inst
@@ -263,6 +265,6 @@ def test_python_dash_m_entry_points_exist() -> None:
 def test_decline_is_not_reported_as_a_failed_setup() -> None:
     cmd = (SCRIPTS / "Install.cmd").read_text()
     assert cmd.index('"%RC%"=="3"') < cmd.index("did not finish")
-    assert "cancelled" in cmd
+    assert "cancelled" in cmd.lower()
     # consent is given BEFORE setup runs; setup must not claim it opens a consent window
     assert "consent screen opens" not in (SCRIPTS / "install.ps1").read_text()
