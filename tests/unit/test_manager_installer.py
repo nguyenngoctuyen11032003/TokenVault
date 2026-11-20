@@ -63,7 +63,8 @@ def test_no_unsigned_manager_exe_is_installed() -> None:
 def test_firewall_steps_elevate_the_signed_python() -> None:
     code = ISS[ISS.index("[Code]"):]
     assert "ShellExec('runas', RuntimePython" in code
-    assert re.search(r"ShellExec\('runas',\s*RuntimePython,\s*'-m tokenvault.manager firewall --remove'", code)
+    assert re.search(
+        r"ShellExec\('runas',\s*RuntimePython,\s*'-m tokenvault.manager firewall --remove'", code)
     assert "firewall --check --port" in code and "firewall --ensure --port" in code
     assert "powershell.exe" in code  # only for stopping our own pythonw (not for the rules)
     assert "Remove-NetFirewallRule" not in code
