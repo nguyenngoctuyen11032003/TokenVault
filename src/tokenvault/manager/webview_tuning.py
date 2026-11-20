@@ -1,13 +1,14 @@
 """WebView2 resource hints while the Manager window is hidden to the tray (Task 30).
 
 When the window is hidden or minimised the page has nothing to show, so WebView2 is
-asked to use as little as possible:
+asked to use as little memory as possible:
 
 * ``CoreWebView2.MemoryUsageTargetLevel = Low`` - WebView2 trims caches and moves
   renderer memory to disk where it can (WebView2 SDK 1.0.1210+);
-* ``CoreWebView2.TrySuspendAsync()`` - freezes the renderer's timers and script
-  (allowed only while the control is invisible, which WinForms reports to WebView2
-  when the form is hidden). WebView2 resumes by itself when it becomes visible.
+* NOT ``TrySuspendAsync()``: measured, a suspended page never answers
+  ``evaluate_js``, so any script call while hidden (window-state push, smoke probe)
+  blocked its thread forever. With live pushes paused and no page timers the hidden
+  renderer is idle anyway (~0 % CPU measured).
 
 On show the target goes back to ``Normal``. Everything is best effort: an older
 runtime, another pywebview backend or a closed window just means nothing happens.
@@ -54,8 +55,6 @@ def set_background(window: Any, background: bool) -> bool:
             from Microsoft.Web.WebView2.Core import CoreWebView2MemoryUsageTargetLevel as Lvl
 
             core.MemoryUsageTargetLevel = Lvl.Low if background else Lvl.Normal
-            if background:
-                core.TrySuspendAsync()
         except Exception:  # noqa: BLE001 - old runtime: property/method missing
             log.debug("WebView2 background hints unavailable", exc_info=True)
 

@@ -116,9 +116,10 @@ def test_hidden_window_asks_webview2_for_low_memory_and_suspend(
         webview=types.SimpleNamespace(CoreWebView2=core)))
     win = types.SimpleNamespace(native=form)
     assert webview_tuning.set_background(win, True) is True
-    assert core.MemoryUsageTargetLevel == "low" and core.suspended == 1
+    # never suspended: a suspended page would block evaluate_js forever
+    assert core.MemoryUsageTargetLevel == "low" and core.suspended == 0
     assert webview_tuning.set_background(win, False) is True
-    assert core.MemoryUsageTargetLevel == "normal" and core.suspended == 1
+    assert core.MemoryUsageTargetLevel == "normal" and core.suspended == 0
     assert webview_tuning.set_background(types.SimpleNamespace(native=None), True) is False
 
 
