@@ -35,6 +35,22 @@ _RUN = """async ({hidden}) => {
 }"""
 
 
+def test_online_dot_does_not_animate_forever(open_shell: Any) -> None:
+    """Regression: an endless box-shadow pulse repainted the window 60x/s (~100 % CPU)."""
+    page = open_shell("#/settings")
+    count = page.evaluate("""() => {
+      const live = document.createElement('div');
+      live.className = 'tv-live';
+      live.dataset.state = 'online';
+      const dot = document.createElement('span');
+      dot.className = 'tv-live__dot';
+      live.append(dot);
+      document.body.append(live);
+      return getComputedStyle(dot).animationIterationCount;
+    }""")
+    assert count != "infinite" and float(count) <= 3
+
+
 def test_gate_throttles_and_pauses_while_hidden(open_shell: Any) -> None:
     page = open_shell("#/settings")
     r = page.evaluate(_RUN, {"hidden": {"v": False}})

@@ -64,7 +64,9 @@ def browser(work: Path, a: Any) -> dict[str, Any]:
     try:
         with sync_playwright() as pw:
             br = pw.chromium.launch(headless=True)
-            page = br.new_page(viewport={"width": 1440, "height": 900})
+            # the real UI server sends CSP script-src 'self': let the probes evaluate
+            page = br.new_context(bypass_csp=True,
+                                  viewport={"width": 1440, "height": 900}).new_page()
             calls: list[str] = []
             page.on("request", lambda r: calls.append(r.url))
             page.goto(f"{url}/#/settings")
@@ -118,7 +120,7 @@ def gui(work: Path, a: Any, hidden: bool) -> dict[str, Any]:
             "--screenshot", str(work / f"gui-{int(hidden)}.png")]
     if hidden:
         args.append("--minimized")
-    p = procs.spawn(args, log=work / f"gui-{int(hidden)}.log", pipe_stdout=True)
+    p = procs.spawn(args, log=work / f"gui-{int(hidden)}.log")  # report JSON -> log
     try:
         time.sleep(20)  # boot + first render + transparency probe
         pid = p.pid
