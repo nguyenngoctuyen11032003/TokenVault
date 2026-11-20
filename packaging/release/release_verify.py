@@ -199,7 +199,7 @@ def check_versions(pes: list[PeEntry], expected: str, setups: dict[str, dict[str
     bad: list[str] = []
     meta: list[str] = []
     for p in (x for x in pes if x.role in ("first_party", "unsigned_by_design")):
-        v = p.version
+        v = {k: str(x).strip() for k, x in p.version.items()}  # Inno pads its strings
         pv = norm_version(v.get("ProductVersion", ""))
         if pv != expected:
             bad.append(f"{p.path}: ProductVersion {v.get('ProductVersion')!r} != {expected}")

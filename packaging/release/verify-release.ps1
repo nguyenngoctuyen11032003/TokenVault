@@ -69,7 +69,7 @@ for ($i = 0; $i -lt $Path.Count; $i++) {
   }
 }
 
-$Tools['signtool'] = if ($tool) { "$tool ($((Get-Item $tool).VersionInfo.FileVersion))" } else { 'not found' }
+$Tools['signtool'] = if ($tool) { "$tool ($((Get-Item $tool).VersionInfo.ProductVersion))" } else { 'not found' }
 $Tools['powershell'] = $PSVersionTable.PSVersion.ToString()
 $Tools['os'] = [Environment]::OSVersion.VersionString
 New-Item -ItemType Directory -Force $OutDir | Out-Null
