@@ -109,7 +109,9 @@ if ($brc -ne 0 -or -not (Test-Path $setup)) {
 Step 'bundle audit'
 $mgrDir = Join-Path $dist 'manager\TokenVault-Manager'
 $warnFiles = @(Get-ChildItem (Join-Path $Root 'build\pyi-*') -Recurse -Filter 'warn-*.txt' | ForEach-Object FullName)
-$auditArgs += @('--bundle-dir', (Join-Path $mgrDir '_internal'))
+# Task 29: the installed Manager is the signed portable runtime, not a PyInstaller folder;
+# the frozen Manager folder only exists when build.ps1 ran with -WithManagerExe.
+if (Test-Path (Join-Path $mgrDir '_internal')) { $auditArgs += @('--bundle-dir', (Join-Path $mgrDir '_internal')) }
 foreach ($w in $warnFiles) { $auditArgs += @('--warn-file', $w) }
 & $Python @auditArgs
 if ($LASTEXITCODE -ne 0) { Write-Warning 'dependency/bundle audit reported FAIL.' }
@@ -124,9 +126,17 @@ if ($LASTEXITCODE -ne 0) { Write-Host "release: signing the artifacts failed (ex
 # 7. verification + report ---------------------------------------------------------------
 Step 'verify + Release Security Report'
 # The Manager folder is exactly what Inno packed (incl. adapter-setup-template.exe).
+$vPaths = @($relDir); $vLabels = @("release/v$version")
+if (Test-Path $mgrDir) {
+  $vPaths += $mgrDir; $vLabels += 'package/TokenVault-Manager'
+} else {
+  $rtDir = Join-Path $Root 'templates\portable-runtime'   # what Inno installs as the Manager
+  if (Test-Path $rtDir) { $vPaths += $rtDir; $vLabels += 'package/portable-runtime' }
+}
+if (Test-Path (Join-Path $dist 'adapter')) { $vPaths += (Join-Path $dist 'adapter'); $vLabels += 'package/adapter' }
 $vArgs = @{
-  Path = @($relDir, $mgrDir, (Join-Path $dist 'adapter'))
-  Label = @("release/v$version", 'package/TokenVault-Manager', 'package/adapter')
+  Path = $vPaths
+  Label = $vLabels
   OutDir = $relDir; Artifact = $artifacts; Mode = $Mode; Extra = @($depsJson); Tools = $tools
   Python = $Python
 }
