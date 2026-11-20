@@ -177,15 +177,11 @@ def top_tools(ctx: QueryContext, flt: Filter, limit: int = 15) -> list[ToolCount
 
 def project_rows(ctx: QueryContext, flt: Filter, by_proj: dict[str, Acc]) -> list[ProjectRow]:
     src, params = ctx.scope(flt, "rollup_session", session=True)
-    # Group to (project, device, session, key) first - a streaming GROUP BY in the order
-    # of ix_rs_project_span - so the DISTINCT counts see sessions, not model rows.
-    stats = {
+    stats = {  # index-only scan of ix_rs_project_span (Task 30)
         p: (int(n), int(e), float(last))
         for p, n, e, last in ctx.q(
-            "SELECT p, COUNT(DISTINCT dev || char(31) || sid), COUNT(DISTINCT k), MAX(lt) "
-            f"FROM (SELECT r.project AS p, r.device_id AS dev, r.session_id AS sid, {KEY} AS k, "
-            f"MAX(r.last_ts) AS lt FROM {src} GROUP BY r.project, r.device_id, r.session_id, k) "
-            "GROUP BY p",
+            "SELECT r.project, COUNT(DISTINCT r.device_id || char(31) || r.session_id), "
+            f"COUNT(DISTINCT {KEY}), MAX(r.last_ts) FROM {src} GROUP BY r.project",
             params,
         )
     }

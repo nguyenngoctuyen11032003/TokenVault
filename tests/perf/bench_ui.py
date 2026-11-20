@@ -6,7 +6,8 @@
   nav      ``--navigations`` hash-route changes over every menu page: render time per
            route, JS heap after a forced GC and DOM counters (documents, nodes, event
            listeners) before/after, live ECharts instances at the end
-  live     100 ``tv.onLive`` pushes in 10 s on the overview: API calls they cause
+  live     20 ``tv.onLive`` pushes in 10 s (the Manager's maximum rate) on the home
+           page: API calls they cause
   gui      (``--gui``) the real WebView2 window on demo data via ``--selftest-window``:
            process tree (python + msedgewebview2) CPU / memory over ``--idle-seconds``,
            once shown and once started hidden (``--minimized``)
@@ -102,12 +103,12 @@ def browser(work: Path, a: Any) -> dict[str, Any]:
             page.evaluate(_WAIT_ROUTE, "home")
             page.wait_for_timeout(1500)
             n0 = len([c for c in calls if "/api/" in c])
-            for _ in range(100):
+            for _ in range(20):  # the Manager's LivePusher maximum: 2 pushes/s, for 10 s
                 page.evaluate("tv.emitLive({online: 1, total: 2})")
-                page.wait_for_timeout(100)
+                page.wait_for_timeout(500)
             page.wait_for_timeout(1500)
-            res["live_100_pushes_10s"] = {"api_calls": len([c for c in calls if "/api/" in c])
-                                          - n0}
+            res["live_20_pushes_10s"] = {"api_calls": len([c for c in calls if "/api/" in c])
+                                         - n0}
             br.close()
     finally:
         procs.stop(srv)
