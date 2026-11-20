@@ -1,0 +1,386 @@
+{
+ "label": "before",
+ "part": "manager",
+ "date": "2026-11-20 11:16:39",
+ "cpus": 12,
+ "python": "3.12.10",
+ "dataset": {
+  "events": 1998000,
+  "seconds": 196.7,
+  "store_events_per_s": 10156,
+  "db_mb": 1423.5
+ },
+ "queries": {
+  "calls": {
+   "overview/today": {
+    "cold_ms": 123.6,
+    "p50_ms": 128.2,
+    "p95_ms": 144.0
+   },
+   "employees/today": {
+    "cold_ms": 70.2,
+    "p50_ms": 69.0,
+    "p95_ms": 151.0
+   },
+   "projects/today": {
+    "cold_ms": 61.6,
+    "p50_ms": 47.9,
+    "p95_ms": 82.4
+   },
+   "sessions/today": {
+    "cold_ms": 14.5,
+    "p50_ms": 12.6,
+    "p95_ms": 13.9
+   },
+   "employee/today": {
+    "cold_ms": 61.1,
+    "p50_ms": 56.9,
+    "p95_ms": 76.4
+   },
+   "skills/today": {
+    "cold_ms": 1.6,
+    "p50_ms": 0.7,
+    "p95_ms": 0.9
+   },
+   "orchestration/today": {
+    "cold_ms": 59.4,
+    "p50_ms": 58.8,
+    "p95_ms": 85.3
+   },
+   "overview/7d": {
+    "cold_ms": 163.1,
+    "p50_ms": 176.8,
+    "p95_ms": 207.0
+   },
+   "employees/7d": {
+    "cold_ms": 78.2,
+    "p50_ms": 89.2,
+    "p95_ms": 108.8
+   },
+   "projects/7d": {
+    "cold_ms": 70.8,
+    "p50_ms": 68.8,
+    "p95_ms": 80.1
+   },
+   "sessions/7d": {
+    "cold_ms": 14.5,
+    "p50_ms": 12.7,
+    "p95_ms": 15.4
+   },
+   "employee/7d": {
+    "cold_ms": 63.2,
+    "p50_ms": 61.9,
+    "p95_ms": 64.3
+   },
+   "skills/7d": {
+    "cold_ms": 8.5,
+    "p50_ms": 7.1,
+    "p95_ms": 12.1
+   },
+   "orchestration/7d": {
+    "cold_ms": 70.6,
+    "p50_ms": 81.6,
+    "p95_ms": 97.3
+   },
+   "overview/30d": {
+    "cold_ms": 460.0,
+    "p50_ms": 393.5,
+    "p95_ms": 483.3
+   },
+   "employees/30d": {
+    "cold_ms": 155.6,
+    "p50_ms": 157.7,
+    "p95_ms": 178.0
+   },
+   "projects/30d": {
+    "cold_ms": 162.4,
+    "p50_ms": 177.5,
+    "p95_ms": 188.6
+   },
+   "sessions/30d": {
+    "cold_ms": 12.4,
+    "p50_ms": 10.4,
+    "p95_ms": 10.6
+   },
+   "employee/30d": {
+    "cold_ms": 87.6,
+    "p50_ms": 95.7,
+    "p95_ms": 101.4
+   },
+   "skills/30d": {
+    "cold_ms": 35.0,
+    "p50_ms": 33.4,
+    "p95_ms": 34.7
+   },
+   "orchestration/30d": {
+    "cold_ms": 143.6,
+    "p50_ms": 164.8,
+    "p95_ms": 235.6
+   },
+   "overview/90d": {
+    "cold_ms": 584.6,
+    "p50_ms": 657.6,
+    "p95_ms": 845.4
+   },
+   "employees/90d": {
+    "cold_ms": 276.5,
+    "p50_ms": 299.9,
+    "p95_ms": 319.7
+   },
+   "projects/90d": {
+    "cold_ms": 431.1,
+    "p50_ms": 364.6,
+    "p95_ms": 379.4
+   },
+   "sessions/90d": {
+    "cold_ms": 14.2,
+    "p50_ms": 13.6,
+    "p95_ms": 14.4
+   },
+   "employee/90d": {
+    "cold_ms": 151.7,
+    "p50_ms": 110.4,
+    "p95_ms": 139.2
+   },
+   "skills/90d": {
+    "cold_ms": 121.3,
+    "p50_ms": 107.9,
+    "p95_ms": 133.0
+   },
+   "orchestration/90d": {
+    "cold_ms": 354.6,
+    "p50_ms": 251.6,
+    "p95_ms": 315.2
+   },
+   "overview/all": {
+    "cold_ms": 320.5,
+    "p50_ms": 324.6,
+    "p95_ms": 327.6
+   },
+   "employees/all": {
+    "cold_ms": 152.6,
+    "p50_ms": 152.8,
+    "p95_ms": 165.6
+   },
+   "projects/all": {
+    "cold_ms": 110.2,
+    "p50_ms": 107.2,
+    "p95_ms": 122.4
+   },
+   "sessions/all": {
+    "cold_ms": 13.1,
+    "p50_ms": 10.9,
+    "p95_ms": 13.4
+   },
+   "employee/all": {
+    "cold_ms": 97.6,
+    "p50_ms": 102.8,
+    "p95_ms": 121.2
+   },
+   "session_turns": {
+    "cold_ms": 0.7,
+    "p50_ms": 0.5,
+    "p95_ms": 0.5
+   }
+  },
+  "distinct_statements": 199,
+  "slowest_statements": [
+   {
+    "ms": 236.5,
+    "sql": "SELECT r.project, COUNT(DISTINCT r.device_id || char(31) || r.session_id), COUNT(DISTINCT CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END), MAX(r.last_ts) FROM rollup_session r WHERE r.last_ts >= 1787418000 AND r.first_ts < 1795194000 GROUP BY r.project",
+    "plan": [
+     "SCAN r USING INDEX ix_rs_project",
+     "USE TEMP B-TREE FOR count(DISTINCT)",
+     "USE TEMP B-TREE FOR count(DISTINCT)"
+    ]
+   },
+   {
+    "ms": 175.7,
+    "sql": "SELECT g, COUNT(*) FROM (SELECT CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS g FROM rollup_session r WHERE r.last_ts >= 1787418000 AND r.first_ts < 1795194000 GROUP BY r.device_id, r.session_id, g) GROUP BY g",
+    "plan": [
+     "CO-ROUTINE (subquery-1)",
+     "SCAN r USING INDEX sqlite_autoindex_rollup_session_1",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN (subquery-1)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 173.3,
+    "sql": "SELECT r.day, r.model, SUM(r.input), SUM(r.output), SUM(r.cache_read), SUM(r.cache_5m), SUM(r.cache_1h) FROM rollup_day r WHERE r.day >= 20688 AND r.day < 20778 GROUP BY r.day, r.model",
+    "plan": [
+     "SEARCH r USING INDEX ix_rd_day (day>? AND day<?)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 162.9,
+    "sql": "SELECT r.device_id, r.session_id, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS k, SUM(r.sidechain_tokens) AS st, MAX(m.title) FROM rollup_session r LEFT JOIN session_meta m ON m.device_id = r.device_id AND m.session_id = r.session_id WHERE r.last_ts >= 1787418000 AND r.first_ts < 1795194000 GROUP BY r.device_id, r.session_id HAVING st > 0 ORDER BY st DESC, r.session_id",
+    "plan": [
+     "SCAN r USING INDEX sqlite_autoindex_rollup_session_1",
+     "SEARCH m USING INDEX sqlite_autoindex_session_meta_1 (device_id=? AND session_id=?) LEFT-JOIN",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   {
+    "ms": 145.4,
+    "sql": "SELECT r.day, r.model, SUM(r.input), SUM(r.output), SUM(r.cache_read), SUM(r.cache_5m), SUM(r.cache_1h) FROM rollup_day r WHERE r.day >= 20688 GROUP BY r.day, r.model",
+    "plan": [
+     "SEARCH r USING INDEX ix_rd_day (day>?)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 125.9,
+    "sql": "SELECT g, COUNT(*) FROM (SELECT CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS g FROM rollup_session r GROUP BY r.device_id, r.session_id, g) GROUP BY g",
+    "plan": [
+     "CO-ROUTINE (subquery-1)",
+     "SCAN r USING COVERING INDEX sqlite_autoindex_rollup_session_1",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN (subquery-1)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 120.3,
+    "sql": "SELECT r.day, r.project, r.model, SUM(r.input), SUM(r.output), SUM(r.cache_read), SUM(r.cache_5m), SUM(r.cache_1h), SUM(r.events) FROM rollup_day r WHERE r.day >= 20748 AND r.day < 20778 GROUP BY r.day, r.project, r.model",
+    "plan": [
+     "SEARCH r USING INDEX ix_rd_day (day>? AND day<?)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 113.2,
+    "sql": "SELECT g, COUNT(*) FROM (SELECT CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS g FROM rollup_session r WHERE r.last_ts >= 1792602000 AND r.first_ts < 1795194000 GROUP BY r.device_id, r.session_id, g) GROUP BY g",
+    "plan": [
+     "CO-ROUTINE (subquery-1)",
+     "SCAN r USING INDEX sqlite_autoindex_rollup_session_1",
+     "USE TEMP B-TREE FOR GROUP BY",
+     "SCAN (subquery-1)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 101.9,
+    "sql": "SELECT r.device_id, r.session_id, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END AS k, SUM(r.sidechain_tokens) AS st, MAX(m.title) FROM rollup_session r LEFT JOIN session_meta m ON m.device_id = r.device_id AND m.session_id = r.session_id WHERE r.last_ts >= 1792602000 AND r.first_ts < 1795194000 GROUP BY r.device_id, r.session_id HAVING st > 0 ORDER BY st DESC, r.session_id",
+    "plan": [
+     "SCAN r USING INDEX sqlite_autoindex_rollup_session_1",
+     "SEARCH m USING INDEX sqlite_autoindex_session_meta_1 (device_id=? AND session_id=?) LEFT-JOIN",
+     "USE TEMP B-TREE FOR ORDER BY"
+    ]
+   },
+   {
+    "ms": 100.2,
+    "sql": "SELECT r.day, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END, SUM(r.calls) FROM rollup_tool_day r WHERE r.day >= 20688 AND r.day < 20778 AND r.tool = 'Skill' GROUP BY r.day, CASE WHEN r.email <> '' THEN r.email ELSE 'device:' || r.device_id END",
+    "plan": [
+     "SEARCH r USING INDEX ix_rtd_tool_day (tool=? AND day>? AND day<?)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 92.2,
+    "sql": "SELECT r.tool, SUM(r.calls) FROM rollup_tool_day r WHERE r.day >= 20748 AND r.day < 20778 GROUP BY r.tool",
+    "plan": [
+     "SEARCH r USING INDEX ix_rtd_day (day>? AND day<?)",
+     "USE TEMP B-TREE FOR GROUP BY"
+    ]
+   },
+   {
+    "ms": 89.4,
+    "sql": "SELECT COUNT(*) FROM (SELECT 1 FROM rollup_session r WHERE r.last_ts >= 1787418000 AND r.first_ts < 1795194000 GROUP BY r.device_id, r.session_id)",
+    "plan": [
+     "CO-ROUTINE (subquery-1)",
+     "SCAN r USING INDEX sqlite_autoindex_rollup_session_1",
+     "SCAN (subquery-1)"
+    ]
+   }
+  ],
+  "worst_call": {
+   "name": "overview/90d",
+   "cold_ms": 584.6,
+   "p50_ms": 657.6,
+   "p95_ms": 845.4
+  }
+ },
+ "backend": {
+  "startup_s": 0.77,
+  "idle_no_clients": {
+   "seconds": 60.3,
+   "cpu_pct_of_one_core": 0.181,
+   "cpu_pct_peak_sample": 3.1,
+   "cpu_pct_sustained_5s": 0.9,
+   "wakeups_per_s": 22.3,
+   "ws_mb_avg": 50.3,
+   "ws_mb_max": 50.3,
+   "private_mb_max": 33.7,
+   "write_mb": 0.0,
+   "write_ops": 0,
+   "processes": 1
+  },
+  "http": {
+   "overview": {
+    "p50_ms": 293.6,
+    "p95_ms": 376.1
+   },
+   "employees": {
+    "p50_ms": 145.5,
+    "p95_ms": 176.6
+   },
+   "projects": {
+    "p50_ms": 105.4,
+    "p95_ms": 130.8
+   },
+   "sessions": {
+    "p50_ms": 34.6,
+    "p95_ms": 47.3
+   },
+   "skills": {
+    "p50_ms": 36.2,
+    "p95_ms": 52.3
+   },
+   "orchestration": {
+    "p50_ms": 161.1,
+    "p95_ms": 225.8
+   }
+  },
+  "clients_connect": {
+   "connected": 50,
+   "seconds": 1.31
+  },
+  "idle_with_clients": {
+   "seconds": 60.4,
+   "cpu_pct_of_one_core": 0.388,
+   "cpu_pct_peak_sample": 4.7,
+   "cpu_pct_sustained_5s": 1.2,
+   "wakeups_per_s": 30.4,
+   "ws_mb_avg": 72.5,
+   "ws_mb_max": 72.5,
+   "private_mb_max": 55.6,
+   "write_mb": 1.18,
+   "write_ops": 600,
+   "processes": 1
+  },
+  "ingest": {
+   "seconds": 5.843,
+   "cpu_pct_of_one_core": 82.562,
+   "cpu_pct_peak_sample": 112.5,
+   "cpu_pct_sustained_5s": 102.5,
+   "wakeups_per_s": 3683.5,
+   "ws_mb_avg": 101.3,
+   "ws_mb_max": 107.1,
+   "private_mb_max": 89.4,
+   "write_mb": 214.72,
+   "write_ops": 92330,
+   "processes": 1,
+   "sent": 100000,
+   "events_per_s": 17114
+  },
+  "pdf_all_30d": {
+   "seconds": 11.36,
+   "pages": 54,
+   "cpu_pct_of_one_core": 94.782,
+   "ws_mb_max": 82.9,
+   "private_mb_max": 68.1
+  }
+ }
+}

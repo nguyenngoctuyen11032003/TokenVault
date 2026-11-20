@@ -1,0 +1,48 @@
+{
+ "label": "before-browser",
+ "part": "ui",
+ "date": "2026-11-20 11:59:54",
+ "cpus": 12,
+ "python": "3.12.10",
+ "browser": {
+  "boot": {
+   "first_route": "settings",
+   "boot_ms": 460,
+   "echarts_loaded_on_non_chart_page": true,
+   "scripts": 24
+  },
+  "navigation": {
+   "navigations": 200,
+   "before": {
+    "heap_mb": 5.38,
+    "nodes": 504,
+    "listeners": 66,
+    "documents": 3
+   },
+   "after": {
+    "heap_mb": 6.88,
+    "nodes": 1207,
+    "listeners": 111,
+    "documents": 3
+   },
+   "heap_growth_mb": 1.5,
+   "node_growth": 703,
+   "listener_growth": 45,
+   "live_charts_on_settings": 0,
+   "render_ms_median": {
+    "home": 99.9,
+    "employees": 76.4,
+    "projects": 76.5,
+    "sessions": 75.7,
+    "skills": 78.7,
+    "orchestration": 85.1,
+    "installer": 81.0,
+    "settings": 81.2,
+    "diagnostics": 76.2
+   }
+  },
+  "live_20_pushes_10s": {
+   "api_calls": 60
+  }
+ }
+}
