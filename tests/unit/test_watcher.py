@@ -22,7 +22,7 @@ class FakeCollector:
         self.max_active = 0
         self._lock = threading.Lock()
 
-    def collect_file(self, path: Path) -> CollectResult:
+    def collect_file(self, path: Path, max_bytes: int | None = None) -> CollectResult:
         with self._lock:
             self._active += 1
             self.max_active = max(self.max_active, self._active)
@@ -164,7 +164,7 @@ def test_collector_exception_does_not_kill_worker(root: Path) -> None:
     calls: list[int] = []
 
     class Boom(FakeCollector):
-        def collect_file(self, path: Path) -> CollectResult:
+        def collect_file(self, path: Path, max_bytes: int | None = None) -> CollectResult:
             calls.append(1)
             if len(calls) == 1:
                 raise RuntimeError("boom")
@@ -254,7 +254,7 @@ def test_more_flag_loops_same_file(root: Path) -> None:
     calls: list[Path] = []
 
     class More:
-        def collect_file(self, path: Path) -> CollectResult:
+        def collect_file(self, path: Path, max_bytes: int | None = None) -> CollectResult:
             calls.append(path)
             return results[len(calls) - 1] if len(calls) <= 3 else CollectResult()
 
@@ -308,7 +308,7 @@ def test_modification_during_collect_is_collected_again(root: Path) -> None:
     calls: list[int] = []
 
     class Slow(FakeCollector):
-        def collect_file(self, path: Path) -> CollectResult:
+        def collect_file(self, path: Path, max_bytes: int | None = None) -> CollectResult:
             calls.append(1)
             if len(calls) == 1:
                 started.set()
@@ -428,7 +428,7 @@ def test_backfill_marks_only_recent_files_hot(root: Path) -> None:
     os.utime(old, (time.time() - 3600,) * 2)
 
     class Quiet:
-        def collect_file(self, path: Path) -> CollectResult:
+        def collect_file(self, path: Path, max_bytes: int | None = None) -> CollectResult:
             return CollectResult()
 
     w = Watcher(root, Quiet(), lambda: None)
@@ -510,13 +510,13 @@ def test_observer_uses_short_os_event_timeout(root: Path, monkeypatch: pytest.Mo
     import tokenvault.adapter.watcher as wmod
 
     seen: list[float] = []
-    real = wmod.Observer
+    real = wmod.make_observer
 
-    def spy(*args: object, **kw: float) -> object:
-        seen.append(kw.get("timeout", 1.0))
-        return real(*args, **kw)
+    def spy(timeout: float) -> object:
+        seen.append(timeout)
+        return real(timeout)
 
-    monkeypatch.setattr(wmod, "Observer", spy)
+    monkeypatch.setattr(wmod, "make_observer", spy)
     w = Watcher(root, FakeCollector(), on_new=lambda: None)
     w.start()
     try:

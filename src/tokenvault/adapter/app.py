@@ -51,6 +51,7 @@ from tokenvault.adapter.config import (
     save_config,
     write_secret,
 )
+from tokenvault.adapter.cpu_budget import CpuBudget
 from tokenvault.adapter.discovery import make_resolver
 from tokenvault.adapter.identity import Identity, default_identity
 from tokenvault.adapter.outbox import Outbox
@@ -234,6 +235,7 @@ class AdapterApp:
             ob = Outbox(self.files.outbox)
             self._outbox = ob
             collector = Collector(ob, self.identity, cfg.team)
+            budget = CpuBudget()  # one budget: backfill + backlog sending together
             self._transport = Transport(
                 ob,
                 Endpoint(list(cfg.hosts), cfg.port, cfg.fingerprint),
@@ -241,10 +243,11 @@ class AdapterApp:
                 on_state=self.on_state,
                 resolver=self._resolve,
                 on_device_key=self.on_device_key,
-                **self._transport_options,
+                **{"budget": budget, **self._transport_options},
             )
             self._transport.last_good_host = self._saved_good_host()
-            self._watcher = Watcher(self.projects_dir, collector, on_new=self._on_new)
+            self._watcher = Watcher(self.projects_dir, collector, on_new=self._on_new,
+                                    budget=budget)
             if self._tray_enabled:
                 self._tray = Tray(lambda: self.state, self.waiting, self.show_what_is_sent,
                                   self.open_log_folder, self.show_about)

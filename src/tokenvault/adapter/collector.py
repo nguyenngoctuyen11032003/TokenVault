@@ -148,7 +148,12 @@ class Collector:
             return 0, True
         return saved.offset, False
 
-    def collect_file(self, path: Path) -> CollectResult:
+    def collect_file(self, path: Path, max_bytes: int | None = None) -> CollectResult:
+        """Consume up to ``max_bytes`` (default MAX_BATCH_BYTES) of complete lines.
+
+        Rows, titles and the new offset are committed in ONE outbox transaction.
+        """
+        cap = MAX_BATCH_BYTES if max_bytes is None else max(1, min(max_bytes, MAX_BATCH_BYTES))
         sid = source_id(path)
         with open(path, "rb") as fh:
             st = os.fstat(fh.fileno())
@@ -158,7 +163,7 @@ class Collector:
             consumed, oversize, invalid, more = 0, 0, 0, False
             titles: dict[str, str] = {}
             while True:
-                if consumed >= MAX_BATCH_BYTES:
+                if consumed >= cap:
                     more = True
                     break
                 line = fh.readline(MAX_LINE_BYTES + 1)
@@ -182,13 +187,10 @@ class Collector:
                         invalid += 1
             end = start + consumed
             events = [self._to_event(u) for u in self._deduper.flush()]
-            new = self._outbox.enqueue(events)
-            for session, title in titles.items():
-                self._outbox.set_session_title(session, title)
             size_now = os.fstat(fh.fileno()).st_size
-            self._outbox.set_offset(
-                sid, SourceOffset(fid, end, _window_hash(fh, end), max(size_now, end))
-            )
+            new = self._outbox.commit_file(
+                events, titles, sid,
+                SourceOffset(fid, end, _window_hash(fh, end), max(size_now, end)))
         if oversize:
             log.warning("skipped %d oversize line(s) in source %s", oversize, sid[:12])
         return CollectResult(new, oversize, rebaselined, invalid, more)

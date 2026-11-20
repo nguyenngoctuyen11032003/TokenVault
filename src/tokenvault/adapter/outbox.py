@@ -182,34 +182,51 @@ class Outbox:
 
     def enqueue(self, events: Iterable[UsageEvent]) -> int:
         """Insert new rows; replace rows whose usage grew. Returns rows changed."""
+        with self._tx() as db:
+            return self._enqueue(db, events)
+
+    def commit_file(self, events: Iterable[UsageEvent], titles: dict[str, str], source: str,
+                    off: SourceOffset) -> int:
+        """One collected chunk in ONE transaction: rows, session titles, read offset.
+
+        Same effect as enqueue + set_session_title + set_offset, with one commit (and
+        one WAL append) instead of 2 + titles. Returns rows changed by the events.
+        """
+        with self._tx() as db:
+            n = self._enqueue(db, events)
+            for session, title in titles.items():
+                self._set_title(db, session, title)
+            self._set_offset(db, source, off)
+            return n
+
+    def _enqueue(self, db: sqlite3.Connection, events: Iterable[UsageEvent]) -> int:
         changed = 0
         now = time.time()
-        with self._tx() as db:
-            for ev in events:
-                key = _key(ev)
-                row = db.execute(
-                    "SELECT payload, delivered FROM events WHERE message_id=?", (key,)).fetchone()
-                if row is None:
-                    db.execute(
-                        "INSERT INTO events (message_id, session_id, payload, delivered, "
-                        "enqueued_at, revision) VALUES (?, ?, ?, 0, ?, 0)",
-                        (key, ev.session_id, _dump(ev), now),
-                    )
-                    changed += 1
-                    continue
-                try:
-                    merged = _merge(_load(row[0]), ev)
-                except (ValueError, ProtocolError):
-                    log.warning("replacing unreadable outbox row %s", key)
-                    merged = ev
-                if merged is not None:
-                    self._delivered -= int(row[1] == 1)
-                    db.execute(
-                        "UPDATE events SET session_id=?, payload=?, delivered=0, enqueued_at=?, "
-                        "revision=revision+1 WHERE message_id=?",
-                        (merged.session_id, _dump(merged), now, key),
-                    )
-                    changed += 1
+        for ev in events:
+            key = _key(ev)
+            row = db.execute(
+                "SELECT payload, delivered FROM events WHERE message_id=?", (key,)).fetchone()
+            if row is None:
+                db.execute(
+                    "INSERT INTO events (message_id, session_id, payload, delivered, "
+                    "enqueued_at, revision) VALUES (?, ?, ?, 0, ?, 0)",
+                    (key, ev.session_id, _dump(ev), now),
+                )
+                changed += 1
+                continue
+            try:
+                merged = _merge(_load(row[0]), ev)
+            except (ValueError, ProtocolError):
+                log.warning("replacing unreadable outbox row %s", key)
+                merged = ev
+            if merged is not None:
+                self._delivered -= int(row[1] == 1)
+                db.execute(
+                    "UPDATE events SET session_id=?, payload=?, delivered=0, enqueued_at=?, "
+                    "revision=revision+1 WHERE message_id=?",
+                    (merged.session_id, _dump(merged), now, key),
+                )
+                changed += 1
         return changed
 
     def pending(self, limit: int) -> list[PendingEvent]:
@@ -279,29 +296,33 @@ class Outbox:
 
     def set_session_title(self, session_id: str, title: str) -> int:
         """Persist a session's title and set it on its undelivered rows. Returns rows changed."""
-        changed = 0
         with self._tx() as db:
+            return self._set_title(db, session_id, title)
+
+    @staticmethod
+    def _set_title(db: sqlite3.Connection, session_id: str, title: str) -> int:
+        changed = 0
+        db.execute(
+            "INSERT INTO session_titles VALUES (?, ?) "
+            "ON CONFLICT(session_id) DO UPDATE SET title=excluded.title",
+            (session_id, title),
+        )
+        rows = db.execute(
+            "SELECT message_id, payload FROM events WHERE session_id=? AND delivered=0",
+            (session_id,),
+        ).fetchall()
+        for key, payload in rows:
+            try:
+                ev = _load(payload)
+            except (ValueError, ProtocolError):
+                continue
+            if ev.session_title == title:
+                continue
             db.execute(
-                "INSERT INTO session_titles VALUES (?, ?) "
-                "ON CONFLICT(session_id) DO UPDATE SET title=excluded.title",
-                (session_id, title),
+                "UPDATE events SET payload=?, revision=revision+1 WHERE message_id=?",
+                (_dump(replace(ev, session_title=title)), key),
             )
-            rows = db.execute(
-                "SELECT message_id, payload FROM events WHERE session_id=? AND delivered=0",
-                (session_id,),
-            ).fetchall()
-            for key, payload in rows:
-                try:
-                    ev = _load(payload)
-                except (ValueError, ProtocolError):
-                    continue
-                if ev.session_title == title:
-                    continue
-                db.execute(
-                    "UPDATE events SET payload=?, revision=revision+1 WHERE message_id=?",
-                    (_dump(replace(ev, session_title=title)), key),
-                )
-                changed += 1
+            changed += 1
         return changed
 
     def session_titles(self) -> dict[str, str]:
@@ -320,9 +341,13 @@ class Outbox:
 
     def set_offset(self, source: str, off: SourceOffset) -> None:
         with self._tx() as db:
-            db.execute(
-                "INSERT INTO source_offsets VALUES (?, ?, ?, ?, ?) ON CONFLICT(source_id) DO "
-                "UPDATE SET file_id=excluded.file_id, offset=excluded.offset, "
-                "prefix_hash=excluded.prefix_hash, file_size=excluded.file_size",
-                (source, off.file_id, off.offset, off.prefix_hash, off.file_size),
-            )
+            self._set_offset(db, source, off)
+
+    @staticmethod
+    def _set_offset(db: sqlite3.Connection, source: str, off: SourceOffset) -> None:
+        db.execute(
+            "INSERT INTO source_offsets VALUES (?, ?, ?, ?, ?) ON CONFLICT(source_id) DO "
+            "UPDATE SET file_id=excluded.file_id, offset=excluded.offset, "
+            "prefix_hash=excluded.prefix_hash, file_size=excluded.file_size",
+            (source, off.file_id, off.offset, off.prefix_hash, off.file_size),
+        )
