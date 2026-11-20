@@ -97,12 +97,19 @@ class WindowShell:
         self.on_page_loaded: Callable[[], None] | None = None
         self.transparency_ok: bool | None = None  # result of the corner probe
         self.on_window_state: Callable[[], None] | None = None  # tv.onWindowState push
+        # visible (shown / restored) or not (hidden to tray / minimised): live pushes pause
+        self.on_visibility: Callable[[bool], None] | None = None
         self._persist = Debouncer(self._save_geometry, delay=1.0)
         self._start_maximized = False
         self._shown = False
         self._probe_state = "none"  # none | waiting | running | done
         self.geometry: WindowGeometry | None = None
         self._native: Win32Native | None = None
+
+    @property
+    def native_window(self) -> Any:
+        """The pywebview window (None before create / after close)."""
+        return None if self._destroyed else self._window
 
     @property
     def transparent(self) -> bool:
@@ -181,6 +188,10 @@ class WindowShell:
         win.events.resized += native_change
         win.events.moved += native_change
         win.events.maximized += native_maximized
+        for name, visible in (("minimized", False), ("restored", True)):
+            ev = getattr(win.events, name, None)
+            if ev is not None:
+                ev += lambda v=visible: self._visibility(v)
 
     def _geo_changed(self) -> None:
         if self.on_window_state is not None:
@@ -261,6 +272,8 @@ class WindowShell:
             if self.shape == "region":
                 self._apply_region()
         self.ready()
+        if self._hidden:  # started hidden (--minimized): background from the start
+            self._visibility(False)
         if self.on_page_loaded is not None:
             self.on_page_loaded()  # e.g. push the current live state at once
         self._maybe_probe()
@@ -314,14 +327,25 @@ class WindowShell:
         if self._window is not None and not self._destroyed:
             self._window.minimize()
 
+    def _visibility(self, visible: bool) -> None:
+        cb = self.on_visibility
+        if cb is not None:
+            try:
+                cb(visible)
+            except Exception:  # noqa: BLE001 - never break the GUI over a callback
+                log.debug("visibility callback failed", exc_info=True)
+
     def hide(self) -> None:
         if self._window is not None and not self._destroyed:
             self._window.hide()
+            self._hidden = True
+            self._visibility(False)
 
     def show(self) -> None:
         if self._window is not None and not self._destroyed:
             self._window.show()
             self._hidden = False
+            self._visibility(True)
             # A minimised window is always restored (SW_RESTORE returns it to its last
             # rect, i.e. the work area when maximised); a visible maximised one is kept.
             if self.geometry is None or not self.geometry.maximized or self._minimized():

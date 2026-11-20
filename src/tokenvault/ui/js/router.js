@@ -18,6 +18,7 @@
 import { DEFAULT_ROUTE, navEntryFor } from './nav.js';
 import { esc, useStylesheet } from './dom.js';
 import { loadI18nExtension } from './i18n.js';
+import { gateLive } from './livegate.js';
 
 const NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 
@@ -98,7 +99,9 @@ export function createRouter({ container, api, t, filters, live, onRoute }) {
         reset: () => (scope.alive ? filters.reset() : false),
         subscribe: (cb) => subscribeScoped(scope, (fn) => filters.subscribe(fn), cb),
       },
-      onLive: (cb) => subscribeScoped(scope, (fn) => live.onLive(fn), cb),
+      // gated: at most one push per second, none while the window is hidden (livegate.js)
+      onLive: (cb) =>
+        subscribeScoped(scope, (fn) => live.onLive(gateLive(fn, scope.controller.signal)), cb),
       navigate: (route, ...routeArgs) => {
         if (scope.alive) location.hash = hrefFor(route, ...routeArgs);
       },

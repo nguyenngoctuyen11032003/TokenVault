@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from tokenvault.common import brand
-from tokenvault.manager import api_manage, firewall, win_autostart
+from tokenvault.manager import api_manage, firewall, webview_tuning, win_autostart
 from tokenvault.manager.api import Api, dispatch
 from tokenvault.manager.app_support import (
     message_box,
@@ -140,6 +140,14 @@ def run_gui(a: argparse.Namespace, *, demo: bool = False, screenshot: Path | Non
         return 2
     shell.on_page_loaded = pusher.notify  # push the current live state on every page load
     shell.on_window_state = state_pusher.notify
+    # Hidden to the tray / minimised: no live pushes (the page re-fetches nothing) and
+    # WebView2 is asked for low memory + suspension (webview_tuning).
+    def visibility(visible: bool) -> None:
+        pusher.set_paused(not visible)
+        webview_tuning.set_background(shell.native_window, not visible)
+
+    shell.on_visibility = visibility
+    pusher.set_paused(bool(a.minimized))
     m.on_change = pusher.notify
 
     def window_gone() -> None:  # never evaluate JS on a destroyed window
