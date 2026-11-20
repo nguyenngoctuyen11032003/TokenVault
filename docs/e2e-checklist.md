@@ -89,6 +89,29 @@ loopback on one PC):
 - [ ] SmartScreen / Mark-of-the-Web on the downloaded unsigned installer exe ("More info -> Run
   anyway"). Application Control / AV blocking an unsigned exe (seen on this dev machine: frozen
   exes could not be run here at all, so only the source build was exercised).
+- [ ] **Task 29, Manager installer without an unsigned exe** (needs a machine with Smart App
+  Control / WDAC that blocks unsigned exes; NOT verified by the developer, who only compiled the
+  Setup with ISCC, simulated the installed layout by file copy and ran the runtime's
+  `-m tokenvault.manager --selftest --require-template`, `firewall --check` and
+  `firewall --ensure --dry-run`):
+  - [ ] `TokenVault-Manager-Setup.exe` starts and finishes (it is still an unsigned Inno stub; if
+    even that is blocked, the portable ZIP is the fallback).
+  - [ ] Start menu "TokenVault Manager" (target `{app}\runtime\pythonw.exe`, args
+    `-m tokenvault.manager`, brand icon) opens the window; no 4551 error. Desktop shortcut task and
+    the "start when I sign in" task create the same command (HKCU Run value ends in
+    `--minimized`).
+  - [ ] Firewall step: one UAC prompt (publisher "Python Software Foundation"), then
+    `python.exe -m tokenvault.manager firewall --check` exits 0 and the rules have
+    `program=<app>\runtime\pythonw.exe`. Decline the prompt on a second run: Setup finishes with the
+    Vietnamese + English message and the exact command; Start menu "Mở cổng tường lửa cho
+    TokenVault (cần quyền admin)" then creates the rules with one click.
+  - [ ] Employee PC reaches the Manager (ingest TCP 47800, discovery UDP 47801) with the rule
+    restricted to `pythonw.exe`.
+  - [ ] Installer page: "Windows – gói không cần exe" is first and selected for a new install;
+    the .exe option is labelled as possibly blocked by Smart App Control.
+  - [ ] Upgrade over an old exe-based install removes `TokenVault-Manager.exe`/`_internal`;
+    uninstall removes the shortcuts, the autostart value and (after UAC) the firewall rules; the
+    Manager data folder is kept unless chosen.
 - [ ] Real frozen `TokenVaultAdapter.exe` / Manager exe: consent window, tray icon, HKCU Run
   autostart after logoff/logon, upgrade by re-running a newer installer.
 - [ ] Real Claude Code writing live transcripts while the adapter runs (the harness simulates the

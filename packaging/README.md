@@ -10,7 +10,9 @@ powershell -File tests\packaging\test_build_outputs.ps1   # smoke test
 ```
 
 `build.ps1` order: adapter (PyInstaller onefile) -> `adapter-setup-template.exe` (Inno,
-per user, unsigned) -> Manager (PyInstaller onedir, template placed next to the exe) ->
+per user, unsigned) -> portable runtime (`templates/portable-runtime`, signed Python + wheels +
+sources; built by `build/build-portable.ps1` when missing, sources always refreshed with
+`-RefreshOnly`; offline: `-EmbedZip`/`-WheelDir`) ->
 WebView2 bootstrapper (downloaded to `packaging/redist/`, git-ignored) ->
 `TokenVault-Manager-Setup.exe` (Inno). Outputs are in `dist/`; work files in `build/`.
 Without ISCC the script builds the PyInstaller outputs, prints an install hint and exits 3.
@@ -19,7 +21,8 @@ Without ISCC the script builds the PyInstaller outputs, prints an install hint a
 | --- | --- |
 | `adapter.spec`, `manager.spec` | PyInstaller specs (`entry_*.py` are the entry points) |
 | `adapter-template.iss` | per-user installer; runs `TokenVaultAdapter.exe setup --from "{srcexe}"`; upgrade stops the agent via its reload event (taskkill of its own exe as fallback); uninstall removes the HKCU Run value |
-| `manager.iss` | per-user installer (`PrivilegesRequired=lowest`); only the firewall step is elevated (`ShellExec runas` of `TokenVault-Manager.exe firewall --ensure`, skipped on upgrade when the rules already exist); WebView2 check/bootstrapper; uninstall removes every `TokenVault-Manager-*` rule, whatever the base port |
+| `manager.iss` | per-user installer (`PrivilegesRequired=lowest`) of the **signed portable runtime** (no unsigned Manager exe: shortcuts/autostart run `runtime\pythonw.exe -m tokenvault.manager`); only the firewall step is elevated (`ShellExec runas` of `runtime\python.exe -m tokenvault.manager firewall --ensure`, skipped on upgrade when the rules already exist; failure -> bilingual message + the Start-menu shortcut `Open-Firewall.cmd`); WebView2 check/bootstrapper; uninstall runs `firewall --remove` (every `TokenVault-Manager-*` rule, whatever the base port) |
+| `manager-extras/Open-Firewall.cmd` | one-click elevated retry of the firewall step (Start menu "Mở cổng tường lửa cho TokenVault") |
 
 Rules that matter:
 
@@ -48,8 +51,7 @@ Software Foundation), vendored wheels, TokenVault's Python source and `.cmd`/`.p
   Remove: `Uninstall.cmd`.
 * Manager: extract `TokenVault-Manager-portable.zip`; `Start-Manager.cmd` runs it in place,
   `Install-Manager.ps1` adds Start-menu/Desktop shortcuts and one elevated firewall step.
-* Shipped Manager: `packaginguild.ps1` copies `templates\portable-runtime` to `<install dir>\portable-runtime` (that is where
-  the Manager looks; the installer ships it with the exe). Without it the windows-portable target is unavailable;
+* Shipped Manager: the installer copies `templates\portable-runtime\runtime` to `<install dir>\runtime` and `scripts` to `<install dir>\scripts` (the Manager finds them there; a PyInstaller exe, built only with `build.ps1 -WithManagerExe`, would look in `<exe dir>\portable-runtime`). Without it the windows-portable target is unavailable;
   `--selftest` prints a `portable_runtime` step and Diagnostics reports `portable_runtime.present`. A portable
   Manager ZIP also carries the adapter scripts under `scripts/` (copied by `Install-Manager.ps1`).
 * Check the runtime: `runtime\python.exe -m tokenvault.adapter --selftest` (or
