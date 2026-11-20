@@ -22,6 +22,34 @@ BASE_PY="${PYTHON:-python3}"
 rm -rf "$OUT" "$WORK"
 mkdir -p "$OUT" "$WORK"
 
+# App icon: tokenvault.icns from the logo PNGs (iconutil ships with macOS / Xcode CLT).
+# Without iconutil the build still works, just without a custom icon.
+ICNS=""
+if command -v iconutil >/dev/null 2>&1; then
+  ICONSET="$WORK/tokenvault.iconset"
+  mkdir -p "$ICONSET"
+  LOGO="$ROOT/assets/logo"
+  for spec in "16 icon_16x16" "32 icon_16x16@2x" "32 icon_32x32" "64 icon_32x32@2x" \
+              "128 icon_128x128" "256 icon_128x128@2x" "256 icon_256x256" \
+              "512 icon_256x256@2x" "512 icon_512x512"; do
+    set -- $spec
+    cp "$LOGO/tokenvault-$1.png" "$ICONSET/$2.png"
+  done
+  # icon_512x512@2x needs 1024 px: upscale the 512 px PNG with sips (also macOS-only).
+  if command -v sips >/dev/null 2>&1; then
+    sips -z 1024 1024 "$LOGO/tokenvault-512.png" --out "$ICONSET/icon_512x512@2x.png" >/dev/null
+  fi
+  if iconutil -c icns "$ICONSET" -o "$WORK/tokenvault.icns"; then
+    ICNS="$WORK/tokenvault.icns"
+  else
+    echo "WARNING: iconutil failed; building without an app icon." >&2
+  fi
+else
+  echo "NOTE: iconutil not found - skipping tokenvault.icns (the app gets the default icon)." >&2
+fi
+ICON_ARGS=()
+[ -n "$ICNS" ] && ICON_ARGS=(--icon "$ICNS")
+
 # Isolated venv: the build must not depend on whatever is installed system-wide.
 # Runtime deps come from pyproject.toml; the build tools are pinned here.
 VENV="$WORK/venv"
@@ -32,7 +60,7 @@ PY="$VENV/bin/python"
 
 "$PY" -m PyInstaller --noconfirm --clean --windowed \
   --name "$BIN_NAME" \
-  --osx-bundle-identifier vn.ics.tokenvault.adapter \
+  --osx-bundle-identifier vn.ics.tokenvault.adapter   ${ICON_ARGS[@]+"${ICON_ARGS[@]}"} \
   --paths "$ROOT/src" \
   --hidden-import pystray._darwin \
   --hidden-import watchdog.observers.fsevents \

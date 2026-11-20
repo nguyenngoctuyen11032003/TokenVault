@@ -41,6 +41,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 ArchitecturesAllowed=x64compatible
 CloseApplications=no
 WizardStyle=modern
+SetupIconFile=..\assets\logo\tokenvault.ico
+WizardImageFile=brand\wizard-large.bmp
+WizardSmallImageFile=brand\wizard-small.bmp
 
 [Tasks]
 Name: "startatlogin"; Description: "Start TokenVault Manager when I sign in to Windows"; Flags: unchecked

@@ -4,10 +4,12 @@
 from pathlib import Path
 
 ROOT = Path(SPECPATH).parent  # repo root (SPECPATH = this folder)
+LOGO = ROOT / "src" / "tokenvault" / "ui" / "assets" / "logo"  # common/brand.py reads these
 
 a = Analysis(
     [str(ROOT / "packaging" / "entry_adapter.py")],
     pathex=[str(ROOT / "src")],  # always the sources of THIS checkout
+    datas=[(str(f), "tokenvault/ui/assets/logo") for f in sorted(LOGO.glob("*.png"))],
     hiddenimports=[
         "pystray._win32",       # backend chosen at runtime
         "watchdog.observers.read_directory_changes",
@@ -22,4 +24,5 @@ exe = EXE(
     upx=False,              # UPX triggers antivirus false positives
     runtime_tmpdir=None,
     version=str(ROOT / "packaging" / "version_adapter.txt"),
+    icon=str(ROOT / "assets" / "logo" / "tokenvault.ico"),
 )

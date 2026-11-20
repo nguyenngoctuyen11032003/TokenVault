@@ -9,6 +9,8 @@
   <string>TokenVault Adapter</string>
   <key>CFBundleIdentifier</key>
   <string>vn.ics.tokenvault.adapter</string>
+  <key>CFBundleIconFile</key>
+  <string>tokenvault</string>
   <key>LSUIElement</key>
   <true/>
   <key>LSMinimumSystemVersion</key>
