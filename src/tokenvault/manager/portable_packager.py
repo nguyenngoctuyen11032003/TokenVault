@@ -64,14 +64,15 @@ DOC_NAME = "DOC-TRUOC.txt"
 # source name (in the scripts dir) -> path inside the ZIP, adapter package
 ADAPTER_ROOT = {"1-CAI-DAT.cmd": "1-CAI-DAT.cmd", "2-GO-CAI-DAT.cmd": "2-GO-CAI-DAT.cmd",
                 "DOC-TRUOC.employee.txt": DOC_NAME}
-ADAPTER_SYSTEM = ("install.ps1", "uninstall.ps1")
-ADAPTER_SCRIPTS = (*ADAPTER_ROOT, *ADAPTER_SYSTEM)
+VERSION_FILE = "version.txt"  # written by build-portable.ps1 from pyproject (optional)
+ADAPTER_SYSTEM = ("install.ps1", "uninstall.ps1", VERSION_FILE)
+ADAPTER_SCRIPTS = (*ADAPTER_ROOT, *ADAPTER_SYSTEM)  # version.txt is optional (_check)
 # Manager package: clickable root files, and the helper scripts kept under _he-thong/scripts
 MANAGER_ROOT = {"1-CHAY-MANAGER.cmd": "1-CHAY-MANAGER.cmd",
                 "2-CAI-MANAGER-VAO-MAY.cmd": "2-CAI-MANAGER-VAO-MAY.cmd",
                 "3-GO-CAI-MANAGER.cmd": "3-GO-CAI-MANAGER.cmd",
                 "DOC-TRUOC.manager.txt": DOC_NAME}
-MANAGER_SYSTEM = ("Install-Manager.ps1", "Uninstall-Manager.ps1")
+MANAGER_SYSTEM = ("Install-Manager.ps1", "Uninstall-Manager.ps1", VERSION_FILE)
 MANAGER_SCRIPTS = (*MANAGER_ROOT, *MANAGER_SYSTEM)
 # Packages the Adapter never imports (keeps the per-team ZIP small).
 MANAGER_ONLY_DIST = ("webview", "pywebview", "clr_loader", "pythonnet", "proxy_tools",
@@ -177,7 +178,8 @@ class PortablePackager:
             raise PackagerError(
                 "The portable runtime is missing: run build\\build-portable.ps1 "
                 f"(expected {self.runtime_dir / 'runtime' / 'python.exe'}).")
-        missing = [n for n in ADAPTER_SCRIPTS if not (self.scripts_dir / n).is_file()]
+        missing = [n for n in ADAPTER_SCRIPTS
+                   if n != VERSION_FILE and not (self.scripts_dir / n).is_file()]
         if missing:
             raise PackagerError(f"Portable package scripts are missing: {', '.join(missing)}")
 
@@ -265,22 +267,29 @@ def _write_zip(dst: Path, runtime: Path, scripts: Path, root_files: dict[str, st
     ``_he-thong/scripts/`` so the extracted Manager can build adapter packages."""
     sysd = SYSTEM_DIR + "/"
     with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
+        done: set[str] = set()
+
+        def put(src: Path, arc: str) -> None:  # never the same archive name twice
+            if arc not in done:
+                done.add(arc)
+                z.write(src, arc)
+
         for src_name, arc in root_files.items():
             src = scripts / src_name
             if src.is_file():
-                z.write(src, arc)
+                put(src, arc)
         for name in system_files:
             src = scripts / name
             if src.is_file():
-                z.write(src, sysd + ("scripts/" if nested_scripts else "") + name)
+                put(src, sysd + ("scripts/" if nested_scripts else "") + name)
         for name in nested_scripts:
             src = scripts / name
             if src.is_file():
-                z.write(src, sysd + "scripts/" + name)
+                put(src, sysd + "scripts/" + name)
         for name, src in (extra or {}).items():
-            z.write(src, sysd + name)
+            put(src, sysd + name)
         for p, rel in _iter_runtime(runtime, adapter_only=adapter_only):
-            z.write(p, sysd + "runtime/" + rel)
+            put(p, sysd + "runtime/" + rel)
 
 
 def build_manager_zip(runtime_dir: Path, out_zip: Path, scripts_dir: Path | None = None) -> Path:
@@ -290,7 +299,8 @@ def build_manager_zip(runtime_dir: Path, out_zip: Path, scripts_dir: Path | None
         raise PackagerError(f"The portable runtime is missing under {runtime_dir}")
     sd = Path(scripts_dir) if scripts_dir else (
         runtime_dir / "scripts" if (runtime_dir / "scripts").is_dir() else default_scripts_dir())
-    missing = [n for n in (*MANAGER_SCRIPTS, *ADAPTER_SCRIPTS) if not (sd / n).is_file()]
+    missing = [n for n in (*MANAGER_SCRIPTS, *ADAPTER_SCRIPTS)
+               if n != VERSION_FILE and not (sd / n).is_file()]
     if missing:
         raise PackagerError(f"Manager package scripts are missing: {', '.join(missing)}")
     out_zip = Path(out_zip)

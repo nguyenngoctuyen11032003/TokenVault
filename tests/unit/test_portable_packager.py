@@ -137,7 +137,8 @@ def test_manager_zip_carries_adapter_scripts_so_an_installed_manager_can_build(
     out = pp.build_manager_zip(runtime, tmp_path / "m.zip", scripts_dir=SCRIPTS)
     with zipfile.ZipFile(out) as z:
         names = set(z.namelist())
-        assert {"_he-thong/scripts/" + n for n in pp.ADAPTER_SCRIPTS} <= names
+        assert {"_he-thong/scripts/" + n for n in pp.ADAPTER_SCRIPTS
+                if n != pp.VERSION_FILE} <= names
         z.extractall(tmp_path / "installed")
     # an extracted Manager ZIP: <root>/_he-thong/{runtime,scripts} (== an Inno {app} layout)
     root = tmp_path / "installed" / "_he-thong"
@@ -291,3 +292,41 @@ def test_decline_is_not_reported_as_a_failed_setup() -> None:
     assert "cancelled" in cmd.lower()
     # consent is given BEFORE setup runs; setup must not claim it opens a consent window
     assert "consent screen opens" not in (SCRIPTS / "install.ps1").read_text()
+
+
+def test_version_file_is_carried_into_both_zips(
+        tmp_path: Path, enr: Enrollment, runtime: Path) -> None:
+    sd = tmp_path / "scripts"
+    shutil.copytree(SCRIPTS, sd)
+    (sd / "version.txt").write_text("1.2.3")
+    with zipfile.ZipFile(pp.build_manager_zip(runtime, tmp_path / "m.zip", scripts_dir=sd)) as z:
+        assert z.read("_he-thong/scripts/version.txt").strip() == b"1.2.3"
+    b = pp.PortablePackager(runtime, enr, CertInfo(tmp_path / "c", tmp_path / "k", FP),
+                            tmp_path / "out", lambda: (["192.168.1.5"], 47800), "mgr-1",
+                            scripts_dir=sd).build_for_team("Dev", None)
+    with zipfile.ZipFile(b.path) as z:
+        assert z.read("_he-thong/version.txt").strip() == b"1.2.3"
+
+
+def test_uninstall_scripts_are_clean_one_click_and_registered() -> None:
+    BS = chr(92)
+    mi = (SCRIPTS / "Install-Manager.ps1").read_text()
+    ai = (SCRIPTS / "install.ps1").read_text()
+    mu = (SCRIPTS / "Uninstall-Manager.ps1").read_text()
+    au = (SCRIPTS / "uninstall.ps1").read_text()
+    for ps in (mi, ai):  # Settings > Installed apps registration
+        for needle in ("Uninstall" + BS + "$name", "DisplayName", "DisplayVersion", "Publisher",
+                       "DisplayIcon", "InstallLocation", "UninstallString", "NoModify",
+                       "NoRepair", "-RegistryRoot".lstrip("-"), "cmd.exe /c"):
+            assert needle in ps, needle
+    assert "TokenVaultManager" in mi and "TokenVaultAdapter" in ai
+    for ps in (mu, au):
+        for sw in ("RemoveData", "KeepData", "Silent", "RegistryRoot", "[C/K]"):
+            assert sw in ps, sw
+        assert "ExecutablePath" in ps and "StartsWith($prefix)" in ps  # never other pythons
+        assert "Uninstall" + BS + "TokenVault" in ps and "ping -n" in ps
+    assert "firewall --remove" in mu and "-Verb RunAs" in mu and "TokenVault-Manager-*" in mu
+    assert "TokenVaultAdapter" in au and "DPAPI" in au
+    for cmd in ("3-GO-CAI-MANAGER.cmd", "2-GO-CAI-DAT.cmd"):  # self-deleting: one parsed block
+        t = (SCRIPTS / cmd).read_text()
+        assert "EnableDelayedExpansion" in t and "!RC!" in t, cmd

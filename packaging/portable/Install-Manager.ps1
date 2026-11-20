@@ -27,6 +27,7 @@ param(
     [switch]$SkipFirewall,
     [switch]$SkipSignatureCheck,
     [switch]$NoStart,
+    [string]$RegistryRoot = 'HKCU:\Software',   # tests use a throwaway sub key
     [switch]$Silent   # accepted for IT / tests (the .cmd wrapper then does not pause)
 )
 $ErrorActionPreference = 'Stop'
@@ -34,6 +35,24 @@ $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $sys = Split-Path -Parent $here
 function Say($m) { Write-Host $m }
+
+# Settings > Installed apps registration (HKCU, no admin); removed again by the uninstaller.
+function Register-Uninstall($name, $display, $unCmd, $icon, $loc) {
+    $ver = ''
+    foreach ($vf in @((Join-Path $here 'version.txt'), (Join-Path (Split-Path -Parent $here) 'version.txt'))) {
+        if (-not $ver -and (Test-Path -LiteralPath $vf)) { $ver = (Get-Content -LiteralPath $vf -TotalCount 1).Trim() }
+    }
+    $k = "$RegistryRoot\Microsoft\Windows\CurrentVersion\Uninstall\$name"
+    New-Item -Path $k -Force | Out-Null
+    Set-ItemProperty -Path $k -Name 'DisplayName' -Value $display
+    if ($ver) { Set-ItemProperty -Path $k -Name 'DisplayVersion' -Value $ver }
+    Set-ItemProperty -Path $k -Name 'Publisher' -Value 'TokenVault'
+    if ($icon -and (Test-Path -LiteralPath $icon)) { Set-ItemProperty -Path $k -Name 'DisplayIcon' -Value $icon }
+    Set-ItemProperty -Path $k -Name 'InstallLocation' -Value $loc
+    Set-ItemProperty -Path $k -Name 'UninstallString' -Value $unCmd
+    Set-ItemProperty -Path $k -Name 'NoModify' -Value 1 -Type DWord
+    Set-ItemProperty -Path $k -Name 'NoRepair' -Value 1 -Type DWord
+}
 function Fail($code, $m) { Write-Host "ERROR: $m" -ForegroundColor Red; exit $code }
 
 try {
@@ -112,6 +131,15 @@ function New-Launcher($dir, $name) {
     }
 }
 function Try-Launcher($dir) { try { return (New-Launcher $dir 'TokenVault Manager') } catch { return $null } }
+# the uninstaller next to the program (Windows Settings > Installed apps calls it)
+$goSrc = Join-Path (Split-Path -Parent $sys) '3-GO-CAI-MANAGER.cmd'
+$goDst = Join-Path $InstallDir '3-GO-CAI-MANAGER.cmd'
+if (Test-Path -LiteralPath $goSrc) { Copy-Item -LiteralPath $goSrc -Destination $goDst -Force }
+try {
+    if (Test-Path -LiteralPath $goDst) {
+        Register-Uninstall 'TokenVaultManager' 'TokenVault Manager' ('cmd.exe /c ""' + $goDst + '""') $ico $InstallDir
+    }
+} catch { Write-Host "WARNING: could not register in Settings > Installed apps: $($_.Exception.Message)" -ForegroundColor Yellow }
 $made = @()
 $startLnk = Try-Launcher $StartMenuDir
 if ($startLnk) { $made += $startLnk }
