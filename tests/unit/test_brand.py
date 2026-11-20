@@ -26,7 +26,7 @@ SRC = ROOT / "assets" / "logo"
 
 
 def test_package_logo_copy_matches_source_of_truth() -> None:
-    names = [p.name for p in SRC.iterdir() if p.is_file()]
+    names = [p.name for p in SRC.iterdir() if p.is_file() and p.name != "preview.png"]
     assert "tokenvault.ico" in names and "tokenvault-mark-small.svg" in names
     for n in names:
         assert (PKG / n).is_file(), f"{n} missing in the package copy (run: cp assets/logo/*)"

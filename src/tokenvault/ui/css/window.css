@@ -179,7 +179,7 @@ html.window--fullscreen {
   padding-left: calc(var(--tv-chamfer) * 0.55);
 }
 
-/* Brand mark (gold/navy logo; the UI accent stays red). */
+/* Brand mark (charcoal/silver logo with a red accent bar, like the UI). */
 .tv-titlebar__logo {
   display: block;
   width: 30px;

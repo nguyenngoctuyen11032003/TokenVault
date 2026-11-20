@@ -67,6 +67,6 @@ def tray_image(size: int = 64, dot: tuple[int, int, int] | None = None) -> Any |
         ring = max(1, round(size / 32))  # dark outline keeps it visible on any taskbar
         cx = cy = size - r - ring
         d.ellipse((cx - r - ring, cy - r - ring, cx + r + ring, cy + r + ring),
-                  fill=(10, 15, 32, 255))
+                  fill=(14, 14, 16, 255))
         d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(*dot, 255))
     return img
