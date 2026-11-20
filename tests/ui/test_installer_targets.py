@@ -35,7 +35,8 @@ def _create_error(page: Any) -> Any:
 
 
 TARGET_CASES = [
-    ("windows-portable", "windows-portable", "TokenVault-Adapter-Dev-portable.zip", "1-CAI-DAT.cmd"),
+    ("windows-portable", "windows-portable", "TokenVault-Adapter-Dev-portable.zip",
+     "1-CAI-DAT.cmd"),
     ("windows", None, "TokenVault-Adapter-Dev.exe", "Run anyway"),
     ("mac", "mac", "TokenVault-Adapter-Dev-mac.zip", "Install.command"),
 ]

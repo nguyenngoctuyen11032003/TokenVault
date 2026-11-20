@@ -42,9 +42,9 @@ Khi không gửi được, sự kiện nằm trong `outbox.db` (SQLite bền v�
 
 ## 8. Khác
 * **Bị thu hồi** (Manager đóng phiên, lý do `revoked`): gói/thiết bị đã bị thu hồi; cần bộ cài mới.
-* **Máy chặn exe lạ hoàn toàn** (Smart App Control / Application Control: không có "Run anyway" hoặc exe không chạy): tạo gói "Windows - gói không cần exe" ở trang Tạo bộ cài, nhân viên giải nén và chạy `Install.cmd`. Nếu trang báo thiếu runtime: chạy `build\build-portable.ps1` rồi thử lại (script tạo `templates\portable-runtime`). Nếu `Install.cmd` vẫn báo lỗi (mã 10) thì chính sách chặn cả DLL/.pyd chưa ký trong thư viện Python; cần IT cho phép (chưa kiểm chứng trên máy bị chặn thật).
+* **Máy chặn exe lạ hoàn toàn** (Smart App Control / Application Control: không có "Run anyway" hoặc exe không chạy): tạo gói "Windows - gói không cần exe" ở trang Tạo bộ cài, nhân viên giải nén và chạy `1-CAI-DAT.cmd`. Nếu trang báo thiếu runtime: chạy `build\build-portable.ps1` rồi thử lại (script tạo `templates\portable-runtime`). Nếu `1-CAI-DAT.cmd` vẫn báo lỗi (mã 10) thì chính sách chặn cả DLL/.pyd chưa ký trong thư viện Python; cần IT cho phép (chưa kiểm chứng trên máy bị chặn thật).
 * **Gói portable cài rất chậm lần đầu:** `pythonw.exe` mới chép có thể mất tới ~2 phút ở lần chạy đầu do quét thời gian thực; hãy đợi, không bấm lại.
-* **SmartScreen vẫn chặn file nhận qua trình duyệt/email:** Mark-of-the-Web. Gửi lại qua chia sẻ mạng/USB, hoặc Properties -> Unblock / `Unblock-File`. Gói portable tự gỡ dấu khi chạy `Install.cmd`.
+* **SmartScreen vẫn chặn file nhận qua trình duyệt/email:** Mark-of-the-Web. Gửi lại qua chia sẻ mạng/USB, hoặc Properties -> Unblock / `Unblock-File`. Gói portable tự gỡ dấu khi chạy `1-CAI-DAT.cmd`.
 * **Mac: trang Tạo bộ cài báo thiếu bộ mẫu macOS:** build `adapter-mac.zip` trên một máy Mac (`build/build-mac.sh`) rồi chép vào `%APPDATA%\TokenVault\Manager\templates\adapter-mac.zip` trên máy Manager.
 * **Mac: macOS không cho mở `Install.command`:** chuột phải -> Open; macOS 15 thì System Settings -> Privacy & Security -> "Open Anyway".
 * **Mac: không có biểu tượng thanh menu / thiết bị không gửi dữ liệu:** Adapter cố ý dừng thu thập khi không hiện được biểu tượng (`status` báo `no_indicator`, thoát mã 0 nên launchd không chạy lại). Đăng nhập lại hoặc cài lại; xem `~/Library/Logs/TokenVault/adapter.log`.
@@ -62,8 +62,8 @@ Khi không gửi được, sự kiện nằm trong `outbox.db` (SQLite bền v�
 | Cách vượt | "More info" -> "Run anyway", hoặc `Unblock-File`, hoặc gửi qua USB/chia sẻ mạng | **không có** cách vượt cho exe chưa ký (kể cả từ USB). Smart App Control đã tắt thì không bật lại được; IT quản lý WDAC |
 
 **Cách sửa miễn phí, không cần mua chứng chỉ, không tắt Smart App Control:** dùng Python đã được **Python Software Foundation ký số** thay cho exe chưa ký.
-* **Manager:** cài bằng `TokenVault-Manager-Setup.exe` bản mới (từ Task 29). Nó chỉ cài `runtime\pythonw.exe` (đã ký) + mã nguồn và mở Manager bằng `pythonw.exe -m tokenvault.manager`; bước tường lửa cũng chạy `python.exe` đã ký. Nếu chính file Setup bị chặn: giải nén `TokenVault-Manager-portable.zip` và chạy `Start-Manager.cmd` / `Install-Manager.ps1`.
-* **Nhân viên:** trong Manager, trang **Tạo bộ cài**, chọn **"Windows – gói không cần exe"** (mặc định) và gửi `TokenVault-Adapter-<Nhóm>-portable.zip`; nhân viên giải nén rồi chạy `Install.cmd`.
+* **Manager:** cài bằng `TokenVault-Manager-Setup.exe` bản mới (từ Task 29). Nó chỉ cài `runtime\pythonw.exe` (đã ký) + mã nguồn và mở Manager bằng `pythonw.exe -m tokenvault.manager`; bước tường lửa cũng chạy `python.exe` đã ký. Nếu chính file Setup bị chặn: giải nén `TokenVault-Manager-<version>.zip` và chạy `1-CHAY-MANAGER.cmd` / `Install-Manager.ps1`.
+* **Nhân viên:** trong Manager, trang **Tạo bộ cài**, chọn **"Windows – gói không cần exe"** (mặc định) và gửi `TokenVault-Adapter-<Nhóm>-portable.zip`; nhân viên giải nén rồi chạy `1-CAI-DAT.cmd`.
 * **Tường lửa:** nếu lỡ từ chối UAC: Start menu -> "Mở cổng tường lửa cho TokenVault (cần quyền admin)", hoặc chạy trong cửa sổ quản trị `"<thư mục cài>\runtime\python.exe" -m tokenvault.manager firewall --ensure --port 47800` (xem mục 2).
 
 **Giới hạn.** Các module `.pyd`/`.dll` trong gói wheel (cryptography, Pillow, ...) không có chữ ký số. Chính sách chặn cả DLL chưa ký (không chỉ exe) sẽ chặn cả chúng; khi đó chỉ IT mới giải quyết được (ký hoặc cho phép theo đường dẫn/ hash). Chưa kiểm chứng trên máy bị chặn thật.

@@ -30,12 +30,15 @@ set RC=%ERRORLEVEL%
 echo.
 if "%RC%"=="0" (
   echo ==============================================================
-  echo   DA CAI XONG / INSTALLED. Mo "TokenVault Manager" tu Start menu hoac Desktop.
-  echo   Co the xoa thu muc giai nen nay neu muon.
+  echo   DA CAI XONG / INSTALLED. Manager dang mo.
+  echo   Bieu tuong "TokenVault Manager": tren man hinh Desktop va trong menu Start
+  echo   ^(go "TokenVault Manager" vao o tim kiem cua Windows^).
+  echo   Dong cua so Manager chi THU NHO xuong khay he thong ^(bieu tuong cung nut mui ten ^^ ^).
+  echo   Co the xoa thu muc giai nen nay: ban da cai nam o %%LOCALAPPDATA%%\Programs\TokenVault Manager.
   echo ==============================================================
 ) else if "%RC%"=="6" (
   echo ==============================================================
-  echo   DA CAI XONG, nhung buoc TUONG LUA chua xong ^(ban bam No hoac bi chan^).
+  echo   DA CAI XONG ^(da co bieu tuong Desktop + Start menu^), nhung buoc TUONG LUA chua xong ^(ban bam No hoac bi chan^).
   echo   May khac se chua ket noi duoc cho den khi quan tri vien chay lai file nay.
   echo   Installed, but the firewall step was cancelled or failed: other PCs cannot
   echo   connect until an administrator runs this file again.

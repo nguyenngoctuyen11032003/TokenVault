@@ -207,6 +207,13 @@ def test_scripts_are_ascii_and_reference_the_documented_commands() -> None:
     assert "Install-Manager.ps1" in (SCRIPTS / "2-CAI-MANAGER-VAO-MAY.cmd").read_text()
     assert "Uninstall-Manager.ps1" in (SCRIPTS / "3-GO-CAI-MANAGER.cmd").read_text()
     assert "_he-thong" in (SCRIPTS / "DOC-TRUOC.employee.txt").read_text("utf-8")
+    # the optional install: logo shortcuts on Desktop + Start menu pointing at the INSTALLED copy
+    assert "Programs\\TokenVault Manager" in mgr and "tokenvault.ico" in mgr
+    assert "SHChangeNotify" in mgr and "CommonDesktopDirectory" in mgr
+    assert "Programs\\TokenVault Manager" in (SCRIPTS / "Uninstall-Manager.ps1").read_text()
+    doc = (SCRIPTS / "DOC-TRUOC.manager.txt").read_text("utf-8")
+    assert "khay" in doc and "2-CAI-MANAGER-VAO-MAY.cmd" in doc and "Thoát" in doc
+    assert "2-CAI-MANAGER-VAO-MAY.cmd" in (SCRIPTS / "1-CHAY-MANAGER.cmd").read_text()
 
 
 @pytest.mark.skipif(shutil.which("powershell") is None, reason="needs Windows PowerShell")

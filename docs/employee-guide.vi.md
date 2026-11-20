@@ -8,7 +8,7 @@ TokenVault Adapter là chương trình nhỏ chạy nền, gửi **số token đ
 3. Màn hình đồng ý liệt kê chính xác dữ liệu được gửi. Đọc và bấm đồng ý.
 4. Cài xong, biểu tượng TokenVault hiện ở khay hệ thống (góc phải thanh tác vụ) và tự chạy mỗi lần đăng nhập. Không cần quyền admin.
 
-**Máy chặn hẳn file .exe lạ** (không có nút "Run anyway")? Báo người quản lý để nhận gói **"không cần exe"** (`TokenVault-Adapter-<Nhóm>-portable.zip`): giải nén toàn bộ ra một thư mục, bấm đúp `Install.cmd` (không cần quyền admin, tự bỏ dấu "tải từ Internet"), đọc màn hình đồng ý rồi đồng ý. Gỡ: chạy `Uninstall.cmd` trong thư mục đó.
+**Máy chặn hẳn file .exe lạ** (không có nút "Run anyway")? Báo người quản lý để nhận gói **"không cần exe"** (`TokenVault-Adapter-<Nhóm>-portable.zip`): giải nén toàn bộ ra một thư mục, bấm đúp `1-CAI-DAT.cmd` (không cần quyền admin, tự bỏ dấu "tải từ Internet"), đọc màn hình đồng ý rồi đồng ý. Gỡ: chạy `2-GO-CAI-DAT.cmd` trong thư mục đó.
 
 **Máy Mac:** nhận `TokenVault-Adapter-<Nhóm>-mac.zip`, nhấp đúp để giải nén, chuột phải `Install.command` -> **Open** (macOS 15: nếu không có tuỳ chọn này, vào System Settings -> Privacy & Security -> "Open Anyway"). Màn hình đồng ý hiện trước khi cài; từ chối thì không có gì thay đổi. Cài xong, biểu tượng nằm trên **thanh menu** (bắt buộc, không ẩn được; nếu không hiện được biểu tượng, chương trình dừng thu thập và báo bằng thông báo), khoá bí mật nằm trong Keychain, tự chạy khi đăng nhập. Gỡ: chuột phải `Uninstall.command` -> Open. Bản Mac chưa được kiểm chứng trên máy Mac thật.
 
@@ -24,7 +24,7 @@ Mỗi câu trả lời của Claude: số token (vào/ra/cache), mô hình, th�
 Adapter chủ ý **không có nút tạm dừng hay ẩn**; nó luôn hiển thị.
 
 ## 4. Gỡ cài đặt
-Bộ cài .exe: Cài đặt Windows -> **Ứng dụng** -> "TokenVault Adapter" -> Gỡ cài đặt. Gói không cần exe: `Uninstall.cmd` (thêm `-RemoveData` để xoá cả dữ liệu). Mac: `Uninstall.command`. Adapter dừng ngay, Manager thấy thiết bị ngoại tuyến.
+Bộ cài .exe: Cài đặt Windows -> **Ứng dụng** -> "TokenVault Adapter" -> Gỡ cài đặt. Gói không cần exe: `2-GO-CAI-DAT.cmd` (thêm `-RemoveData` để xoá cả dữ liệu). Mac: `Uninstall.command`. Adapter dừng ngay, Manager thấy thiết bị ngoại tuyến.
 
 ## 5. Hỏi đáp
 * **Có làm chậm máy không?** Không: gần 0% CPU lúc rảnh, dưới 40 MB RAM, ưu tiên thấp, chỉ theo dõi thư mục `~/.claude/projects`.

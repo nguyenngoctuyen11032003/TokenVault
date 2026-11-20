@@ -15,6 +15,14 @@ CÁCH DÙNG (3 bước)
      máy nhân viên kết nối:  nháy đúp  2-CAI-MANAGER-VAO-MAY.cmd
      Windows sẽ hỏi quyền Administrator MỘT lần cho phần tường lửa (bấm Yes).
 
+LƯU Ý QUAN TRỌNG
+  * Đóng cửa sổ Manager chỉ THU NHỎ xuống khay hệ thống (biểu tượng nằm dưới nút mũi tên ^
+    cạnh đồng hồ). Nháy đúp biểu tượng đó để mở lại; chuột phải -> "Thoát" để tắt hẳn.
+  * Chỉ chạy 1-CHAY-MANAGER.cmd thì KHÔNG có biểu tượng Desktop hay mục Start menu. Ô tìm kiếm
+    của Windows chỉ tìm thấy "TokenVault Manager" SAU KHI bạn chạy 2-CAI-MANAGER-VAO-MAY.cmd
+    (nó tạo biểu tượng trên Desktop + Start menu và chép Manager vào
+    %LOCALAPPDATA%\Programs\TokenVault Manager, nên xóa thư mục giải nén cũng không sao).
+
 FILE NÀO LÀ GÌ
   1-CHAY-MANAGER.cmd          chạy ngay, không cài gì lên máy
   2-CAI-MANAGER-VAO-MAY.cmd   cài vào máy (biểu tượng + tường lửa); không bắt buộc
@@ -44,6 +52,9 @@ ENGLISH SUMMARY
   2. Run now, nothing installed: double-click  1-CHAY-MANAGER.cmd
   3. Optional: Start menu / Desktop shortcuts + firewall rules so employee PCs can connect:
      double-click  2-CAI-MANAGER-VAO-MAY.cmd  (ONE administrator prompt, press Yes).
+  Closing the window only hides it to the system tray (icon under the ^ arrow): double-click it
+  to reopen, right-click -> Thoat to quit. Start-menu search finds "TokenVault Manager" only
+  after option 2 (which also makes the Desktop shortcut).
   Remove the installed copy: 3-GO-CAI-MANAGER.cmd (Manager data is kept).
   The "_he-thong" folder holds the technical files: do not open, delete or rename it.
   FAQ: Smart App Control blocks it -> only signed Python runs here; ask IT. Window does not

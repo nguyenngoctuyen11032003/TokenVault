@@ -4,7 +4,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'TokenVault\ManagerApp'),
+    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Programs\TokenVault Manager'),
     [string]$StartMenuDir = (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'),
     [string]$DesktopDir = [Environment]::GetFolderPath('Desktop'),
     [switch]$Silent   # accepted for IT / tests (the .cmd wrapper then does not pause)
@@ -16,7 +16,7 @@ Get-CimInstance Win32_Process -Filter "Name='pythonw.exe' OR Name='python.exe'" 
     Where-Object { $_.ExecutablePath -and $_.ExecutablePath.ToLowerInvariant().StartsWith($prefix) } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 Start-Sleep -Milliseconds 700
-foreach ($d in @($StartMenuDir, $DesktopDir)) {
+foreach ($d in @($StartMenuDir, $DesktopDir, [Environment]::GetFolderPath('CommonDesktopDirectory'))) {
     foreach ($e in 'lnk', 'cmd') { Remove-Item -LiteralPath (Join-Path $d "TokenVault Manager.$e") -Force -ErrorAction SilentlyContinue }
 }
 if (Test-Path -LiteralPath $InstallDir) { Remove-Item -LiteralPath $InstallDir -Recurse -Force -ErrorAction SilentlyContinue }

@@ -3,7 +3,7 @@
   the firewall).
 
   * copies the signed embeddable Python runtime + TokenVault to
-    %LOCALAPPDATA%\TokenVault\ManagerApp\runtime
+    %LOCALAPPDATA%\Programs\TokenVault Manager\runtime
   * Start menu (and Desktop) shortcut -> pythonw.exe -m tokenvault.manager
     (falls back to a .cmd launcher when shortcuts cannot be created)
   * firewall rules (inbound TCP 47800-47820, UDP 47801, local subnet) through the
@@ -19,13 +19,14 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'TokenVault\ManagerApp'),
+    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'Programs\TokenVault Manager'),
     [string]$StartMenuDir = (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'),
     [string]$DesktopDir = [Environment]::GetFolderPath('Desktop'),
     [int]$Port = 47800,
     [switch]$NoDesktop,
     [switch]$SkipFirewall,
     [switch]$SkipSignatureCheck,
+    [switch]$NoStart,
     [switch]$Silent   # accepted for IT / tests (the .cmd wrapper then does not pause)
 )
 $ErrorActionPreference = 'Stop'
@@ -92,7 +93,7 @@ $ico = Join-Path $destRuntime 'app\tokenvault\ui\assets\logo\tokenvault.ico'
 $iconLocation = if (Test-Path -LiteralPath $ico) { $ico } else { "$pyw,0" }
 
 function New-Launcher($dir, $name) {
-    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    New-Item -ItemType Directory -Force -Path $dir -ErrorAction Stop | Out-Null
     $lnk = Join-Path $dir "$name.lnk"
     try {
         $sh = New-Object -ComObject WScript.Shell
@@ -110,10 +111,25 @@ function New-Launcher($dir, $name) {
         return $cmd
     }
 }
+function Try-Launcher($dir) { try { return (New-Launcher $dir 'TokenVault Manager') } catch { return $null } }
 $made = @()
-$made += New-Launcher $StartMenuDir 'TokenVault Manager'
-if (-not $NoDesktop) { $made += New-Launcher $DesktopDir 'TokenVault Manager' }
+$startLnk = Try-Launcher $StartMenuDir
+if ($startLnk) { $made += $startLnk }
+if (-not $NoDesktop) {
+    # Desktop may be redirected (OneDrive): $DesktopDir comes from GetFolderPath('Desktop').
+    $deskLnk = Try-Launcher $DesktopDir
+    if (-not $deskLnk -and -not $PSBoundParameters.ContainsKey('DesktopDir')) {
+        $deskLnk = Try-Launcher ([Environment]::GetFolderPath('CommonDesktopDirectory'))  # Public desktop, last resort
+    }
+    if ($deskLnk) { $made += $deskLnk } else { Write-Host 'WARNING: could not create the Desktop shortcut.' -ForegroundColor Yellow }
+}
+if (-not $startLnk) { Write-Host 'WARNING: could not create the Start menu shortcut.' -ForegroundColor Yellow }
 $made | ForEach-Object { Say "Shortcut: $_" }
+# Tell Explorer right away so the icons show up without a restart / icon-cache refresh.
+try {
+    Add-Type -Namespace TV -Name Shell -MemberDefinition '[System.Runtime.InteropServices.DllImport("shell32.dll")] public static extern void SHChangeNotify(int e, uint f, System.IntPtr a, System.IntPtr b);'
+    [TV.Shell]::SHChangeNotify(0x08000000, 0, [IntPtr]::Zero, [IntPtr]::Zero)  # SHCNE_ASSOCCHANGED
+} catch {}
 
 $rc = 0
 if (-not $SkipFirewall) {
@@ -129,4 +145,7 @@ if (-not $SkipFirewall) {
     }
 }
 Say 'TokenVault Manager installed. Start it from the Start menu.'
+if (-not $NoStart -and -not $Silent) {
+    try { Start-Process -FilePath $pyw -ArgumentList '-m tokenvault.manager' -WorkingDirectory $destRuntime } catch {}
+}
 exit $rc

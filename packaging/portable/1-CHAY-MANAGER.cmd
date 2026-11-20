@@ -17,4 +17,9 @@ if not exist "%~dp0_he-thong\.unblocked" (
 )
 echo Dang mo TokenVault Manager ... / Starting TokenVault Manager ...
 start "" "%~dp0_he-thong\runtime\pythonw.exe" -m tokenvault.manager %*
+echo.
+echo Muon co bieu tuong tren man hinh / menu Start: chay 2-CAI-MANAGER-VAO-MAY.cmd
+echo Dong cua so Manager chi thu nho xuong khay he thong ^(nut mui ten ^^ canh dong ho^).
+echo Bam doi vao bieu tuong do de mo lai; chuot phai -^> Thoat de tat han.
+"%SystemRoot%\System32\timeout.exe" /t 6 >nul
 exit /b 0

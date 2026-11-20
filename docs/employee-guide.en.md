@@ -12,9 +12,9 @@ manager's PC on the company network. It does **not** read or send your conversat
 4. A TokenVault tray icon appears (bottom right) and starts at every login. No admin rights needed.
 
 **If your PC blocks unknown .exe files outright** (no "Run anyway" button), ask your manager for the **no-exe
-package** (`TokenVault-Adapter-<Team>-portable.zip`): extract the whole ZIP to a folder, double-click `Install.cmd`
+package** (`TokenVault-Adapter-<Team>-portable.zip`): extract the whole ZIP to a folder, double-click `1-CAI-DAT.cmd`
 (no admin rights; it removes the "downloaded from the internet" mark itself), read the consent screen and accept.
-Remove it with `Uninstall.cmd` from the same folder.
+Remove it with `2-GO-CAI-DAT.cmd` from the same folder.
 
 **On a Mac:** get `TokenVault-Adapter-<Team>-mac.zip`, double-click to unzip, right-click `Install.command` ->
 **Open** (macOS 15: if that is not offered, System Settings -> Privacy & Security -> "Open Anyway"). The consent
@@ -38,7 +38,7 @@ project, session title, the **names** of tools called, Claude account email, Win
 There is deliberately **no pause or hide button**; the Adapter is always visible.
 
 ## 4. Uninstall
-exe installer: Windows Settings -> **Apps** -> "TokenVault Adapter" -> Uninstall. No-exe package: `Uninstall.cmd`
+exe installer: Windows Settings -> **Apps** -> "TokenVault Adapter" -> Uninstall. No-exe package: `2-GO-CAI-DAT.cmd`
 (add `-RemoveData` to delete collected data too). Mac: `Uninstall.command`. It stops immediately; the Manager shows
 the device as offline.
 
