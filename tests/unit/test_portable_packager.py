@@ -258,3 +258,11 @@ def test_runtime_line_unsigned_and_missing_dep() -> None:
 def test_python_dash_m_entry_points_exist() -> None:
     assert (REPO / "src/tokenvault/adapter/__main__.py").is_file()
     assert (REPO / "src/tokenvault/manager/__main__.py").is_file()
+
+
+def test_decline_is_not_reported_as_a_failed_setup() -> None:
+    cmd = (SCRIPTS / "Install.cmd").read_text()
+    assert cmd.index('"%RC%"=="3"') < cmd.index("did not finish")
+    assert "cancelled" in cmd
+    # consent is given BEFORE setup runs; setup must not claim it opens a consent window
+    assert "consent screen opens" not in (SCRIPTS / "install.ps1").read_text()

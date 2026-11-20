@@ -97,7 +97,7 @@ if ($NoAutostart) { $argList += '--no-autostart' }
 if ($NoStart) { $argList += '--no-start' }
 if ($Silent -or $consented) { $argList += '--silent' }
 if ($Accept -or $consented) { $argList += '--accept' }  # consent was already given above
-Say 'Starting setup (the consent screen opens in a separate window) ...'
+Say 'Starting setup ...'
 try {
     $p = Start-Process -FilePath $py -ArgumentList ($argList -join ' ') -WorkingDirectory $destRuntime -PassThru -WindowStyle Hidden
     # NOT Start-Process -Wait / WaitForExit(): they can also block on the detached agent that setup starts.
