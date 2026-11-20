@@ -60,6 +60,11 @@ WizardStyle=modern
 SetupIconFile=..\assets\logo\tokenvault.ico
 WizardImageFile=brand\wizard-large.bmp
 WizardSmallImageFile=brand\wizard-small.bmp
+; Task 31 signing hook: build.ps1 -Sign passes /DTvSignTool=tvsign + /Stvsign=<sign.ps1 ...>
+#ifdef TvSignTool
+SignTool={#TvSignTool}
+SignedUninstaller=yes
+#endif
 
 [Tasks]
 Name: "startatlogin"; Description: "Start TokenVault Manager when I sign in to Windows"; Flags: unchecked
