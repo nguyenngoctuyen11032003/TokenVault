@@ -25,20 +25,23 @@ param(
     [int]$Port = 47800,
     [switch]$NoDesktop,
     [switch]$SkipFirewall,
-    [switch]$SkipSignatureCheck
+    [switch]$SkipSignatureCheck,
+    [switch]$Silent   # accepted for IT / tests (the .cmd wrapper then does not pause)
 )
 $ErrorActionPreference = 'Stop'
+# Lives in <zip root>\_he-thong\scripts\ ; the runtime is its sibling <zip root>\_he-thong\runtime
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
+$sys = Split-Path -Parent $here
 function Say($m) { Write-Host $m }
 function Fail($code, $m) { Write-Host "ERROR: $m" -ForegroundColor Red; exit $code }
 
 try {
-    Get-ChildItem -LiteralPath $here -Recurse -File -Force -ErrorAction SilentlyContinue |
+    Get-ChildItem -LiteralPath (Split-Path -Parent $sys) -Recurse -File -Force -ErrorAction SilentlyContinue |
         ForEach-Object { try { Unblock-File -LiteralPath $_.FullName -ErrorAction SilentlyContinue } catch {} }
 } catch {}
 
-$srcRuntime = Join-Path $here 'runtime'
-if (-not (Test-Path -LiteralPath (Join-Path $srcRuntime 'pythonw.exe'))) { Fail 1 'runtime\pythonw.exe not found. Extract the whole ZIP first.' }
+$srcRuntime = Join-Path $sys 'runtime'
+if (-not (Test-Path -LiteralPath (Join-Path $srcRuntime 'pythonw.exe'))) { Fail 1 '_he-thong\runtime\pythonw.exe not found. Extract the whole ZIP first (right-click the .zip, Extract All).' }
 
 if (-not $SkipSignatureCheck) {
     $sig = Get-AuthenticodeSignature -LiteralPath (Join-Path $srcRuntime 'python.exe')
@@ -73,7 +76,7 @@ try {
     Copy-Item -LiteralPath $srcRuntime -Destination $destRuntime -Recurse -Force
 } catch { Fail 1 "cannot copy to ${InstallDir}: $($_.Exception.Message)" }
 # adapter package scripts: the installed Manager needs them to build "windows-portable" packages
-$srcScripts = Join-Path $here 'scripts'
+$srcScripts = $here
 $destScripts = Join-Path $InstallDir 'scripts'
 if (Test-Path -LiteralPath $srcScripts) {
     try {

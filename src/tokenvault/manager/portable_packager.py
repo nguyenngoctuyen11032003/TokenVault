@@ -8,17 +8,25 @@ TokenVault sources, and PowerShell/cmd scripts. Nothing in it is an unsigned exe
 Prepared runtime folder (created by ``build/build-portable.ps1``)::
 
     <runtime_dir>/runtime/    embeddable python + Lib/site-packages + app/tokenvault
-    <runtime_dir>/scripts/    Install.cmd, install.ps1, Uninstall.cmd, ... (optional;
+    <runtime_dir>/scripts/    1-CAI-DAT.cmd, install.ps1, 1-CHAY-MANAGER.cmd, ... (optional;
                               falls back to packaging/portable of a source checkout)
+
+Both ZIPs show only what a human clicks at the root; everything technical sits in ONE
+folder, ``_he-thong`` ("system", do not touch).
 
 Adapter ZIP (one per team, carries an enrollment credential - treat it like one)::
 
-    runtime/  Install.cmd  install.ps1  Uninstall.cmd  uninstall.ps1  README.txt
-    tokenvault-config.bin       payload (stub bytes + the TVLTCFG1 footer)
+    DOC-TRUOC.txt  1-CAI-DAT.cmd  2-GO-CAI-DAT.cmd
+    _he-thong/runtime/  install.ps1  uninstall.ps1  tokenvault-config.bin
 
 Manager ZIP (generic, no credential)::
 
-    runtime/  Start-Manager.cmd  Install-Manager.ps1  Uninstall-Manager.ps1  README-Manager.txt
+    DOC-TRUOC.txt  1-CHAY-MANAGER.cmd  2-CAI-MANAGER-VAO-MAY.cmd  3-GO-CAI-MANAGER.cmd
+    _he-thong/runtime/  _he-thong/scripts/ (Install-Manager.ps1, Uninstall-Manager.ps1 and
+    the adapter package scripts the Manager needs to build employee ZIPs)
+
+``_he-thong`` is also a valid "runtime dir" (it holds ``runtime/`` and ``scripts/``), so an
+extracted Manager ZIP builds employee packages with no further setup.
 
 CLI (used by build-portable.ps1)::
 
@@ -51,9 +59,20 @@ log = logging.getLogger(__name__)
 
 PAYLOAD_NAME = "tokenvault-config.bin"
 _PAYLOAD_STUB = b"TokenVault portable payload carrier\r\n"
-ADAPTER_SCRIPTS = ("Install.cmd", "install.ps1", "Uninstall.cmd", "uninstall.ps1", "README.txt")
-MANAGER_SCRIPTS = ("Start-Manager.cmd", "Install-Manager.ps1", "Uninstall-Manager.ps1",
-                   "README-Manager.txt")
+SYSTEM_DIR = "_he-thong"
+DOC_NAME = "DOC-TRUOC.txt"
+# source name (in the scripts dir) -> path inside the ZIP, adapter package
+ADAPTER_ROOT = {"1-CAI-DAT.cmd": "1-CAI-DAT.cmd", "2-GO-CAI-DAT.cmd": "2-GO-CAI-DAT.cmd",
+                "DOC-TRUOC.employee.txt": DOC_NAME}
+ADAPTER_SYSTEM = ("install.ps1", "uninstall.ps1")
+ADAPTER_SCRIPTS = (*ADAPTER_ROOT, *ADAPTER_SYSTEM)
+# Manager package: clickable root files, and the helper scripts kept under _he-thong/scripts
+MANAGER_ROOT = {"1-CHAY-MANAGER.cmd": "1-CHAY-MANAGER.cmd",
+                "2-CAI-MANAGER-VAO-MAY.cmd": "2-CAI-MANAGER-VAO-MAY.cmd",
+                "3-GO-CAI-MANAGER.cmd": "3-GO-CAI-MANAGER.cmd",
+                "DOC-TRUOC.manager.txt": DOC_NAME}
+MANAGER_SYSTEM = ("Install-Manager.ps1", "Uninstall-Manager.ps1")
+MANAGER_SCRIPTS = (*MANAGER_ROOT, *MANAGER_SYSTEM)
 # Packages the Adapter never imports (keeps the per-team ZIP small).
 MANAGER_ONLY_DIST = ("webview", "pywebview", "clr_loader", "pythonnet", "proxy_tools",
                      "bottle", "reportlab", "charset_normalizer", "pypdf")
@@ -67,7 +86,8 @@ def _exe_dir() -> Path:
 
 def _embedded_package_root() -> Path | None:
     """Running from the embeddable runtime (``<root>/runtime/app/tokenvault/manager``):
-    the folder that holds ``runtime/`` (and ``scripts/``), else None."""
+    the folder that holds ``runtime/`` (and ``scripts/``), else None. For an extracted
+    Manager ZIP that is ``<zip root>/_he-thong``; for an Inno install ``{app}``."""
     rt = Path(__file__).resolve().parents[3]
     if rt.name.lower() == "runtime" and (rt / "python.exe").is_file():
         return rt.parent
@@ -208,8 +228,8 @@ class PortablePackager:
                                 pkg.secret, payload_team)
             stub.write_bytes(_PAYLOAD_STUB)
             append_payload(stub, payload_file, cfg)
-            _write_zip(tmp, self.runtime_dir / "runtime", self.scripts_dir, ADAPTER_SCRIPTS,
-                       adapter_only=True, extra={PAYLOAD_NAME: payload_file})
+            _write_zip(tmp, self.runtime_dir / "runtime", self.scripts_dir, ADAPTER_ROOT,
+                       ADAPTER_SYSTEM, adapter_only=True, extra={PAYLOAD_NAME: payload_file})
             final = self._publish(tmp, f"TokenVault-Adapter-{safe_team_name(team)}-portable")
             size = final.stat().st_size
         except BaseException as e:
@@ -236,22 +256,31 @@ class PortablePackager:
         return BuiltInstaller(final, final.name, team, pkg.package_id, size)
 
 
-def _write_zip(dst: Path, runtime: Path, scripts: Path, script_names: Sequence[str], *,
-               adapter_only: bool, extra: dict[str, Path] | None = None,
+def _write_zip(dst: Path, runtime: Path, scripts: Path, root_files: dict[str, str],
+               system_files: Sequence[str], *, adapter_only: bool,
+               extra: dict[str, Path] | None = None,
                nested_scripts: Sequence[str] = ()) -> None:
+    """``root_files``: {source name: zip path at the root}; ``system_files`` go to
+    ``_he-thong/`` (``_he-thong/scripts/`` for the Manager), ``nested_scripts`` always to
+    ``_he-thong/scripts/`` so the extracted Manager can build adapter packages."""
+    sysd = SYSTEM_DIR + "/"
     with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
-        for name in script_names:
+        for src_name, arc in root_files.items():
+            src = scripts / src_name
+            if src.is_file():
+                z.write(src, arc)
+        for name in system_files:
             src = scripts / name
             if src.is_file():
-                z.write(src, name)
-        for name in nested_scripts:  # kept under scripts/ so the installed Manager can build
-            src = scripts / name  # adapter packages (see default_runtime_dir)
+                z.write(src, sysd + ("scripts/" if nested_scripts else "") + name)
+        for name in nested_scripts:
+            src = scripts / name
             if src.is_file():
-                z.write(src, "scripts/" + name)
+                z.write(src, sysd + "scripts/" + name)
         for name, src in (extra or {}).items():
-            z.write(src, name)
+            z.write(src, sysd + name)
         for p, rel in _iter_runtime(runtime, adapter_only=adapter_only):
-            z.write(p, "runtime/" + rel)
+            z.write(p, sysd + "runtime/" + rel)
 
 
 def build_manager_zip(runtime_dir: Path, out_zip: Path, scripts_dir: Path | None = None) -> Path:
@@ -268,8 +297,9 @@ def build_manager_zip(runtime_dir: Path, out_zip: Path, scripts_dir: Path | None
     out_zip.parent.mkdir(parents=True, exist_ok=True)
     tmp = out_zip.with_name(out_zip.name + ".partial")
     try:
-        _write_zip(tmp, runtime_dir / "runtime", sd, MANAGER_SCRIPTS, adapter_only=False,
-                   nested_scripts=ADAPTER_SCRIPTS)
+        # the nested copy keeps the adapter sources AND the Manager helpers under scripts/
+        _write_zip(tmp, runtime_dir / "runtime", sd, MANAGER_ROOT, MANAGER_SYSTEM,
+                   adapter_only=False, nested_scripts=ADAPTER_SCRIPTS)
         os.replace(tmp, out_zip)
     finally:
         with contextlib.suppress(OSError):

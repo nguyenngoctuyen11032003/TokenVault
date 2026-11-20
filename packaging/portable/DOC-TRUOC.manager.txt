@@ -1,0 +1,51 @@
+﻿DOC TRUOC / READ ME FIRST - TOKENVAULT MANAGER
+==============================================
+
+ĐÂY LÀ GÌ?
+  TokenVault Manager: ứng dụng dành cho người quản lý, nhận số liệu sử dụng Claude từ các máy
+  nhân viên và tạo gói cài cho từng nhóm. Gói này KHÔNG có file .exe lạ: chạy bằng Python chính
+  thức (python.exe / pythonw.exe do Python Software Foundation ký số), nên máy bật Smart App
+  Control / Application Control vẫn cho chạy.
+
+CÁCH DÙNG (3 bước)
+  1. Chuột phải file .zip  ->  "Giải nén tất cả..." (Extract All...) ra một thư mục thường.
+     KHÔNG chạy bên trong WinRAR / trình xem ZIP.
+  2. Mở thư mục vừa giải nén. Muốn dùng NGAY, không cài gì:  nháy đúp  1-CHAY-MANAGER.cmd
+  3. (Tùy chọn) Muốn có biểu tượng Start menu / Desktop, tự chạy cùng Windows và mở cổng cho
+     máy nhân viên kết nối:  nháy đúp  2-CAI-MANAGER-VAO-MAY.cmd
+     Windows sẽ hỏi quyền Administrator MỘT lần cho phần tường lửa (bấm Yes).
+
+FILE NÀO LÀ GÌ
+  1-CHAY-MANAGER.cmd          chạy ngay, không cài gì lên máy
+  2-CAI-MANAGER-VAO-MAY.cmd   cài vào máy (biểu tượng + tường lửa); không bắt buộc
+  3-GO-CAI-MANAGER.cmd        gỡ bản đã cài (dữ liệu của Manager được giữ lại)
+  _he-thong\                  phần kỹ thuật bên trong - KHÔNG mở, KHÔNG xóa, KHÔNG đổi tên
+
+SAU KHI MỞ MANAGER
+  Vào trang "Gói cài đặt", chọn nhóm, tạo gói "Windows (portable ZIP)" rồi gửi file ZIP đó cho
+  nhân viên (thư mục mạng chung, USB hoặc chat).
+
+CÂU HỎI THƯỜNG GẶP
+  * Windows báo "đã chặn ứng dụng" (Smart App Control)? Gói này chỉ chạy Python đã ký số, không
+    có .exe lạ. Nếu vẫn bị chặn, liên hệ IT: chính sách máy có thể chặn cả Python.
+  * Cửa sổ Manager không hiện? Cần Microsoft Edge WebView2 Runtime (Windows 11 có sẵn):
+    https://developer.microsoft.com/microsoft-edge/webview2/
+  * Máy nhân viên không kết nối được? Chạy 2-CAI-MANAGER-VAO-MAY.cmd và bấm Yes ở hộp thoại
+    quyền Administrator (mở cổng tường lửa TCP 47800-47820, UDP 47801 cho mạng nội bộ).
+  * Tải ZIP bằng trình duyệt? File bị gắn dấu "tải từ Internet"; các file .cmd tự gỡ dấu này.
+  * Kiểm tra gói:  _he-thong\runtime\python.exe -m tokenvault.manager --selftest
+
+--------------------------------------------------------------------------------------
+ENGLISH SUMMARY
+  What it is: TokenVault Manager, for the person who runs it: it receives Claude usage numbers
+  from employee PCs and builds the per-team install packages. No unknown .exe: it runs the
+  official Python runtime signed by the Python Software Foundation.
+  1. Right-click the ZIP -> "Extract All..." (never run it from inside a ZIP viewer).
+  2. Run now, nothing installed: double-click  1-CHAY-MANAGER.cmd
+  3. Optional: Start menu / Desktop shortcuts + firewall rules so employee PCs can connect:
+     double-click  2-CAI-MANAGER-VAO-MAY.cmd  (ONE administrator prompt, press Yes).
+  Remove the installed copy: 3-GO-CAI-MANAGER.cmd (Manager data is kept).
+  The "_he-thong" folder holds the technical files: do not open, delete or rename it.
+  FAQ: Smart App Control blocks it -> only signed Python runs here; ask IT. Window does not
+  appear -> install the WebView2 runtime. Employee PCs cannot connect -> run option 2 and
+  accept the firewall prompt. Self-test: _he-thong\runtime\python.exe -m tokenvault.manager --selftest

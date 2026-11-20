@@ -6,7 +6,8 @@
 param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'TokenVault\ManagerApp'),
     [string]$StartMenuDir = (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'),
-    [string]$DesktopDir = [Environment]::GetFolderPath('Desktop')
+    [string]$DesktopDir = [Environment]::GetFolderPath('Desktop'),
+    [switch]$Silent   # accepted for IT / tests (the .cmd wrapper then does not pause)
 )
 $ErrorActionPreference = 'Continue'
 $destRuntime = Join-Path $InstallDir 'runtime'

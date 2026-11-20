@@ -86,7 +86,8 @@ def is_frozen() -> bool:
 
 def _embedded_root() -> Path | None:
     """Running from the signed embeddable runtime installed by the Manager installer
-    (``<app>/runtime/app/tokenvault/manager``): ``<app>``, the folder holding ``runtime/``."""
+    (``<app>/runtime/app/tokenvault/manager``): ``<app>``, the folder holding ``runtime/``.
+    In an extracted Manager ZIP that folder is ``<zip root>/_he-thong``."""
     rt = _PKG_DIR.parents[2]
     if rt.name.lower() == "runtime" and (rt / "python.exe").is_file():
         return rt.parent

@@ -7,7 +7,8 @@
 param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'TokenVault\Adapter'),
     [switch]$RemoveData,
-    [switch]$NoAutostart
+    [switch]$NoAutostart,
+    [switch]$Silent   # accepted for IT / tests (the .cmd wrapper then does not pause)
 )
 $ErrorActionPreference = 'Continue'
 $destRuntime = Join-Path $InstallDir 'runtime'

@@ -108,11 +108,11 @@
     "instrPortable": {
       "l1": "Hướng dẫn cài TokenVault, gói không cần exe (nhóm {team})",
       "l2": "1. Lưu tệp {file} vào máy rồi giải nén toàn bộ ra một thư mục bình thường (ví dụ Downloads\\TokenVault).",
-      "l3": "2. Nhấp đúp Install.cmd. Không cần quyền quản trị và không cần bấm “Run anyway”: gói không chứa tệp .exe chưa ký, Install.cmd tự bỏ dấu “tải từ Internet” (Unblock-File).",
+      "l3": "2. Mở thư mục vừa giải nén, nhấp đúp 1-CAI-DAT.cmd (thư mục _he-thong là phần kỹ thuật, không cần mở). Không cần quyền quản trị và không cần bấm “Run anyway”: gói không chứa tệp .exe chưa ký, 1-CAI-DAT.cmd tự bỏ dấu “tải từ Internet” (Unblock-File).",
       "l4": "3. Đọc màn hình đồng ý rồi bấm Đồng ý. TokenVault chỉ gửi số liệu sử dụng Claude Code: số token, model, tên thư mục dự án (không phải đường dẫn đầy đủ), tiêu đề phiên, tên công cụ đã dùng, email tài khoản Claude, tên máy và tên người dùng Windows.",
       "l5": "4. TokenVault KHÔNG gửi: nội dung câu hỏi (prompt), câu trả lời của Claude, nội dung tệp, lệnh đã chạy hay đường dẫn đầy đủ.",
       "l6": "5. Sau khi cài, biểu tượng TokenVault nằm ở khay hệ thống và tự chạy khi đăng nhập Windows. Bấm vào biểu tượng, chọn “Những gì được gửi?” để xem dữ liệu thực tế.",
-      "l7": "6. Muốn gỡ: chạy Uninstall.cmd trong thư mục đã giải nén (thêm -RemoveData nếu muốn xoá cả dữ liệu đã thu thập)."
+      "l7": "6. Muốn gỡ: nhấp đúp 2-GO-CAI-DAT.cmd trong thư mục đã giải nén (thêm -RemoveData nếu muốn xoá cả dữ liệu đã thu thập)."
     },
     "portableNote": "Gói này không có tệp .exe chưa ký, chỉ chạy Python đã ký số và mã nguồn TokenVault, nên dùng được trên máy chặn file chưa ký. Gửi qua chia sẻ mạng, USB hoặc chat để tránh dấu “tải từ Internet”.",
     "macNote": "Bộ cài macOS chưa được ký số nên Gatekeeper sẽ cảnh báo. Đã có hướng dẫn chuột phải → Open trong phần hướng dẫn."

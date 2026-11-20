@@ -1,5 +1,5 @@
 @echo off
-rem TokenVault Adapter - no-exe installer (per user, no admin). Double-click me.
+rem TokenVault Adapter - no-exe installer (per user, no admin). Double-click me (1-CAI-DAT.cmd).
 rem ASCII only on purpose: cmd.exe mis-parses UTF-8 batch files. Any argument containing
 rem -Silent runs without prompts/pauses (IT / automated tests).
 title TokenVault Adapter - Cai dat / Install
@@ -12,11 +12,11 @@ echo   TokenVault Adapter - Cai dat / Install  (khong can quyen Admin)
 echo ==============================================================
 echo.
 
-if not exist "%~dp0runtime\pythonw.exe" (
+if not exist "%~dp0_he-thong\runtime\pythonw.exe" (
   echo LOI / ERROR: Chua giai nen du goi cai dat / the package is not fully extracted.
   echo.
   echo   1. Chuot phai file .zip  -^>  "Extract All..." / "Giai nen tat ca..."
-  echo   2. Mo thu muc vua giai nen, chay lai Install.cmd
+  echo   2. Mo thu muc vua giai nen, chay lai 1-CAI-DAT.cmd
   echo.
   echo   Dung chay truc tiep ben trong WinRAR / trinh xem ZIP.
   echo   Do not run it from inside WinRAR / a ZIP viewer.
@@ -31,7 +31,7 @@ if not defined TVQUIET (
   echo.
 )
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0install.ps1" %*
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0_he-thong\install.ps1" %*
 set RC=%ERRORLEVEL%
 
 if "%RC%"=="0" (

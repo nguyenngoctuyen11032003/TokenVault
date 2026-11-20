@@ -143,7 +143,7 @@ begin
               'Application Control / antivirus). Nothing was changed.' + #13#10 + #13#10 +
               'Ask your manager for the portable ZIP instead (the "no .exe" package, file ' +
               'name ending in -portable.zip, "Windows - goi khong can exe" in the Manager): ' +
-              'extract it and run Install.cmd.';
+              'extract it and run 1-CAI-DAT.cmd.';
     Exit;
   end;
   if Rc = 0 then

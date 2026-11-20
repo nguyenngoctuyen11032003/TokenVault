@@ -33,13 +33,13 @@ function Fail($code, $m) { Write-Host "ERROR: $m" -ForegroundColor Red; exit $co
 
 # 1. Mark-of-the-Web: a ZIP downloaded in a browser tags every extracted file.
 try {
-    Get-ChildItem -LiteralPath $here -Recurse -File -Force -ErrorAction SilentlyContinue |
+    Get-ChildItem -LiteralPath (Split-Path -Parent $here) -Recurse -File -Force -ErrorAction SilentlyContinue |
         ForEach-Object { try { Unblock-File -LiteralPath $_.FullName -ErrorAction SilentlyContinue } catch {} }
 } catch {}
 
 $srcRuntime = Join-Path $here 'runtime'
 $srcPy = Join-Path $srcRuntime 'pythonw.exe'
-if (-not (Test-Path -LiteralPath $srcPy)) { Fail 1 "runtime\pythonw.exe not found next to this script. Extract the whole ZIP first." }
+if (-not (Test-Path -LiteralPath $srcPy)) { Fail 1 "runtime\pythonw.exe not found in _he-thong. Extract the whole ZIP first (right-click the .zip, Extract All)." }
 if (-not (Test-Path -LiteralPath $Payload)) { Fail 2 "payload not found: $Payload" }
 
 # 2. The interpreter must be the one signed by the Python Software Foundation.
